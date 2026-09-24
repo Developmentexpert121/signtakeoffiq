@@ -1,0 +1,73 @@
+There it is — Server error 404. The Drive download route exists in training but wasn't wired up for the job page. The API endpoint POST /jobs/:jobId/files/drive doesn't exist yet.
+
+Here's your Replit prompt:
+
+Fix the Google Drive download on the job page. The UI is wired but the API route is missing, returning 404.
+
+In the API server, find where job file upload routes are defined (likely artifacts/api-server/src/routes/jobs.ts or similar). Add a new route:
+
+ts
+router.post("/jobs/:jobId/files/drive", requireAuth, async (req, res) => {
+  const { tenantId } = req.auth_ctx!;
+  const jobId = String(req.params.jobId);
+  const { driveUrl, fileCategory } = req.body;
+
+  if (!driveUrl || typeof driveUrl !== "string") {
+    res.status(400).json({ error: "driveUrl is required" });
+    return;
+  }
+
+  // Verify job belongs to tenant
+  const [job] = await db.select()
+    .from(jobsTable)
+    .where(and(eq(jobsTable.id, jobId), eq(jobsTable.tenantId, tenantId)));
+  
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  try {
+    const { buffer, filename, contentType, sizeBytes } = 
+      await downloadFromGoogleDrive(driveUrl);
+
+    // Upload to GCS
+    const path = `uploads/${tenantId}/${jobId}/${Date.now()}-${filename}`;
+    const storagePath = await uploadToStorage(path, buffer, contentType, tenantId);
+
+    // Insert into job_files table
+    const fileId = newId("file");
+    await db.insert(jobFilesTable).values({
+      id: fileId,
+      jobId,
+      tenantId,
+      filename,
+      storagePath,
+      fileCategory: fileCategory ?? "floor_plan",
+      contentType,
+      sizeBytes,
+    });
+
+    res.json({
+      id: fileId,
+      filename,
+      storagePath,
+      sizeBytes,
+      sizeMB: (sizeBytes / 1024 / 1024).toFixed(1),
+      contentType,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Download failed";
+    res.status(400).json({ error: message });
+  }
+});
+Import downloadFromGoogleDrive from ../lib/googleDriveDownload at the top of the jobs routes file.
+
+Also check the job_files table schema — if sizeBytes or contentType columns don't exist, add them to the schema and run a migration.
+
+After saving, test by pasting the Cambridge Moses Drive link on the job page and clicking Add. Confirm it shows the file with a real size (should be several MB). Then click Process and verify AI Vision Scans Used > 0.
+
+
+
+
+

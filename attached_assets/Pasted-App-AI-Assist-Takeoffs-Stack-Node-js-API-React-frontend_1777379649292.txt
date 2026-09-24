@@ -1,0 +1,122 @@
+App: AI-Assist Takeoffs
+Stack: Node.js API, React frontend, PostgreSQL, 
+       Python PDF sidecar (port 8008)
+
+PROBLEM:
+Fox Hill Burlington MA returned 91 signs but the 
+plans contain ~180-220 signs across 4 dedicated 
+signage sheets (3.9.51, 3.9.52, 3.9.53, 3.9.54).
+The app is only processing 1-2 sheets and garbling 
+room names on partial reads. This is roughly 50% 
+of the actual count.
+
+══════════════════════════════════════════════════
+FIX 1 — Process ALL pages of the uploaded PDF
+══════════════════════════════════════════════════
+In the Python PDF sidecar (port 8008), the page 
+selection logic must:
+
+1. First pass: extract text from ALL pages to 
+   build a sheet index. For each page, extract 
+   the title block text (bottom-right corner) 
+   to get the sheet number (e.g. "3.9.51") and 
+   title (e.g. "Signage Plan - First Floor")
+
+2. Identify signage-relevant pages by matching 
+   sheet title against these keywords:
+   - "signage plan", "sign plan", "signage"
+   - "floor plan" (architectural)
+   - "egress", "life safety"
+   
+3. If dedicated signage sheets exist (title 
+   contains "signage"), process ONLY those sheets 
+   at full 200 DPI resolution for room extraction.
+   
+4. If NO dedicated signage sheets, fall back to 
+   all floor plan sheets.
+
+5. Return the list of pages processed with their 
+   sheet IDs in the job's pipeline log.
+
+For Fox Hill specifically: pages 1–4 (3.9.51, 
+3.9.52, 3.9.53, 3.9.54) are all signage plans 
+and must ALL be processed.
+
+══════════════════════════════════════════════════
+FIX 2 — Fix garbled room name extraction
+══════════════════════════════════════════════════
+In the room extraction step, the PDF text parser 
+is reading annotation reference strings 
+(e.g. "W139.1", "19A", "MB 8'-0''") as room 
+names. These are drawing callouts, not room labels.
+
+Fix the room label extraction filter:
+- Room labels are CAPS text adjacent to a 
+  room number (3–4 digit format like W139, E119)
+- REJECT strings matching these patterns:
+  - Pure coordinate references: "W123.1", "E100.2"  
+    (room_number + "." + digit)
+  - Dimension strings: "8'-0''", "6'-0''"
+  - Sign legend codes: "MB", "TB", "CB" followed 
+    by dimension
+  - Drawing grid refs: single letter + number 
+    like "A.1", "K.4"
+  - Strings containing only numbers, dashes, 
+    quotes, or dimension tokens
+
+- ACCEPT strings that are:
+  - ALL CAPS words (2+ letters): "CLASSROOM", 
+    "CORRIDOR", "GYMNASIUM", "MECHANICAL"
+  - Known room-type vocabulary (load from the 
+    existing room-type dictionary)
+  - Room number + room name pairs where name 
+    is ≥ 3 alphabetic characters
+
+══════════════════════════════════════════════════
+FIX 3 — Wing-aware floor assignment
+══════════════════════════════════════════════════
+Fox Hill has TWO wings per floor:
+- Sheet 3.9.51 = First Floor Academic Wing  
+- Sheet 3.9.52 = First Floor Community Wing
+- Sheet 3.9.53 = Second Floor Academic Wing
+- Sheet 3.9.54 = Second Floor Community Wing
+
+When multiple sheets share the same floor number, 
+combine them into a single floor in the output:
+- "LEVEL 1" = sheets 3.9.51 + 3.9.52 combined
+- "LEVEL 2" = sheets 3.9.53 + 3.9.54 combined
+
+Do NOT create separate "LEVEL 1" duplicate 
+sections (the current XLSX has two LEVEL 1 
+sections and two LEVEL 3 sections — this is wrong).
+
+Room number prefixes identify the wing:
+- "W" prefix = West/Academic wing
+- "E" prefix = East/Community wing
+Sort rooms within each level: all W-prefix first 
+(numerically), then all E-prefix (numerically).
+
+══════════════════════════════════════════════════
+FIX 4 — Add sheet coverage to pipeline log
+══════════════════════════════════════════════════
+In the Overview tab pipeline log, after processing 
+completes, add a "Sheets processed" line:
+  "Sheets processed: 3.9.51 (p1), 3.9.52 (p2), 
+   3.9.53 (p3), 3.9.54 (p4) — 4 of 6 total pages"
+
+This lets the user immediately confirm whether 
+the right pages were ingested without needing 
+to debug a low count.
+
+══════════════════════════════════════════════════
+VERIFY with Fox Hill Burlington MA
+══════════════════════════════════════════════════
+1. Force rescan Fox Hill — should now find 
+   180-220 signs across Level 1 and Level 2
+2. No duplicate LEVEL sections in the XLSX
+3. Room names should read like "GYMNASIUM", 
+   "PRINCIPAL", "KITCHEN" — not "W139.1" or 
+   "'- LE '' '' ''"
+4. Pipeline log shows all 4 signage sheets 
+   processed
+5. All 1,430 tests pass

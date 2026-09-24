@@ -1,0 +1,49 @@
+# Local infrastructure for Sign Takeoff IQ.
+#   postgres     — the app database (DATABASE_URL points here)
+#   pdf-sidecar  — Python FastAPI PDF service with poppler bundled (port 8008)
+#
+# The app itself (api-server + web) runs on the host via `pnpm dev`; only the
+# stateful/native pieces run here. Variable defaults below match the values in
+# .env.example, and docker compose also reads the repo-root .env for overrides.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-signtakeoff}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - stq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Behind the "sidecar" profile so `docker compose up -d` (pnpm infra:up) starts
+  # only Postgres. Start the sidecar with: docker compose --profile sidecar up -d
+  # (or `pnpm infra:sidecar`). Building it needs access to the Debian apt mirror,
+  # which some restricted networks (e.g. school/corp wifi) block.
+  pdf-sidecar:
+    profiles: ["sidecar"]
+    build:
+      context: ./artifacts/pdf-sidecar
+    environment:
+      PORT: 8008
+      # Phase 1 / S1 — concurrency cap + render/parse cache budget. Defaults
+      # match main.py; override via repo-root .env.
+      SIDECAR_MAX_CONCURRENCY: ${SIDECAR_MAX_CONCURRENCY:-4}
+      SIDECAR_CACHE_MAX_BYTES: ${SIDECAR_CACHE_MAX_BYTES:-536870912}
+      # /extract-table hard guards (defaults match main.py). The extraction runs
+      # in a child process killed past DEADLINE_S; "text"-strategy scans of pages
+      # with more than MAX_CHARS characters are skipped as drawings, not schedules.
+      SIDECAR_TABLE_DEADLINE_S: ${SIDECAR_TABLE_DEADLINE_S:-15}
+      SIDECAR_TABLE_MAX_CHARS: ${SIDECAR_TABLE_MAX_CHARS:-6000}
+    ports:
+      - "${PDF_SIDECAR_PORT:-8008}:8008"
+    restart: unless-stopped
+
+volumes:
+  stq-pgdata:

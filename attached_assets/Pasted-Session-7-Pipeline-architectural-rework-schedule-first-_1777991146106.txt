@@ -1,0 +1,139 @@
+Session 7 — Pipeline architectural rework: schedule-first, coordinate-only floor plans, configurable pricing foundation
+Core philosophy change: Sign schedule drives count and type. Floor plans drive location only. Rules engine handles egress only in schedule_primary mode.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — main changes
+artifacts/api-server/src/routes/exports.ts — XLSX sort order + pricing
+artifacts/web/src/pages/job-detail.tsx — pricing config UI
+
+Regression jobs:
+
+Fox Hill job_a81ec18d15cec938 — must stay 185-215, strategy=floor_plan_primary
+Walking Court_2 — must produce 320-380, strategy=schedule_primary
+
+
+Change 1 — Wire message field through Step 4d dedicated schedule path
+Find where Step 4d builds scheduleSignRows for dedicated sign schedule files like AA831. The message field is currently empty for all 486 Walking Court signs. Add message population:
+typescriptscheduleSignRows.push({
+  ...existingFields,
+  message: [entry.roomNumber, entry.roomName, entry.signType, entry.message]
+    .filter(Boolean).join(" | "),
+});
+Confirm the message column in the signs table accepts this value and that it flows through to the XLSX export's Message/Notes column.
+
+Change 2 — schedule_primary mode: skip Gemini room extraction, keep rasterization for coordinates only
+Find the Step 3 vision loop where Gemini is called for each floor plan sheet. When pipelineStrategy === "schedule_primary", skip the room extraction Gemini call entirely but still rasterize the page for coordinate extraction:
+typescriptif (pipelineStrategy === "schedule_primary") {
+  // Rasterize for coordinate extraction only — do not call Gemini for rooms
+  logger.log(`[Step 3] ${sheet.sheetId}: schedule_primary — rasterizing for coordinates only, skipping room extraction`);
+  // Store the rasterized image path for coordinate matching later
+  // Do NOT push any extractedRooms from this sheet
+  continue;
+}
+This eliminates 8-10 minutes of Gemini vision calls on Walking Court. The schedule already has all rooms — we don't need vision to find them.
+
+Change 3 — Coordinate extraction pass for schedule_primary jobs
+After Step 3 completes, add a new lightweight Step 3b that runs only when pipelineStrategy === "schedule_primary". For each rasterized floor plan page, send a focused coordinate extraction prompt to Gemini:
+typescriptconst coordinatePrompt =
+  "This is an architectural floor plan. For each labeled room, unit, or space, " +
+  "return the room number/identifier and its approximate location as a percentage " +
+  "of image width (x) and height (y), where 0,0 is top-left and 100,100 is bottom-right. " +
+  "Focus on door locations, not room centers. " +
+  "Return JSON array only: [{roomNumber: string, x: number, y: number}]. " +
+  "No preamble, no markdown.";
+Match returned coordinates to schedule rooms by room number. Store matched coordinates in extracted_rooms with coordSource = "schedule_matched". Unmatched schedule rooms get coordSource = "unlocated".
+Log results:
+typescriptlogger.log(`[Step 3b] ${sheet.sheetId}: coordinate extraction — ${matched} matched, ${unmatched} unmatched of ${scheduleRooms.length} schedule rooms`);
+
+Change 4 — Rules engine egress-only filter in schedule_primary mode
+In Step 9, when pipelineStrategy === "schedule_primary", filter the rules engine to only produce egress signs. All other sign types come from the schedule:
+typescriptif (pipelineStrategy === "schedule_primary") {
+  // Only run egress rules — R1 (Exit), R2 (Stair), R3 (Evacuation Map), R4 (Elevator ICF)
+  const EGRESS_RULES = ["R1", "R2", "R3", "R4"];
+  rulesEngineResults = rulesEngineResults.filter(s => 
+    EGRESS_RULES.some(r => s.ruleRef?.startsWith(r))
+  );
+  logger.log(`[Step 9] schedule_primary — filtered rules engine to ${rulesEngineResults.length} egress signs`);
+}
+Combined with schedule signs, total should be: schedule entries (~163) + egress (~15) = ~178 signs for Walking Court. This is the architect's actual count.
+
+Change 5 — Sort XLSX output by room number within each floor
+In exports.ts, sort signs before writing to XLSX:
+typescript// Sort by floor level, then by room number within each floor
+signs.sort((a, b) => {
+  const levelA = a.level ?? "Unspecified";
+  const levelB = b.level ?? "Unspecified";
+  if (levelA !== levelB) return levelA.localeCompare(levelB);
+  
+  // Natural sort on room number so A100 < A101 < A200 < B100
+  const roomA = a.message?.split(" | ")[0] ?? "";
+  const roomB = b.message?.split(" | ")[0] ?? "";
+  return roomA.localeCompare(roomB, undefined, { numeric: true });
+});
+This makes duplicate detection instant — if Room A209 appears twice, the estimator sees it immediately.
+
+Change 6 — Sign type pricing foundation (exports.ts + job-detail.tsx)
+In exports.ts, add a sign type pricing lookup that maps sign type codes to base prices. Start with a default pricing table that can be overridden per account:
+typescriptconst DEFAULT_SIGN_PRICING: Record<string, number> = {
+  "Typical Toilet Room Sign": 185,
+  "Room Sign with Insert": 195,
+  "Emergency Exit": 145,
+  "Room Sign with No Storage": 185,
+  "Occupancy Sign": 95,
+  "24\" Letter Signage": 450,
+  "Typical Room Sign": 165,
+  "Egress Map": 285,
+  "Egress Stair Sign at Corridor": 165,
+  "Typical Stair Sign at Landing": 195,
+  "Sign at Elevator": 165,
+  "Sign at Unit": 95,
+  "Elevator Machine Room Sign": 145,
+  "Sign at Corridor": 245,
+  "Elevator Control Room Location Sign": 145,
+  // Fallback for unknown types
+  "default": 150,
+};
+When writing pricing to XLSX, look up the sign type in this table instead of using a flat per-sign price. This gives realistic pricing variation by sign type.
+In job-detail.tsx, add a "Pricing" section in the Export tab (or job Settings) where the user can override the default price per sign type. Store overrides in a job_pricing_overrides JSONB column on the jobs table or in a separate account_pricing table if per-account pricing is needed.
+For now, a simple per-job override is sufficient:
+
+Show a table of sign types detected in this job with their current price
+Allow the user to edit any price inline
+"Reset to defaults" button
+Prices are used when XLSX is downloaded
+
+
+Change 7 — XLSX Assumptions tab update
+The Assumptions tab added in Session 6 should include the new pipeline strategy:
+Pipeline Strategy: Schedule Primary
+Sign count source: AA831 Interior Signage Schedule (163 entries)
+Egress signs: Rules engine (R1-R4 only)
+Pricing: [user-configured or default rates]
+Last scan: [date]
+This gives the customer context for where the numbers came from.
+
+After all changes
+
+Typecheck — 0 errors
+Tests — 1,461 passing
+Rescan Fox Hill job_a81ec18d15cec938:
+
+Confirm strategy logs floor_plan_primary
+Confirm Step 3 runs full Gemini room extraction (NOT skipped)
+Confirm 185-215 signs
+
+
+Rescan Walking Court_2:
+
+Confirm strategy logs schedule_primary
+Confirm Step 3 logs rasterizing for coordinates only, skipping room extraction
+Confirm Step 3b runs coordinate matching
+Confirm Step 9 filters to egress only (~15 signs from rules engine)
+Confirm total signs ~178 (163 schedule + ~15 egress)
+Confirm XLSX sorted by room number
+Confirm message field populated for schedule signs
+Confirm pricing tab shows per-sign-type prices
+
+
+
+This is the session that makes the pipeline match how a human estimator actually works. After this, the count is the architect's count, the location is from the plans, and the price is configurable by sign type.

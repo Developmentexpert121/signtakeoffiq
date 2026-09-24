@@ -1,0 +1,90 @@
+App: AI-Assist Takeoffs
+
+Fox Hill improved from 91 → 120 but still has 
+issues. Fix the following:
+
+══════════════════════════════════════════════════
+FIX 1 — Strengthen garbled room name filter
+══════════════════════════════════════════════════
+Still seeing junk room names from PDF callouts 
+e.g. "RY CT TA", ".1 .1 MB CO1RRIDOR", 
+"- '0' SLP - 1. 1. 1W 1W UP MB MB"
+
+Tighten the rejection filter — REJECT any 
+room name where:
+- Contains 3+ consecutive non-alpha characters
+  e.g. ".1 .1", "'0'", "1W"
+- Contains dimension tokens: any string matching
+  \d+'-\d+'' or \d+X\d+ (like 60X21, 8'-0'')
+- Contains drawing ref patterns: letter(s) + 
+  digit + "." + digit (like W139.1, E100.2)  
+- Token count > 5 AND >50% of tokens are 
+  non-dictionary words
+- Room number is truncated/partial: single 
+  digit, single letter, or 2-char strings 
+  like "W1", "E1", "M0", "V01", "Y12"
+
+Valid room numbers for this project are:
+- W/E prefix + 3 digits: W100–W999, E100–E999
+- WC prefix + 3 digits: WC100, WC200
+- SA/SB/SC/SD + 2 digits: stairs
+- EV + 2 digits: elevators
+
+Reject any room number that doesn't match 
+these patterns.
+
+══════════════════════════════════════════════════
+FIX 2 — Merge wings into single floor sections
+══════════════════════════════════════════════════
+Currently outputting duplicate LEVEL sections.
+Merge all sheets for the same floor into one:
+- All sheets with "First Floor" in title → LEVEL 1
+- All sheets with "Second Floor" in title → LEVEL 2
+One LEVEL header per floor in the XLSX, 
+one subtotal per floor. No duplicate sections.
+
+══════════════════════════════════════════════════
+FIX 3 — Fix restroom false positives
+══════════════════════════════════════════════════
+These rooms are incorrectly getting Restroom signs:
+- STOREROOM → should be Room ID
+- SENSORY ROOM → should be Room ID  
+- PASSAGE → should be Room ID or excluded
+- LITERACY LIBRARY → should be Room ID, 
+  not Evacuation Map
+- LITERACY SPECIALISTS → Room ID, not Evac Map
+
+Restroom sign ONLY triggers when room name 
+contains: TOILET, RESTROOM, BATH, LAVATORY, 
+SHOWER, WC, BOYS, GIRLS (standalone word).
+Do NOT match partial strings — "STOREROOM" 
+contains "ROOM" but is NOT a restroom.
+Use whole-word matching only.
+
+══════════════════════════════════════════════════
+FIX 4 — Fix Evacuation Map over-assignment
+══════════════════════════════════════════════════
+6 Evac Maps assigned to PROJECT AREA alcoves 
+(WC210A–F) on Level 3. These are open corridor 
+alcoves, not enclosed assembly spaces.
+
+Evacuation Map rules:
+- Max 2 per floor for standard buildings
+- Assign to main CORRIDOR or LOBBY only
+- Do NOT assign to: PROJECT AREA, ALCOVE, 
+  PASSAGE, CLOSET, STORAGE, or any room 
+  with area < 200 sq ft (if determinable)
+- LITERACY LIBRARY and MUSIC LOBBY are valid 
+  candidates; open PROJECT AREAs are not
+
+══════════════════════════════════════════════════
+VERIFY
+══════════════════════════════════════════════════
+Expected result for Fox Hill after all fixes:
+- Single LEVEL 1 section: ~45-55 clean rooms
+- Single LEVEL 2 section: ~40-50 clean rooms  
+- No duplicate level sections
+- Zero garbled room names (all names readable)
+- Restroom signs only on actual toilet rooms
+- Evac Maps: 1-2 per floor max
+- All 1,430 tests pass

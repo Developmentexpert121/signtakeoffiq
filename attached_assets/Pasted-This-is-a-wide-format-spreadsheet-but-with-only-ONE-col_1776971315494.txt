@@ -1,0 +1,34 @@
+This is a wide format spreadsheet but with only ONE column for room identifier — Room — no room number column. The parser requires both a room number AND room name column but this file only has room name.
+Here's your Replit prompt:
+
+Fix the spreadsheet parser to handle wide format files with only a room name column and no room number column.
+In spreadsheet-parser.ts, update the wide format detection to make the room number column optional. When only a room name column is found (no room number), proceed with parsing using just the room name:
+ts// Room number is optional — some spreadsheets only have room name
+const roomNumColIdx = headers.findIndex(h => 
+  ROOM_NUM_COL_NAMES.includes(h?.toLowerCase().trim() ?? "")
+);
+const roomNameColIdx = headers.findIndex(h =>
+  ROOM_NAME_COL_NAMES.includes(h?.toLowerCase().trim() ?? "")
+);
+
+// Need at least a room name column to proceed
+if (roomNameColIdx === -1) {
+  throw new Error(`Could not find room name column...`);
+}
+
+// Room number falls back to empty string if not present
+const roomNum = roomNumColIdx >= 0 
+  ? String(row[roomNumColIdx] ?? "").trim()
+  : "";
+Also add "room" (exact match, case-insensitive) to ROOM_NAME_COL_NAMES since this file uses just "Room" as the column header.
+Also handle section header rows — rows where only the first column has a value and it looks like a floor/section label (e.g. "GROUND FLOOR", "LEVEL 1", "BASEMENT"). These should be skipped as data rows but can be used to set the current level context:
+ts// Detect section header rows — single value in first col, no sign type values
+const isOnlyFirstColFilled = row.slice(1).every(v => !v || v === "");
+const looksLikeFloorLabel = isOnlyFirstColFilled && 
+  /ground|floor|level|basement|mezzanine|roof/i.test(String(row[0] ?? ""));
+
+if (looksLikeFloorLabel) {
+  currentLevel = String(row[0]).trim(); // capture for subsequent rows
+  continue; // skip as data row
+}
+After saving test by uploading 51557_36_Colborne_Rd_-_Takeoff.xlsx. Should parse correctly showing rooms like LOBBY, WATER METER RM with sign types Room ID/Roof Occupancy, Stair ID etc.

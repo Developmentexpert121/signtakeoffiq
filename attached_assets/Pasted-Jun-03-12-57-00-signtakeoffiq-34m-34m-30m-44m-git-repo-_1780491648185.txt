@@ -1,0 +1,205 @@
+Jun 03 12:57:00 [signtakeoffiq] [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Jun 03 12:57:00 [signtakeoffiq] [34m│[0m [34m › fetching app source code[0m
+Jun 03 12:57:00 [signtakeoffiq] [34m│[0m => Selecting branch "production"
+Jun 03 12:57:07 [signtakeoffiq] [34m│[0m => Checking out commit "86da2af34cae8c98c962524b77af2fe4ca630760"
+Jun 03 12:57:07 [signtakeoffiq] [34m│[0m 
+Jun 03 12:57:07 [signtakeoffiq] [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jun 03 12:57:07 [signtakeoffiq] [34m╰────────────────────────────────────────╼[0m
+Jun 03 12:57:07 [signtakeoffiq] 
+Jun 03 12:57:07 [signtakeoffiq] [34m › configuring build-time app environment variables:[0m
+Jun 03 12:57:07 [signtakeoffiq]      CLERK_SECRET_KEY DEFAULT_OBJECT_STORAGE_BUCKET_ID SPACES_ENDPOINT SMTP_PORT CLERK_PUBLISHABLE_KEY GUEST_JWT_SECRET AI_INTEGRATIONS_GEMINI_BASE_URL SMTP_FROM AI_INTEGRATIONS_ANTHROPIC_BASE_URL PDF_SIDECAR_PORT SESSION_SECRET SPACES_SECRET_ACCESS_KEY DEV_BYPASS_AUTH VITE_CLERK_PUBLISHABLE_KEY SIGNSUITEIQ_SSO_SECRET PRIVATE_OBJECT_DIR RASTERIZE_DPI AI_INTEGRATIONS_GEMINI_API_KEY SPACES_ACCESS_KEY_ID SSO_SECRET_SIGNTAKEOFFIQ SMTP_HOST AI_INTEGRATIONS_ANTHROPIC_API_KEY SMTP_PASS PIPELINE_CACHE_ENABLED SPACES_REGION PUBLIC_OBJECT_SEARCH_PATHS DO_DATABASE_URL SMTP_USER
+Jun 03 12:57:07 [signtakeoffiq] 
+Jun 03 12:57:07 [signtakeoffiq] [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jun 03 12:57:07 [signtakeoffiq] [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m Detected the following buildpacks suitable to build your app:
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m 
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    digitalocean/apt               v0.1.0    (Apt)
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    heroku/nodejs                  v0.341.5  (Node.js)
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    digitalocean/python-appdetect  v0.1.2    
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    heroku/python                  v5.339.5  (Python)
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m 
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m 
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 12:57:08 [signtakeoffiq] [34m╰─────────────────────────────────────────────╼[0m
+Jun 03 12:57:08 [signtakeoffiq] 
+Jun 03 12:57:08 [signtakeoffiq] [34m╭────────────[34m[30m[44m build caching [0m[0m[34m───────────╼[0m
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m [34m › checking for cache from a previous build[0m
+Jun 03 12:57:08 [signtakeoffiq] [34m│[0m Timer: Analyzer started at 2026-06-03T12:57:08Z
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring metadata for "digitalocean/apt:apt" from app image
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring metadata for "heroku/nodejs:shim" from cache
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring metadata for "heroku/python:shim" from cache
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Timer: Analyzer ran for 678.171392ms and ended at 2026-06-03T12:57:09Z
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Timer: Restorer started at 2026-06-03T12:57:09Z
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring data for "digitalocean/apt:apt" from cache
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring data for "heroku/nodejs:shim" from cache
+Jun 03 12:57:09 [signtakeoffiq] [34m│[0m Restoring data for "heroku/python:shim" from cache
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m Timer: Restorer ran for 11.909798519s and ended at 2026-06-03T12:57:21Z
+Jun 03 12:57:21 [signtakeoffiq] [34m╰───────────────────────────────────────╼[0m
+Jun 03 12:57:21 [signtakeoffiq] 
+Jun 03 12:57:21 [signtakeoffiq] [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m Timer: Builder started at 2026-06-03T12:57:21Z
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m [33m=> Aptfile and stack look the same, reusing cache[m
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m [33m=> Installed 1 packages in 0s[m
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:21 [signtakeoffiq] [34m│[0m -----> Creating runtime environment
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        NODE_VERBOSE=false
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        NODE_ENV=
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        NODE_MODULES_CACHE=true
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m -----> Installing binaries
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        engines.node (package.json):   22.x
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        packageManager (package.json): pnpm@10.26.1
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        Resolving node version 22.x...
+Jun 03 12:57:22 [signtakeoffiq] [34m│[0m        Downloading and installing node 22.22.2...
+Jun 03 12:57:23 [signtakeoffiq] [34m│[0m        Validating checksum
+Jun 03 12:57:25 [signtakeoffiq] [34m│[0m        Using default npm version: 10.9.7
+Jun 03 12:57:25 [signtakeoffiq] [34m│[0m        Downloading and installing pnpm (10.26.1)
+Jun 03 12:57:28 [signtakeoffiq] [34m│[0m        Using pnpm 10.26.1
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m -----> Restoring cache
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m        - pnpm cache
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m -----> Installing dependencies
+Jun 03 12:57:29 [signtakeoffiq] [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jun 03 12:57:35 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:35 [signtakeoffiq] [34m│[0m -----> Build
+Jun 03 12:57:35 [signtakeoffiq] [34m│[0m        Running build
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > workspace@0.0.0 build /workspace
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > pnpm run typecheck && pnpm -r --if-present run build
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > workspace@0.0.0 typecheck /workspace
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > workspace@0.0.0 typecheck:libs /workspace
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        > tsc --build
+Jun 03 12:57:36 [signtakeoffiq] [34m│[0m        
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m        
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m -----> Caching build
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m        - pnpm cache
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m        
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m -----> Pruning devDependencies
+Jun 03 12:58:03 [signtakeoffiq] [34m│[0m        Skipping because NODE_ENV is not 'production'
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m        
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Build succeeded!
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Using Python 3.11 specified in .python-version
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Restoring cache
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Using cached install of Python 3.11.15
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Using cached uv 0.10.9
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m -----> Installing dependencies using 'uv sync --locked --no-default-groups'
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m        [2mResolved [1m34 packages[0m [2min 0.76ms[0m[0m
+Jun 03 12:58:04 [signtakeoffiq] [34m│[0m        [2mBytecode compiled [1m783 files[0m [2min 237ms[0m[0m
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m -----> Saving cache
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m Procfile: configuring type "web" process: "bash ./start-prod.sh"
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m Procfile: will set process 'web' as the default process
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m Timer: Builder ran for 43.954013104s and ended at 2026-06-03T12:58:05Z
+Jun 03 12:58:05 [signtakeoffiq] [34m╰───────────────────────────────────╼[0m
+Jun 03 12:58:05 [signtakeoffiq] 
+Jun 03 12:58:05 [signtakeoffiq] [34m╭────────────[34m[30m[44m app upload [0m[0m[34m───────────╼[0m
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m [34m › uploading app container image to DOCR[0m
+Jun 03 12:58:05 [signtakeoffiq] [34m│[0m Reusing layers from image <registry-uri-0>
+Jun 03 12:58:06 [signtakeoffiq] [34m│[0m Timer: Exporter started at 2026-06-03T12:58:06Z
+Jun 03 12:58:06 [signtakeoffiq] [34m│[0m Reusing layer 'digitalocean/apt:apt'
+Jun 03 12:58:06 [signtakeoffiq] [34m│[0m Reusing layer 'heroku/nodejs:profile'
+Jun 03 12:58:06 [signtakeoffiq] [34m│[0m Reusing layer 'heroku/python:profile'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Adding 1/1 app layer(s)
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Reusing layer 'buildpacksio/lifecycle:launcher'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Reusing layer 'buildpacksio/lifecycle:config'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Reusing layer 'buildpacksio/lifecycle:process-types'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Adding label 'io.buildpacks.lifecycle.metadata'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Adding label 'io.buildpacks.build.metadata'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Adding label 'io.buildpacks.project.metadata'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Setting default process type 'web'
+Jun 03 12:58:25 [signtakeoffiq] [34m│[0m Timer: Saving <image-1>... started at 2026-06-03T12:58:25Z
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m *** Images (sha256:27533918f6aa95342f657a674f23db463072b51206ddc3d4e2bc37c92d18d080):
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m       <image-2>
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m Timer: Saving <image-3>... ran for 15.934396094s and ended at 2026-06-03T12:58:41Z
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m Timer: Exporter ran for 35.036729305s and ended at 2026-06-03T12:58:41Z
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m Timer: Cache started at 2026-06-03T12:58:41Z
+Jun 03 12:58:41 [signtakeoffiq] [34m│[0m Reusing cache layer 'digitalocean/apt:apt'
+Jun 03 12:58:49 [signtakeoffiq] [34m│[0m Adding cache layer 'heroku/nodejs:shim'
+Jun 03 12:58:57 [signtakeoffiq] [34m│[0m Adding cache layer 'heroku/python:shim'
+Jun 03 12:59:11 [signtakeoffiq] [34m│[0m [32m ✔ uploaded app image to DOCR[0m
+Jun 03 12:59:11 [signtakeoffiq] [34m╰────────────────────────────────────╼[0m
+Jun 03 12:59:11 [signtakeoffiq] 
+Jun 03 12:59:11 [signtakeoffiq] [32m ✔ [0m[30m[42m build complete [0m[0m
+Jun 03 12:59:11 [signtakeoffiq] 
+Jun 03 13:00:12 [signtakeoffiq] [start-prod.sh] Pushing Drizzle schema…
+Jun 03 13:00:13 [signtakeoffiq] 
+Jun 03 13:00:13 [signtakeoffiq] > @workspace/db@0.0.0 push /workspace/lib/db
+Jun 03 13:00:13 [signtakeoffiq] > drizzle-kit push --config ./drizzle.config.ts
+Jun 03 13:00:13 [signtakeoffiq] 
+Jun 03 13:00:14 [signtakeoffiq] Reading config file '/workspace/lib/db/drizzle.config.ts'
+Jun 03 13:00:15 [signtakeoffiq] Using 'pg' driver for database querying
+Jun 03 13:00:17 [signtakeoffiq] [⣷] Pulling schema from database...
+Jun 03 13:00:17 [signtakeoffiq] Error: getaddrinfo ENOTFOUND base
+Jun 03 13:00:17 [signtakeoffiq]     at /workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+Jun 03 13:00:17 [signtakeoffiq]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:17 [signtakeoffiq]     at async Object.query (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+Jun 03 13:00:17 [signtakeoffiq]     at async fromDatabase2 (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:19276:25) {
+Jun 03 13:00:17 [signtakeoffiq]   errno: -3008,
+Jun 03 13:00:17 [signtakeoffiq]   code: 'ENOTFOUND',
+Jun 03 13:00:17 [signtakeoffiq]   syscall: 'getaddrinfo',
+Jun 03 13:00:17 [signtakeoffiq]   hostname: 'base'
+Jun 03 13:00:17 [signtakeoffiq] }
+Jun 03 13:00:17 [signtakeoffiq] [start-prod.sh] Running seeder…
+Jun 03 13:00:17 [signtakeoffiq] [seed] Seeding default tenant "Default Workspace" (default)…
+Jun 03 13:00:18 [signtakeoffiq] [seed] FAILED: _DrizzleQueryError: Failed query: insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing
+Jun 03 13:00:18 [signtakeoffiq] params: default,Default Workspace,default,starter,{}
+Jun 03 13:00:18 [signtakeoffiq]     at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 13:00:18 [signtakeoffiq]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18 [signtakeoffiq]     at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18 [signtakeoffiq]   query: 'insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing',
+Jun 03 13:00:18 [signtakeoffiq]   params: [ 'default', 'Default Workspace', 'default', 'starter', '{}' ],
+Jun 03 13:00:18 [signtakeoffiq]   cause: error: column "signsuiteiq_company_id" of relation "tenants" does not exist
+Jun 03 13:00:18 [signtakeoffiq]       at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)
+Jun 03 13:00:18 [signtakeoffiq]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18 [signtakeoffiq]       at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:149:14)
+Jun 03 13:00:18 [signtakeoffiq]       at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)
+Jun 03 13:00:18 [signtakeoffiq]       at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18 [signtakeoffiq]     length: 142,
+Jun 03 13:00:18 [signtakeoffiq]     severity: 'ERROR',
+Jun 03 13:00:18 [signtakeoffiq]     code: '42703',
+Jun 03 13:00:18 [signtakeoffiq]     detail: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     hint: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     position: '54',
+Jun 03 13:00:18 [signtakeoffiq]     internalPosition: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     internalQuery: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     where: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     schema: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     table: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     column: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     dataType: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     constraint: undefined,
+Jun 03 13:00:18 [signtakeoffiq]     file: 'parse_target.c',
+Jun 03 13:00:18 [signtakeoffiq]     line: '1068',
+Jun 03 13:00:18 [signtakeoffiq]     routine: 'checkInsertTargets'
+Jun 03 13:00:18 [signtakeoffiq]   }
+Jun 03 13:00:18 [signtakeoffiq] }
+Jun 03 13:00:18 [signtakeoffiq] [start-prod.sh] WARN: seed failed (continuing).
+Jun 03 13:00:18 [signtakeoffiq] [start-prod.sh] pdf-sidecar started (PID: 79) on 8008
+Jun 03 13:00:25 [signtakeoffiq] (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 13:00:25 [signtakeoffiq] (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625305,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","port":8080,"msg":"Server listening"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625306,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625307,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 13:00:25 [signtakeoffiq] {"level":30,"time":1780491625542,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 13:00:25 [signtakeoffiq] INFO:     Started server process [79]
+Jun 03 13:00:25 [signtakeoffiq] INFO:     Waiting for application startup.
+Jun 03 13:00:25 [signtakeoffiq] INFO:     Application startup complete.
+Jun 03 13:00:25 [signtakeoffiq] INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)

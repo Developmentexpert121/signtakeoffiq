@@ -1,0 +1,106 @@
+Jun 03 07:35:32  [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Jun 03 07:35:32  [34m│[0m [34m › fetching app source code[0m
+Jun 03 07:35:32  [34m│[0m => Selecting branch "dev-work"
+Jun 03 07:35:39  [34m│[0m => Checking out commit "a8817479676a81fe0660ba6bfef4e6aeee911a63"
+Jun 03 07:35:39  [34m│[0m 
+Jun 03 07:35:39  [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jun 03 07:35:39  [34m╰────────────────────────────────────────╼[0m
+Jun 03 07:35:39  
+Jun 03 07:35:40  [34m › configuring build-time app environment variables:[0m
+Jun 03 07:35:40       SMTP_PASS DEFAULT_OBJECT_STORAGE_BUCKET_ID SPACES_ENDPOINT SPACES_SECRET_ACCESS_KEY SMTP_USER VITE_CLERK_PUBLISHABLE_KEY PRIVATE_OBJECT_DIR GUEST_JWT_SECRET SPACES_ACCESS_KEY_ID CLERK_SECRET_KEY DEV_BYPASS_AUTH PIPELINE_CACHE_ENABLED RASTERIZE_DPI SMTP_FROM SESSION_SECRET CLERK_PUBLISHABLE_KEY AI_INTEGRATIONS_ANTHROPIC_BASE_URL SPACES_REGION SMTP_PORT SMTP_HOST AI_INTEGRATIONS_ANTHROPIC_API_KEY DO_DATABASE_URL AI_INTEGRATIONS_GEMINI_BASE_URL PUBLIC_OBJECT_SEARCH_PATHS AI_INTEGRATIONS_GEMINI_API_KEY
+Jun 03 07:35:40  
+Jun 03 07:35:40  [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jun 03 07:35:40  [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jun 03 07:35:40  [34m│[0m Detected the following buildpacks suitable to build your app:
+Jun 03 07:35:40  [34m│[0m 
+Jun 03 07:35:40  [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jun 03 07:35:40  [34m│[0m    heroku/nodejs                  v0.341.5  (Node.js)
+Jun 03 07:35:40  [34m│[0m    digitalocean/python-appdetect  v0.1.2    
+Jun 03 07:35:40  [34m│[0m    heroku/python                  v5.339.5  (Python)
+Jun 03 07:35:40  [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jun 03 07:35:40  [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jun 03 07:35:40  [34m│[0m 
+Jun 03 07:35:40  [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 07:35:40  [34m│[0m 
+Jun 03 07:35:40  [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 07:35:40  [34m╰─────────────────────────────────────────────╼[0m
+Jun 03 07:35:40  
+Jun 03 07:35:40  [34m╭────────────[34m[30m[44m build caching [0m[0m[34m───────────╼[0m
+Jun 03 07:35:40  [34m│[0m [34m › checking for cache from a previous build[0m
+Jun 03 07:35:41  [34m│[0m Timer: Analyzer started at 2026-06-03T07:35:41Z
+Jun 03 07:35:41  [34m│[0m Restoring metadata for "heroku/nodejs:shim" from cache
+Jun 03 07:35:41  [34m│[0m Timer: Analyzer ran for 747.569451ms and ended at 2026-06-03T07:35:41Z
+Jun 03 07:35:42  [34m│[0m Timer: Restorer started at 2026-06-03T07:35:42Z
+Jun 03 07:35:42  [34m│[0m Restoring data for "heroku/nodejs:shim" from cache
+Jun 03 07:35:50  [34m│[0m Timer: Restorer ran for 7.898240882s and ended at 2026-06-03T07:35:50Z
+Jun 03 07:35:50  [34m╰───────────────────────────────────────╼[0m
+Jun 03 07:35:50  
+Jun 03 07:35:50  [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jun 03 07:35:50  [34m│[0m Timer: Builder started at 2026-06-03T07:35:50Z
+Jun 03 07:35:50  [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jun 03 07:35:50  [34m│[0m        
+Jun 03 07:35:50  [34m│[0m -----> Creating runtime environment
+Jun 03 07:35:50  [34m│[0m        
+Jun 03 07:35:50  [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jun 03 07:35:50  [34m│[0m        NODE_VERBOSE=false
+Jun 03 07:35:50  [34m│[0m        NODE_ENV=
+Jun 03 07:35:50  [34m│[0m        NODE_MODULES_CACHE=true
+Jun 03 07:35:50  [34m│[0m        
+Jun 03 07:35:50  [34m│[0m -----> Installing binaries
+Jun 03 07:35:50  [34m│[0m        engines.node (package.json):   22.x
+Jun 03 07:35:50  [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jun 03 07:35:50  [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jun 03 07:35:50  [34m│[0m        packageManager (package.json): pnpm@10.26.1
+Jun 03 07:35:50  [34m│[0m        
+Jun 03 07:35:51  [34m│[0m        Resolving node version 22.x...
+Jun 03 07:35:51  [34m│[0m        Downloading and installing node 22.22.2...
+Jun 03 07:35:51  [34m│[0m        Validating checksum
+Jun 03 07:35:53  [34m│[0m        Using default npm version: 10.9.7
+Jun 03 07:35:53  [34m│[0m        Downloading and installing pnpm (10.26.1)
+Jun 03 07:35:56  [34m│[0m        Using pnpm 10.26.1
+Jun 03 07:35:58  [34m│[0m        
+Jun 03 07:35:58  [34m│[0m -----> Restoring cache
+Jun 03 07:35:58  [34m│[0m        - pnpm cache
+Jun 03 07:35:58  [34m│[0m        
+Jun 03 07:35:58  [34m│[0m -----> Installing dependencies
+Jun 03 07:35:58  [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m -----> Build
+Jun 03 07:36:03  [34m│[0m        Running build
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m        > workspace@0.0.0 build /workspace
+Jun 03 07:36:03  [34m│[0m        > pnpm run typecheck && pnpm -r --if-present run build
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m        > workspace@0.0.0 typecheck /workspace
+Jun 03 07:36:03  [34m│[0m        > pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:03  [34m│[0m        > workspace@0.0.0 typecheck:libs /workspace
+Jun 03 07:36:03  [34m│[0m        > tsc --build
+Jun 03 07:36:03  [34m│[0m        
+Jun 03 07:36:21  [34m│[0m        /workspace/artifacts/mockup-sandbox:
+Jun 03 07:36:21  [34m│[0m         ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/mockup-sandbox@2.0.0 build: `vite build`
+Jun 03 07:36:21  [34m│[0m        Exit status 1
+Jun 03 07:36:21  [34m│[0m         ELIFECYCLE  Command failed with exit code 1.
+Jun 03 07:36:21  [34m│[0m 
+Jun 03 07:36:21  [34m│[0m -----> Build failed
+Jun 03 07:36:22  [34m│[0m        
+Jun 03 07:36:22  [34m│[0m        We're sorry this build is failing! You can troubleshoot common issues here:
+Jun 03 07:36:22  [34m│[0m        https://devcenter.heroku.com/articles/troubleshooting-node-deploys
+Jun 03 07:36:22  [34m│[0m        
+Jun 03 07:36:22  [34m│[0m        If you're stuck, please submit a ticket so we can help:
+Jun 03 07:36:22  [34m│[0m        https://help.heroku.com/
+Jun 03 07:36:22  [34m│[0m        
+Jun 03 07:36:22  [34m│[0m        Love,
+Jun 03 07:36:22  [34m│[0m        Heroku
+Jun 03 07:36:22  [34m│[0m        
+Jun 03 07:36:22  [34m│[0m Timer: Builder ran for 31.920925775s and ended at 2026-06-03T07:36:22Z
+Jun 03 07:36:22  [34m│[0m [31;1mERROR: [0mfailed to build: exit status 1
+Jun 03 07:36:22  [34m│[0m 
+Jun 03 07:36:22  [34m│[0m 
+Jun 03 07:36:22  [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 07:36:22  [34m│[0m 
+Jun 03 07:36:22  [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 07:36:22  [34m│[0m 
+Jun 03 07:36:22  [34m│[0m [31m ✘ build failed[0m

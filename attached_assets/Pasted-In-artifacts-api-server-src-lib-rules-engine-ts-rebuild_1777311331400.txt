@@ -1,0 +1,181 @@
+In artifacts/api-server/src/lib/rules-engine.ts,
+rebuild sign assignment around a building-type-aware 
+rule matrix. This is a universal fix for all plan types.
+
+STEP 1 — Building type groups:
+const BUILDING_TYPE_GROUPS = {
+  commercial: ['commercial', 'office', 'retail',
+    'restaurant', 'airport', 'transit', 'warehouse',
+    'industrial', 'mixed_use'],
+  residential: ['residential', 'multifamily',
+    'apartment', 'condo', 'senior_living', 'dormitory',
+    'affordable_housing'],
+  education: ['education', 'school', 'university',
+    'college', 'daycare', 'library'],
+  healthcare: ['healthcare', 'hospital', 'clinic',
+    'medical', 'dental', 'nursing_home'],
+  government: ['government', 'municipal', 'federal',
+    'courthouse', 'police', 'fire_station', 'military'],
+  hotel: ['hotel', 'motel', 'resort', 'inn'],
+  assembly: ['assembly', 'church', 'theater', 'arena',
+    'stadium', 'convention', 'museum', 'gym']
+}
+
+STEP 2 — Auto-detect when Unknown selected:
+Analyze room names found on plans:
+- 30%+ rooms are UNIT/APT → residential
+- Contains CLASSROOM, GYMNASIUM, CAFETERIA → education
+- Contains PATIENT ROOM, ICU, WARD, 
+  OPERATING ROOM → healthcare
+- Contains COURTROOM, COUNCIL CHAMBER → government
+- Contains GUEST ROOM + FRONT DESK + LOBBY → hotel
+- Contains AUDITORIUM, SANCTUARY, NAVE → assembly
+- Default → commercial
+
+Log: "Building type auto-detected as [type]"
+
+STEP 3 — Rule matrix per building type:
+
+COMMERCIAL:
+- Room ID: all enclosed rooms except corridors
+- Restroom: all toilet rooms
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 1 per floor
+- Office Directory: only if 3+ suites OR 30+ rooms 
+  with lobby
+- Max Occupancy: conference/dining/meeting rooms only
+- Unit ID: NEVER
+
+RESIDENTIAL:
+- Unit ID: every UNIT/APT/SUITE entrance
+- Room ID: common areas only (lobby, mail room,
+  laundry, gym, leasing office, package room,
+  community room, fitness center)
+- Restroom: common area restrooms only
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 2 per floor
+- Max Occupancy: gym/community room only
+- Office Directory: NEVER
+
+EDUCATION:
+- Room ID: ALL rooms (classrooms, labs, offices,
+  storage, mechanical, custodial)
+- Restroom: all toilet rooms
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 1 per floor
+- Max Occupancy: gymnasium, auditorium, cafeteria only
+- Unit ID: NEVER
+- Office Directory: NEVER
+
+HEALTHCARE:
+- Room ID: ALL rooms (patient rooms, exam rooms,
+  labs, offices, storage, mechanical)
+- Restroom: all toilet rooms
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 2 per floor
+- Max Occupancy: waiting rooms, assembly areas
+- Unit ID: NEVER
+
+GOVERNMENT:
+- Room ID: ALL rooms
+- Restroom: all toilet rooms
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 1 per floor
+- Office Directory: if public lobby present
+- Max Occupancy: courtrooms, chambers, assembly rooms
+- Unit ID: NEVER
+
+HOTEL:
+- Unit ID: every guest room (KING, QUEEN, SUITE + 
+  number, GUEST ROOM, ROOM + number)
+- Room ID: common areas (lobby, restaurant,
+  conference, spa, fitness, business center,
+  ballroom, pool, bar)
+- Restroom: public restrooms only
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 2 per floor
+- Max Occupancy: dining, conference, ballroom
+
+ASSEMBLY:
+- Room ID: all permanent spaces
+- Restroom: all toilet rooms
+- Exit: all exit doors
+- Stair Corridor + Landing: all stairs
+- Elevator: all elevators
+- Evacuation Map: 2 per floor
+- Max Occupancy: main hall, sanctuary, auditorium,
+  all assembly spaces
+- Accessible Entrance: always required
+- Unit ID: NEVER
+
+STEP 4 — Room classification overrides per type:
+
+RESIDENTIAL overrides:
+  UNIT [anything] → Unit ID
+  APT [anything] → Unit ID
+  SUITE [number] → Unit ID
+  LOBBY, MAIL ROOM, LAUNDRY, PACKAGE ROOM,
+  LEASING OFFICE, FITNESS, CLUB ROOM,
+  COMMUNITY ROOM → Room ID
+
+HEALTHCARE overrides:
+  PATIENT ROOM, EXAM ROOM, OPERATING ROOM,
+  ICU, RECOVERY, NURSING STATION → Room ID
+  WAITING ROOM → Room ID + Max Occupancy
+
+EDUCATION overrides:
+  CLASSROOM, LAB, GYMNASIUM, CAFETERIA,
+  AUDITORIUM, LIBRARY, MEDIA CENTER → Room ID
+  GYMNASIUM, CAFETERIA, AUDITORIUM → also Max Occupancy
+
+HOTEL overrides:
+  GUEST ROOM, KING, QUEEN → Unit ID
+  BALLROOM, CONFERENCE → Room ID + Max Occupancy
+
+STEP 5 — Universal corridor exclusion (all types):
+Never assign Room ID to:
+CORRIDOR, HALLWAY, HALL, PASSAGE, CIRCULATION,
+WALKWAY, CONCOURSE, BREEZEWAY, RAMP
+Still allow Exit, Stair, Directional on corridors.
+
+STEP 6 — Universal garbage filter (all types):
+Never assign any sign to rooms matching:
+/occupant.?load/i
+/load.?table/i
+/fixture.?table/i
+/door.?schedule/i
+/finish.?schedule/i
+/^keynote/i
+/^general.?note/i
+/^note:/i
+/^legend/i
+/^abbreviation/i
+/^detail\s/i
+/^section\s[a-z]/i
+/^bc\s/i (building code references)
+
+STEP 7 — Evacuation Map cap by building size:
+floors 1-3: max 1 evac map per floor
+floors 4-10: max 2 evac maps per floor
+floors 11+: max 3 evac maps per floor
+residential 15+ floors: max 4 per floor
+
+STEP 8 — Log output:
+"[rules] Building type: [type] ([auto/user-set])
+[rules] Rule matrix: [type]
+[rules] Assigned: X Room ID, Y Unit ID, 
+  Z Restroom, W Stair, V Elevator, U Evac Map
+[rules] Suppressed: X corridors, Y garbage, 
+  Z wrong-type rooms"

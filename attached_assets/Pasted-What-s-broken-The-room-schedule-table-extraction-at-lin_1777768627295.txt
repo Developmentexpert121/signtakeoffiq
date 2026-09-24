@@ -1,0 +1,48 @@
+What's broken: The room-schedule table extraction at line ~5059 in pipeline.ts receives correct table data from pdfplumber but fails to parse it into rooms because of two issues: (1) the room name and floor finish columns are merged by pdfplumber into a single cell (e.g. 'LOBBY TILE-1'), so the room name extractor needs to strip trailing finish codes; (2) header/title rows like 'ROOM FINISH SCHEDULE' and 'ROOM NUMBER' pass the row filter and get treated as room data.
+File that changes: artifacts/api-server/src/lib/pipeline.ts only — the room-schedule table parsing logic around line 5059.
+What won't be affected: All other extractTable call sites, all other pipeline steps, all existing jobs, all benchmark jobs.
+The fix — update the room-schedule row parser:
+Find the parsing logic that processes rows returned by extractTable for room_schedule sheets. Update it as follows:
+1. Strengthen the header/skip row filter. Skip any row where cells[0] matches any of these patterns:
+typescriptconst SKIP_ROW_PATTERNS = [
+  /^ROOM\s+FINISH\s+SCHEDULE$/i,
+  /^ROOM\s+NUMBER$/i,
+  /^ROOM$/i,
+  /^NO\.?$/i,
+  /^#$/i,
+  /^RM\.?$/i,
+  /^\s*$/,        // empty
+  /^null$/i,
+];
+
+function isHeaderRow(cells: (string | null)[]): boolean {
+  const first = (cells[0] ?? "").trim();
+  return SKIP_ROW_PATTERNS.some(p => p.test(first)) 
+    || !/^\d/.test(first);  // room numbers always start with a digit
+}
+2. Fix the merged room name column. When pdfplumber merges ROOM NAME and F columns, the room name cell contains the room name followed by a finish code. Strip everything after the first finish code token:
+typescriptconst FINISH_CODE_PATTERN = /\s+(TILE-\d+|LVT-\d+|VCT-\d+|EPX|SC|EXISTING|MATCH\s+EX|GWB|ACT-\d+|P-\d+|PT-\d+|VCB-\d+|CTB-\d+|ECB|NC)\b.*$/i;
+
+function extractRoomName(raw: string | null): string {
+  if (!raw) return "";
+  return raw.replace(FINISH_CODE_PATTERN, "").trim();
+}
+3. Apply both fixes in the row processing loop for the room-schedule path:
+typescriptfor (const row of tableRows) {
+  if (isHeaderRow(row)) continue;
+  
+  const roomNumber = (row[0] ?? "").trim();
+  const roomNameRaw = (row[1] ?? "").trim();
+  const roomName = extractRoomName(roomNameRaw);
+  
+  if (!roomNumber || !roomName) continue;
+  
+  // rest of existing room insert logic unchanged
+}
+Then:
+
+Typecheck — 0 errors
+Run full test suite — 1,585 passing
+Do NOT rescan until tests pass
+Rescan Fresh Example 8 — report total sign count
+Do not rescan Fox Hill or any other benchmark job

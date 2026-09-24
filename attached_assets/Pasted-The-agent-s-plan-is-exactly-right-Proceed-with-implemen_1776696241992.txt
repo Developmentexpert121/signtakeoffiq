@@ -1,0 +1,55 @@
+The agent's plan is exactly right. **Proceed with implementing it.** This is the correct architectural fix — read the signage schedule table directly instead of inferring from room names.
+
+**Paste this into Replit Agent:**
+
+> Proceed with implementing the signage schedule table parser (Step 4b). Here is the exact plan:
+>
+> **1. Add `/extract-table` endpoint to `artifacts/pdf-sidecar/main.py`:**
+> ```python
+> @app.post("/extract-table")
+> def extract_table(body: dict):
+>     """Extract tabular data from a PDF page using pdfplumber."""
+>     pdf_path = body["pdf_path"]
+>     page_number = body["page_number"]  # 1-indexed
+>     
+>     with pdfplumber.open(pdf_path) as pdf:
+>         page = pdf.pages[page_number - 1]
+>         tables = page.extract_tables()
+>     
+>     return {"tables": tables, "page": page_number}
+> ```
+>
+> **2. Add `parseSignageSchedule()` function in `artifacts/api-server/src/lib/pipeline.ts` at Step 4b (after L1200, before Step 5):**
+>
+> The function should:
+> - Find sheets where `sheet_type = 'signage_schedule'`
+> - Call sidecar `/extract-table` on each signage schedule page
+> - Parse rows looking for columns: SIGN, ROOM NUMBER, ROOM NAME, VERBAGE, TYPE
+> - The I-601 table has headers: SIGN | ROOM NUMBER | ROOM NAME | VERBAGE | TYPE | DETAIL | INTERIOR/EXTERIOR
+> - Skip header rows (where first cell = "SIGN" or "SIGN\n")
+> - For each data row, insert a sign record with:
+>   - `sign_type`: map TYPE column (BB2A→"Room ID", BB2B→"Room ID w/insert", BB3→"Stair(Landing)", SS1A→"Stair ID", AA1→"Directory(Building)", AA2→"Directory(Floor-L1)", AA3→"Directory(Floor-L2)", BB4→"Exit(Tactile)", BB7A→"Restroom(Men)", BB7B→"Restroom(Women)", DD1→"Regulatory", LED→"LED", BB2D→"Occupancy", BB2E→"Egress", BB5→"Entry(Building)", BB2C→"Conference")
+>   - `room_number`: ROOM NUMBER column
+>   - `sign_identifier`: SIGN column (S1, S2... S123)
+>   - `source`: "schedule"
+>   - `status`: "extracted"
+> - Set `hasScheduleImport = true` on the job after successful import
+>
+> **3. In Step 9 (rules engine at L1666), skip rules engine if `hasScheduleImport = true`:**
+> ```typescript
+> if (hasScheduleImport) {
+>   log("Skipping rules engine — signs imported directly from signage schedule");
+> } else {
+>   // existing rules engine code
+> }
+> ```
+>
+> **4. Add `has_schedule_import` boolean column to jobs table:**
+> In `artifacts/api-server/src/db/schema.ts`, add:
+> ```typescript
+> hasScheduleImport: boolean("has_schedule_import").default(false),
+> ```
+> Run: `pnpm --filter @workspace/api-server db:push`
+>
+> After implementing, rebuild, restart sidecar, rescan SOF 7087.
+> Expected result: exactly 123 signs, types matching I-601 schedule, `source = 'schedule'`.

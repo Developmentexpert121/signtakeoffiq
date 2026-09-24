@@ -1,0 +1,81 @@
+We need you to build POST /api/internal/provision-user on SignTakeoffIQ. It's the webhook SignSuiteIQ.ai calls whenever a user is created, updated, password-changed, or archived in the portal, so SignTakeoffIQ's local users table stays in lock-step with SignSuite. This is exactly what InstallIQ.ai already implemented — match its behavior so the three child apps stay consistent.
+
+Without this endpoint, SSO-logged-in users will not be able to log in directly on SignTakeoffIQ's native login page (you have no local password row to match against). With it, both flows — SSO and native email+password login — work seamlessly with the same credentials the user typed at SignSuite.
+
+Endpoint contract
+POST /api/internal/provision-user
+Headers:
+  Content-Type: application/json
+  X-App-Secret: <SIGNSUITE_SSO_SECRET>      // same shared secret as /sso/exchange
+
+Body (JSON):
+
+{
+  "external_id": 123,                       // SignSuiteIQ users.id — store on your side as signsuiteiq_user_id
+  "email": "user@example.com",
+  "username": "user",
+  "name": "Jane Doe",
+  "role": "user",                           // "super_admin" | "admin" | "user"
+  "phone": "+15551234567",                  // nullable
+  "job_title": "Estimator",                 // nullable
+  "location": "Dallas, TX",                 // nullable
+  "action": "upsert",                       // "upsert" | "delete"
+  "password": "plaintext-here",             // OPTIONAL — present ONLY on create / password reset / forgot-password
+  "tenant": {                               // OPTIONAL — present only when the user has a company on SignSuite
+    "external_id": 42,                      // SignSuite business_details.id — store as signsuiteiq_company_id
+    "name": "Acme Signs Inc.",
+    "slug": "acme-signs-inc-42",            // already URL-safe and collision-free; use as-is
+    "email": "billing@acme.com",            // nullable
+    "phone": "+15559876543",                // nullable
+    "website": "https://acme.com"           // nullable
+  }
+}
+
+Behavior — match InstallIQ's implementation exactly
+Authenticate. Constant-time compare X-App-Secret against your env-stored SIGNSUITE_SSO_SECRET. Wrong or missing → 401 { error: "invalid app secret" }. Never log the secret value.
+
+Lookup the existing row in this order:
+
+First by email (case-insensitive).
+If no email match and external_id was provided, fall back to matching by signsuiteiq_user_id. (This covers the case where the user changes their email in SignSuite — we update the existing row instead of inserting a duplicate that would crash on the unique email index.)
+If action === "delete" — soft-delete: set deleted_at = NOW() on the matched row. If no match exists, log it and return 200 { ok: true, ignored: true }. Never hard-delete from this endpoint.
+
+If action === "upsert" and a row was found:
+
+Update name, role, phone, job_title, location.
+Clear deleted_at (so re-activating an archived user just works).
+Set signsuiteiq_user_id = external_id if provided.
+Only overwrite username if the new one isn't already taken by a different row (collision-safe).
+If body.password is present → bcrypt-hash (cost 10) and overwrite password. If absent → leave the existing hash alone.
+If tenant is present → upsert tenant by signsuiteiq_company_id (preferred) or slug, keep its local id stable, link the user to it.
+If action === "upsert" and no row was found (brand-new user):
+
+Username collision check: if the incoming username is already taken, append 1, 2, 3… until you find a free one (finalUsername).
+Password:
+If body.password is present → bcrypt-hash (cost 10) and store it.
+If absent → store a random unusable bcrypt hash (e.g. !unusable!<random hex>) so the row exists and shows up everywhere in SignTakeoffIQ, but native password login cannot succeed until the user does "Forgot Password" or comes in via SSO.
+Insert the row with all fields + signsuiteiq_user_id = external_id + tenant link.
+Responses:
+
+Success → 200 { ok: true, user_id: <local id>, action: <action> } (or 200 { ok: true, ignored: true } for a delete miss).
+Validation failure → 400 { error: "<specific reason>" }.
+Bad secret → 401 { error: "invalid app secret" }.
+Anything unexpected → 500 { error: "internal error" } (deliberately generic so the caller retries with backoff and you don't leak schema details over the wire). Log the real error on your side as [Provision] Error: ....
+Why a generic 500?
+SignSuite's worker treats any non-2xx as failure and retries with exponential backoff (10s, 30s, 1m, 5m, 15m, 30m, 1h, 2h, 4h, 8h — then parks for 30 days). A leaked DB error in the body would be noise; a clean 500 means we retry cleanly and you investigate from your own logs.
+
+After it's deployed
+End-state behavior, matching InstallIQ today:
+
+Sign-in via SignSuiteIQ SSO (recommended path): user lands on /sso/callback, you exchange the one-time code, look up the local user by email or signsuiteiq_user_id, start the session, render the app-switcher widget. Already working from your earlier integration.
+Direct password login on SignTakeoffIQ: works only if SignSuite sent a real password (i.e. the user registered, reset, or "forgot password"-ed on SignSuite while this endpoint existed). Otherwise the user must do "Forgot Password" once to set a real password locally.
+Net effect: SignSuiteIQ is the source of truth for the user roster. Every create / update / role change / password reset / archive over there propagates to SignTakeoffIQ in real time, and your users table stays in sync without anyone touching SignTakeoffIQ's admin UI.
+
+Acceptance test (run these end-to-end before declaring done)
+Auth guard: curl -X POST .../api/internal/provision-user -d '{...}' -H 'Content-Type: application/json' (no X-App-Secret) → 401. Same call with a wrong secret → 401.
+Brand-new user: With a valid secret and {action: "upsert", email: "newuser@test.com", username: "newuser", name: "...", role: "user", password: "Tmp123!"}, the row is inserted with signsuiteiq_user_id set and the bcrypt hash matches "Tmp123!". Native login at SignTakeoffIQ's login page with that email + Tmp123! succeeds.
+Username collision: Call again with username: "newuser" but a different external_id and email → the new row stores newuser1 (or next free suffix), no DB error.
+Profile update (no password): Same email, {action: "upsert", name: "New Name"} (no password). The row's name updates, the bcrypt hash is unchanged, the user can still log in with Tmp123!.
+Password reset: {action: "upsert", password: "Reset999!"} updates the hash; old password no longer logs in, new one does.
+Email change: Call with {action: "upsert", external_id: 123, email: "renamed@test.com"} after a prior call had external_id: 123, email: "newuser@test.com". The existing row gets its email updated to renamed@test.com — no duplicate row is created.
+Delete: {action: "delete", email: "renamed@test.com"} sets deleted_at. The user can no longer log in. A second delete call returns 200 { ok: true, ignored: true }.

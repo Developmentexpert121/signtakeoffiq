@@ -1,0 +1,340 @@
+Jun 03 09:57:42  [start-prod.sh] pdf-sidecar supervisor started (PID: 26) on 8008 (not waited on)
+Jun 03 09:57:42  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 09:57:42  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:42  Traceback (most recent call last):
+Jun 03 09:57:42    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:42      import pdfplumber
+Jun 03 09:57:42  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:42  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:45  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:45  Traceback (most recent call last):
+Jun 03 09:57:45    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:45      import pdfplumber
+Jun 03 09:57:45  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:45  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:46  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 09:57:46  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 09:57:46  {"level":30,"time":1780480666356,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","port":8080,"msg":"Server listening"}
+Jun 03 09:57:46  {"level":30,"time":1780480666357,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 09:57:46  {"level":30,"time":1780480666357,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 09:57:46  {"level":30,"time":1780480666420,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 09:57:46  {"level":30,"time":1780480666420,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 09:57:46  {"level":30,"time":1780480666420,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 09:57:46  {"level":30,"time":1780480666438,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-7rwkk","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 09:57:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:47  Traceback (most recent call last):
+Jun 03 09:57:47    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:47      import pdfplumber
+Jun 03 09:57:47  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:47  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:49  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:49  Traceback (most recent call last):
+Jun 03 09:57:49    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:49      import pdfplumber
+Jun 03 09:57:49  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:49  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:51  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:51  Traceback (most recent call last):
+Jun 03 09:57:51    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:51      import pdfplumber
+Jun 03 09:57:51  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:51  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:53  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:53  Traceback (most recent call last):
+Jun 03 09:57:53    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:53      import pdfplumber
+Jun 03 09:57:53  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:53  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:55  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:55  Traceback (most recent call last):
+Jun 03 09:57:55    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:55      import pdfplumber
+Jun 03 09:57:55  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:58  Traceback (most recent call last):
+Jun 03 09:57:58    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:58      import pdfplumber
+Jun 03 09:57:58  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:00  Traceback (most recent call last):
+Jun 03 09:58:00    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:00      import pdfplumber
+Jun 03 09:58:00  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:00  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:02  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:02  Traceback (most recent call last):
+Jun 03 09:58:02    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:02      import pdfplumber
+Jun 03 09:58:02  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:02  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:04  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:04  Traceback (most recent call last):
+Jun 03 09:58:04    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:04      import pdfplumber
+Jun 03 09:58:04  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:04  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:06  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:06  Traceback (most recent call last):
+Jun 03 09:58:06    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:06      import pdfplumber
+Jun 03 09:58:06  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:06  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:08  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:08  Traceback (most recent call last):
+Jun 03 09:58:08    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:08      import pdfplumber
+Jun 03 09:58:08  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:10  Traceback (most recent call last):
+Jun 03 09:58:10    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:10      import pdfplumber
+Jun 03 09:58:10  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:10  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:12  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:12  Traceback (most recent call last):
+Jun 03 09:58:12    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:12      import pdfplumber
+Jun 03 09:58:12  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:56:52  [start-prod.sh] pdf-sidecar supervisor started (PID: 26) on 8008 (not waited on)
+Jun 03 09:56:52  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 09:56:52  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:56:52  Traceback (most recent call last):
+Jun 03 09:56:52    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:56:52      import pdfplumber
+Jun 03 09:56:52  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:56:52  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:56:54  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:56:54  Traceback (most recent call last):
+Jun 03 09:56:54    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:56:54      import pdfplumber
+Jun 03 09:56:54  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:56:54  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:56:56  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:56:57  Traceback (most recent call last):
+Jun 03 09:56:57    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:56:57      import pdfplumber
+Jun 03 09:56:57  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:56:57  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:56:57  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 09:56:57  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 09:56:57  {"level":30,"time":1780480617266,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","port":8080,"msg":"Server listening"}
+Jun 03 09:56:57  {"level":30,"time":1780480617267,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 09:56:57  {"level":30,"time":1780480617268,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 09:56:57  {"level":30,"time":1780480617409,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 09:56:57  {"level":30,"time":1780480617409,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 09:56:57  {"level":30,"time":1780480617409,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 09:56:57  {"level":30,"time":1780480617429,"pid":1,"hostname":"signtakeoffiq-5b8dd68c66-976d8","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 09:56:59  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:56:59  Traceback (most recent call last):
+Jun 03 09:56:59    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:56:59      import pdfplumber
+Jun 03 09:56:59  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:56:59  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:01  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:01  Traceback (most recent call last):
+Jun 03 09:57:01    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:01      import pdfplumber
+Jun 03 09:57:01  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:01  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:03  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:03  Traceback (most recent call last):
+Jun 03 09:57:03    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:03      import pdfplumber
+Jun 03 09:57:03  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:03  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:05  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:05  Traceback (most recent call last):
+Jun 03 09:57:05    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:05      import pdfplumber
+Jun 03 09:57:05  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:08  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:08  Traceback (most recent call last):
+Jun 03 09:57:08    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:08      import pdfplumber
+Jun 03 09:57:08  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:10  Traceback (most recent call last):
+Jun 03 09:57:10    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:10      import pdfplumber
+Jun 03 09:57:10  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:10  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:12  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:12  Traceback (most recent call last):
+Jun 03 09:57:12    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:12      import pdfplumber
+Jun 03 09:57:12  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:14  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:14  Traceback (most recent call last):
+Jun 03 09:57:14    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:14      import pdfplumber
+Jun 03 09:57:14  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:14  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:16  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:16  Traceback (most recent call last):
+Jun 03 09:57:16    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:16      import pdfplumber
+Jun 03 09:57:16  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:16  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:18  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:18  Traceback (most recent call last):
+Jun 03 09:57:18    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:18      import pdfplumber
+Jun 03 09:57:18  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:21  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:21  Traceback (most recent call last):
+Jun 03 09:57:21    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:21      import pdfplumber
+Jun 03 09:57:21  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:21  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:23  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:23  Traceback (most recent call last):
+Jun 03 09:57:23    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:23      import pdfplumber
+Jun 03 09:57:23  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:23  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:25  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:25  Traceback (most recent call last):
+Jun 03 09:57:25    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:25      import pdfplumber
+Jun 03 09:57:25  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:25  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:27  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:27  Traceback (most recent call last):
+Jun 03 09:57:27    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:27      import pdfplumber
+Jun 03 09:57:27  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:27  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:29  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:29  Traceback (most recent call last):
+Jun 03 09:57:29    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:29      import pdfplumber
+Jun 03 09:57:29  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:29  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:31  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:31  Traceback (most recent call last):
+Jun 03 09:57:31    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:31      import pdfplumber
+Jun 03 09:57:31  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:31  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:33  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:34  Traceback (most recent call last):
+Jun 03 09:57:34    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:34      import pdfplumber
+Jun 03 09:57:34  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:34  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:36  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:36  Traceback (most recent call last):
+Jun 03 09:57:36    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:36      import pdfplumber
+Jun 03 09:57:36  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:36  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:38  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:38  Traceback (most recent call last):
+Jun 03 09:57:38    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:38      import pdfplumber
+Jun 03 09:57:38  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:38  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:40  Traceback (most recent call last):
+Jun 03 09:57:40    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:40      import pdfplumber
+Jun 03 09:57:40  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:40  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:42  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:42  Traceback (most recent call last):
+Jun 03 09:57:42    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:42      import pdfplumber
+Jun 03 09:57:42  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:42  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:44  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:44  Traceback (most recent call last):
+Jun 03 09:57:44    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:44      import pdfplumber
+Jun 03 09:57:44  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:44  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:47  Traceback (most recent call last):
+Jun 03 09:57:47    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:47      import pdfplumber
+Jun 03 09:57:47  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:47  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:49  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:49  Traceback (most recent call last):
+Jun 03 09:57:49    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:49      import pdfplumber
+Jun 03 09:57:49  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:49  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:51  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:51  Traceback (most recent call last):
+Jun 03 09:57:51    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:51      import pdfplumber
+Jun 03 09:57:51  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:51  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:53  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:53  Traceback (most recent call last):
+Jun 03 09:57:53    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:53      import pdfplumber
+Jun 03 09:57:53  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:53  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:55  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:55  Traceback (most recent call last):
+Jun 03 09:57:55    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:55      import pdfplumber
+Jun 03 09:57:55  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:57:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:57:58  Traceback (most recent call last):
+Jun 03 09:57:58    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:57:58      import pdfplumber
+Jun 03 09:57:58  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:57:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:00  Traceback (most recent call last):
+Jun 03 09:58:00    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:00      import pdfplumber
+Jun 03 09:58:00  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:00  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:02  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:02  Traceback (most recent call last):
+Jun 03 09:58:02    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:02      import pdfplumber
+Jun 03 09:58:02  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:02  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:04  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:04  Traceback (most recent call last):
+Jun 03 09:58:04    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:04      import pdfplumber
+Jun 03 09:58:04  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:04  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:06  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:06  Traceback (most recent call last):
+Jun 03 09:58:06    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:06      import pdfplumber
+Jun 03 09:58:06  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:06  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:08  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:08  Traceback (most recent call last):
+Jun 03 09:58:08    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:08      import pdfplumber
+Jun 03 09:58:08  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:10  Traceback (most recent call last):
+Jun 03 09:58:10    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:10      import pdfplumber
+Jun 03 09:58:10  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:10  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 09:58:12  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 09:58:13  Traceback (most recent call last):
+Jun 03 09:58:13    File "/workspace/artifacts/pdf-sidecar/main.py", line 16, in <module>
+Jun 03 09:58:13      import pdfplumber
+Jun 03 09:58:13  ModuleNotFoundError: No module named 'pdfplumber'
+Jun 03 09:58:13  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s

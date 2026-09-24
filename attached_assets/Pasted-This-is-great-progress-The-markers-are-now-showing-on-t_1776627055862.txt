@@ -1,0 +1,60 @@
+This is great progress! The markers are now showing on the plan with the legend working. I can see Room ID (orange), Exit (red), Room ID w/insert (purple), and Restroom (teal) markers placed on the Level 2 floor plan.
+
+Looking at what's still wrong:
+
+1. **Markers are clustered on the left side** — most dots are bunched near columns 4-5, while the right half of the plan (columns 6-10) has very few markers despite having rooms like CLASSRM 1-6, AES 1ST SGT, CORRIDOR, etc.
+
+2. **Location text is wrong** — "1106 — WOMEN'S MEN'S TACTICS OFFIC..." — Room 1106 is SERE (Level 1), not a women's/men's room. The location text is picking up neighboring text rather than the correct room name.
+
+3. **38 signs with no coordinates** — these are the missed ones.
+
+The core issue is the **room label extraction is matching text incorrectly** — the pdfplumber word extraction is finding the room number but then grabbing nearby words from adjacent rooms rather than the correct room name.
+
+**Paste this into Replit Agent:**
+
+> The floor plan markers are showing but in the wrong positions and with wrong room names. Looking at the sign list:
+> - "1106 — WOMEN'S MEN'S TACTICS OFFIC..." — room 1106 is SERE, not women's/men's
+> - "1104 — F 2.2 2.8 WOMEN'S MEN'S" — picking up grid reference text and adjacent room names
+> - Most markers are clustered on the left, missing rooms on the right half of the plan
+>
+> **Root cause:** The room name extraction in `artifacts/api-server/src/lib/pipeline.ts` in `extractRoomsFromWords` is collecting nearby words within too wide a radius (dx < 320), grabbing grid reference numbers (2.2, 2.8, F, G) and adjacent room names (WOMEN'S, MEN'S) that happen to be within 320 pixels horizontally.
+>
+> **Fix 1 — Tighten the nearby word collection radius:**
+>
+> Find in `extractRoomsFromWords` the nearby word collection loop. Change the horizontal tolerance from 320 to 150, and vertical from 35 to 25:
+> ```typescript
+> // Find:
+> if (dy < 35 && dx < 320 && !ROOM_NUMBER_RE.test(w2.text)) {
+> // Change to:
+> if (dy < 25 && dx < 150 && !ROOM_NUMBER_RE.test(w2.text)) {
+> ```
+>
+> **Fix 2 — Filter out grid reference text:**
+>
+> Grid lines on architectural plans use single letters (A-N) and decimal numbers (2.2, 4.8, 10.2) as coordinates. These should be excluded from room names.
+>
+> Add to the IGNORE_WORDS set or add a filter before pushing to nearby:
+> ```typescript
+> // Skip single letters (grid line references like A, B, C... N)
+> if (upper.length === 1 && /[A-Z]/.test(upper)) continue;
+> // Skip decimal grid numbers like 2.2, 4.8, 10.2
+> if (/^\d+\.\d+$/.test(w2.text)) continue;
+> // Skip pure numbers that aren't room numbers
+> if (/^\d+$/.test(w2.text) && w2.text.length <= 2) continue;
+> ```
+>
+> **Fix 3 — Prefer words ABOVE the room number, not beside it:**
+>
+> On architectural floor plans, the room name is typically printed ABOVE or BELOW the room number inside the room boundary. Words to the left/right at the same y-level are more likely to be from adjacent rooms.
+>
+> Change the nearby collection to prefer words that are vertically close (within the same room label group) over words that are horizontally far:
+> ```typescript
+> // Prefer words within 80px horizontally AND 40px vertically (tight cluster)
+> // Allow up to 200px horizontally only if within 15px vertically
+> const tightCluster = dy < 40 && dx < 80;
+> const sameLineClose = dy < 15 && dx < 200;
+> if (!tightCluster && !sameLineClose) continue;
+> ```
+>
+> After making changes, rebuild: `cd artifacts/api-server && pnpm run build`
+> Then Rescan the Test 2 / SOF 7087 job to re-extract with the improved logic.

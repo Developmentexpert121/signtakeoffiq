@@ -1,0 +1,84 @@
+App: AI-Assist Takeoffs
+Stack: Node.js API server, React frontend, PostgreSQL
+Location: artifacts/
+
+Fix three issues:
+
+──────────────────────────────────────────
+BUG 1 — Overview shows 0 signs after force rescan
+──────────────────────────────────────────
+In artifacts/api-server/src/routes/jobs.ts (or 
+wherever the Overview job stats are computed):
+
+The totalSigns count on the Overview tab is reading 
+from a cached/stale field on the jobs table that 
+resets to 0 at the start of a force rescan and may 
+not be updated until processing fully completes.
+
+Fix:
+1. Create or update a GET /api/jobs/:jobId/counts 
+   endpoint that queries the signs table LIVE:
+
+   SELECT 
+     COUNT(*) as totalSigns,
+     COUNT(*) FILTER (WHERE confidence >= 75) as highConfidence,
+     COUNT(*) FILTER (WHERE confidence < 75 AND dismissed = false) as needsReview
+   FROM signs
+   WHERE job_id = $1 AND dismissed = false
+
+2. In artifacts/web/src/pages/job-detail.tsx:
+   The Overview tab metric cards (Total Signs, 
+   High Confidence, Needs Review) must call 
+   /api/jobs/:jobId/counts — NOT read from 
+   job.totalSigns on the job record.
+   
+   This ensures Overview always matches Review tab.
+
+3. Do NOT change the Review tab — it already 
+   shows the correct count. Just make Overview 
+   use the same live query.
+
+──────────────────────────────────────────
+BUG 2 — Summary tab in XLSX shows pricing columns
+──────────────────────────────────────────
+In the XLSX export logic (likely in 
+artifacts/api-server/src/lib/xlsx-export.ts 
+or similar):
+
+CURRENT Summary sheet columns:
+  Sign Type | Standard Size | Total Qty | ADA Required | Unit Price | Extended Price
+
+REQUIRED Summary sheet columns:
+  Sign Type | Standard Size | Total Qty | ADA Required
+
+Rules:
+- KEEP the "ADA Required" column — this is 
+  code-mandated (ADA Standards 216/703) and 
+  belongs in the sign count summary
+- REMOVE "Unit Price" and "Extended Price" 
+  columns from the Summary sheet entirely
+- REMOVE the Subtotal, Rush Fee, Shipping, 
+  and Grand Total rows from the Summary sheet
+- REMOVE the footer note about pricing from 
+  the Summary sheet
+
+All pricing (Unit Price, Extended Price, 
+material, finishing, installation, subtotal, 
+grand total) stays exclusively on the 
+Pricing tab — no changes to Pricing tab.
+
+Summary tab should be a clean sign count 
+schedule only: what signs, what size, how many, 
+ADA required yes/no.
+
+──────────────────────────────────────────
+VERIFY
+──────────────────────────────────────────
+After changes:
+1. Run a force rescan on any job — Overview 
+   Total Signs should match Review tab room count
+2. Download XLSX — Summary tab should have 
+   exactly 4 columns: Sign Type, Standard Size, 
+   Total Qty, ADA Required. No dollar amounts.
+3. Pricing tab unchanged and intact.
+4. All 1,430 existing tests must still pass.

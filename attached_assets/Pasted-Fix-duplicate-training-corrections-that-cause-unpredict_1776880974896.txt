@@ -1,0 +1,71 @@
+Fix duplicate training corrections that cause unpredictable sign type assignment.
+Fix 1 — Prevent future duplicates in training.ts:
+In POST /training/import/confirm, just before the loop that builds the corrections array to insert, add a deactivation step:
+ts// Deactivate existing corrections and rule overrides for the same room patterns
+// before inserting new ones — prevents conflicting duplicates
+for (const diff of deduplicatedDiffs) {
+  const roomNamePattern = String(diff.roomName || "").trim();
+  if (!roomNamePattern) continue;
+
+  await db.update(trainingCorrectionsTable)
+    .set({ isActive: false })
+    .where(and(
+      eq(trainingCorrectionsTable.tenantId, tenantId),
+      eq(trainingCorrectionsTable.roomNamePattern, roomNamePattern),
+    ));
+
+  await db.update(ruleOverridesTable)
+    .set({ isActive: false })
+    .where(and(
+      eq(ruleOverridesTable.tenantId, tenantId),
+      sql`condition->>'roomNamePattern' = ${roomNamePattern}`,
+    ));
+}
+Fix 2 — Clean up existing duplicates via DB migration script:
+Create a file artifacts/api-server/src/scripts/fix-duplicate-corrections.ts and run it once:
+tsimport { db } from "@workspace/db";
+import { trainingCorrectionsTable, ruleOverridesTable } from "@workspace/db";
+import { eq, and, sql, ne } from "drizzle-orm";
+
+// For each room pattern, keep only the most recently created correction
+// and deactivate all older ones
+const duplicates = await db.execute(sql`
+  UPDATE training_corrections tc1
+  SET is_active = false
+  WHERE is_active = true
+  AND id NOT IN (
+    SELECT DISTINCT ON (tenant_id, room_name_pattern) id
+    FROM training_corrections
+    WHERE is_active = true
+    AND room_name_pattern IS NOT NULL
+    ORDER BY tenant_id, room_name_pattern, created_at DESC
+  )
+`);
+
+// Same for rule_overrides
+await db.execute(sql`
+  UPDATE rule_overrides ro1
+  SET is_active = false
+  WHERE is_active = true
+  AND room_name_pattern IS NOT NULL
+  AND id NOT IN (
+    SELECT DISTINCT ON (tenant_id, condition->>'roomNamePattern') id
+    FROM rule_overrides
+    WHERE is_active = true
+    AND condition->>'roomNamePattern' IS NOT NULL
+    ORDER BY tenant_id, condition->>'roomNamePattern', created_at DESC
+  )
+`);
+
+console.log("Duplicate corrections cleaned up");
+process.exit(0);
+Run it with:
+bashcd artifacts/api-server && npx ts-node src/scripts/fix-duplicate-corrections.ts
+After running, verify RECEPTION only has one active correction (A-2) by running:
+bashnode -e "
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.query(\`SELECT room_name_pattern, sign_type, is_active FROM training_corrections WHERE room_name_pattern = 'RECEPTION'\`)
+.then(r => { console.log(JSON.stringify(r.rows, null, 2)); pool.end(); });
+"
+Then rescan BA Lounge with Force Fresh AI Scan and share the Sign Table screenshot.

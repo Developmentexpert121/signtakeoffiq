@@ -1,0 +1,63 @@
+Great question — this is the right thing to focus on. Let me show you the cleanest workflow.
+
+**The core problem we've been fighting:**
+
+The app is trying to *infer* sign types from room names (fragile) instead of *reading* the signage schedule directly (reliable). The skill does it right. The app needs to do the same.
+
+**The correct workflow — 3 validation checkpoints:**
+
+```
+PDF uploaded
+    ↓
+① SHEET CHECK — Does the PDF have a signage schedule?
+   YES (I-601, sign schedule) → Parse table directly → exact signs
+   NO (finish plan, no schedule) → Rules engine fallback
+    ↓
+② SIGN SCHEDULE TAB — Human reviews the list
+   - Correct sign types?
+   - Correct room numbers?
+   - Flag anything wrong
+    ↓  
+③ FLOOR PLAN TAB — Human reviews marker positions
+   - Is each marker inside the right room?
+   - Drag to fix any that are off
+   - Confirm when satisfied
+```
+
+**One focused Replit prompt to implement Checkpoint ①:**
+
+> **Single focused task — parse the signage schedule table directly.**
+>
+> Do NOT change the rules engine, regex, or any existing logic.
+>
+> **Only do these 3 things:**
+>
+> 1. Add `/extract-table` to the Python sidecar (`artifacts/pdf-sidecar/main.py`):
+> ```python
+> @app.post("/extract-table")
+> def extract_table(body: dict):
+>     pdf_path = body["pdf_path"]
+>     page_number = body["page_number"]
+>     with pdfplumber.open(pdf_path) as pdf:
+>         page = pdf.pages[page_number - 1]
+>         tables = page.extract_tables()
+>     return {"tables": tables, "page": page_number}
+> ```
+>
+> 2. Add `parseSignageSchedule()` in pipeline.ts at Step 4b:
+>    - Find sheets where `sheet_type = 'signage_schedule'`
+>    - Call `/extract-table` on each
+>    - Parse rows with columns: SIGN | ROOM NUMBER | ROOM NAME | VERBAGE | TYPE
+>    - Skip header rows where first cell = "SIGN"
+>    - Map TYPE codes to sign types:
+>      `BB2A→"Room ID", BB2B→"Room ID w/insert", BB3→"Stair(Landing)", SS1A→"Stair ID", AA1→"Directory(Building)", AA2→"Directory(Floor)", AA3→"Directory(Floor)", BB4→"Exit(Tactile)", BB7A→"Restroom(Men)", BB7B→"Restroom(Women)", DD1→"Regulatory", LED→"LED", BB2D→"Occupancy", BB2E→"Egress", BB5→"Entry(Building)", BB2C→"Conference", BB7A→"Restroom(Men)"`
+>    - Insert signs with `source = 'schedule'`
+>    - Set `hasScheduleImport = true` on the job
+>
+> 3. In Step 9, skip rules engine if `hasScheduleImport = true`
+>
+> Nothing else. No schema changes. No regex changes. Rebuild, restart sidecar, rescan SOF 7087.
+>
+> Expected: exactly 123 signs matching the I-601 table.
+
+This one change fixes SOF 7087 permanently and works for any future project that has a signage schedule sheet. Want to run this now?

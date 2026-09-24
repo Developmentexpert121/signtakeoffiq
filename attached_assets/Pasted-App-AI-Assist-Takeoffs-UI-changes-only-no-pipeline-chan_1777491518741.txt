@@ -1,0 +1,149 @@
+App: AI-Assist Takeoffs
+UI changes only — no pipeline changes.
+Applies to ALL building types.
+
+════════════════════════════════════════════════
+CHANGE 1 — Fix Overview count flash on page load
+════════════════════════════════════════════════
+Overview shows 0 briefly on load before 
+refreshing to correct count.
+
+In job-detail.tsx, on component mount add
+an immediate fetch of live counts:
+
+  useEffect(() => {
+    // Fetch live counts immediately on load
+    // Don't wait for job record to load
+    fetchAndUpdateSignCount();
+  }, [jobId]);
+
+This ensures Overview shows correct count
+from the first render, not after a refresh.
+
+════════════════════════════════════════════════
+CHANGE 2 — Add Egress tab to job detail
+════════════════════════════════════════════════
+Add new "Egress" tab between Review and Plans:
+
+  Overview | Review | Egress | Plans | 
+  Schedule | Export
+
+Tab content — full egress sign table:
+  Header: "Egress & Code Signs"
+  Subtext: "Rule-generated from building code.
+    Verify all counts against construction plans
+    before bidding."
+  
+  Badge: "Rule-generated" (amber, existing style)
+  Sign count: "30 signs"
+
+  Table columns:
+    Sign Type | Floor | Qty | ADA Required | 
+    Notes | ✓ Verified
+
+  Rows from signs table where source='rules'
+  Sorted by: Floor asc, Sign Type asc
+
+  Footer: verification summary
+    "✓ Stair sets: 4 stairs × 2 floors = 16"
+    "✓ Exit signs: 12 current / 12 minimum"
+    "✓ Evacuation maps: 2 across 2 floors"
+    (same checks as current Overview panel)
+
+Remove the Egress & Code Signs panel from 
+Overview tab entirely. Keep Overview clean:
+  - Job Details
+  - 4 metric cards
+  - Pipeline log
+  - File Uploads
+
+════════════════════════════════════════════════
+CHANGE 3 — Add Specialty tab to job detail
+════════════════════════════════════════════════
+Add new "Specialty" tab between Egress and Plans:
+
+  Overview | Review | Egress | Specialty | 
+  Plans | Schedule | Export
+
+Tab content:
+  Header: "Specialty & Exterior Signs"
+  Subtext: "Extracted from detail sheets.
+    Quantities require field verification.
+    No standard pricing — obtain custom quotes."
+  
+  Badge: "Detail sheets" (blue)
+
+  Table columns:
+    Code | Description | Dimensions | 
+    Material | Finish | Qty (editable) | Sheet
+
+  Rows from specialty_signs table for this job
+  Sorted by: sheet_number asc, code asc
+
+  Qty column: inline editable number input
+    (estimator can adjust qty before export)
+    On change: PATCH /api/jobs/:jobId/specialty-signs/:id
+    { qty: newValue }
+
+  Footer note:
+    "Specialty signs are not included in the
+    standard Takeoff or Pricing tabs. They are
+    listed in the Specialty Signs tab of the
+    XLSX export for separate quoting."
+
+Show "No specialty items found" empty state
+when specialty_signs table is empty for this job.
+This is correct behavior for plans without
+detail sheets.
+
+════════════════════════════════════════════════
+CHANGE 4 — Fix XLSX floor column still blank
+════════════════════════════════════════════════
+FLOORS: {} in XLSX despite Review tab showing
+LEVEL 1 correctly.
+
+The floor value exists in the DB as floor_label
+on sign rows but the XLSX export reads the wrong
+field name.
+
+In exports.ts or xlsx-export.ts, find the sign
+row builder and fix the floor column:
+
+  // Current (wrong):
+  dr.getCell(1).value = "";  
+  // or reading sign.floor instead of sign.floor_label
+
+  // Fix:
+  dr.getCell(1).value = sign.floor_label 
+    ?? sign.level 
+    ?? label  // outer loop floor label
+    ?? "";
+
+Also fix the Summary tab floor grouping to use
+floor_label not floor.
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Overview loads with correct count immediately
+   No flash to 0 on page load
+
+2. Egress tab shows 30 signs in table
+   Verification checks at bottom
+
+3. Overview no longer has Egress panel
+   Clean: Job Details + 4 cards + Pipeline log
+
+4. Specialty tab shows 12 items
+   Qty fields are editable
+
+5. XLSX floor column: Level 1 / Level 2
+   Not blank
+
+6. Works for ALL building types:
+   - Education: Egress shows stair/exit/evac
+   - Commercial: Egress shows AOR signs
+   - Assembly: Egress shows higher exit counts
+   - Empty Specialty tab when no detail sheets
+
+All 1,461 tests pass.

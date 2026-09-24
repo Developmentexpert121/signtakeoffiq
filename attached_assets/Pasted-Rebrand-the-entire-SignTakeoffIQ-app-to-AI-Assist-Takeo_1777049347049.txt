@@ -1,0 +1,78 @@
+Rebrand the entire SignTakeoffIQ app to "AI-Assist Takeoffs" 
+with the following design system applied globally across all 
+pages in artifacts/web/src/.
+
+BRAND NAME:
+- Product name: "AI-Assist Takeoffs"
+- Tagline: "Smarter Estimates. Faster Quotes."
+- Replace all instances of "SignTakeoffIQ", "Sign Takeoff IQ", 
+  "SignTakeoff" with "AI-Assist Takeoffs"
+
+TYPOGRAPHY:
+- Headings (h1, h2, h3): font-family: 'Chakra Petch', sans-serif
+- Body/UI text: font-family: 'IBM Plex Sans', sans-serif
+- Add both fonts via Google Fonts import in index.html:
+  https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap
+
+COLOR SYSTEM (update tailwind.config or CSS variables):
+- --background: 220 15% 8%        (dark navy)
+- --foreground: 220 10% 90%       (off-white)
+- --card: 220 15% 11%
+- --card-border: 220 15% 20%
+- --primary: 40 100% 55%          (amber/gold — main CTAs)
+- --primary-foreground: 220 15% 8%
+- --accent: 180 100% 40%          (cyan — highlights)
+- --secondary: 220 20% 18%
+- --muted: 220 15% 16%
+- --muted-foreground: 220 10% 60%
+- --border: 220 15% 20%
+- --destructive: 0 85% 60%        (red for errors)
+
+SIDEBAR:
+- Background: hsl(220, 15%, 8%) with left border accent 
+  in amber (--primary)
+- Logo area at top: "AI-ASSIST TAKEOFFS" in Chakra Petch, 
+  bold, amber color, all caps, with a small lightning bolt 
+  icon (⚡) prefix
+- Nav items: IBM Plex Sans, hover state uses amber left border
+- Active item: amber background at 15% opacity, amber text
+- Bottom user area: keep existing layout, update colors
+
+TOP NAV / JOB HEADER:
+- Job title: Chakra Petch, bold, amber color, all caps
+- Status badge: keep green COMPLETED style
+- Top right buttons: 
+  "Export XLSX" → solid amber background, dark text, bold
+  "Export Marked PDF" → outline amber border
+  "Rescan" → cyan accent color
+
+TABS:
+- Reduce to 5 tabs max per job: 
+  Overview | Review | Plans | Schedule | Export
+- Active tab: amber underline border, amber text
+- Inactive: muted gray text
+
+METRIC CARDS (Total Signs, High Confidence etc):
+- Dark card background (--card color)
+- Large number in Chakra Petch, amber color
+- Label in IBM Plex Sans, muted gray
+- Amber/gold left border accent on card
+
+SIGN TABLE:
+- Alternating row colors: transparent / slightly lighter bg
+- Source badges keep existing colors but update font to 
+  IBM Plex Sans
+- EDIT button: small, amber outline
+- Confidence % shown in amber when >85%, yellow when 60-85%, 
+  red when <60%
+
+GENERAL:
+- All primary action buttons: amber background
+- All secondary buttons: dark background, amber border
+- All destructive actions: red
+- Border radius: 6px (slightly rounded, professional)
+- Remove any rounded-full pill shapes from buttons — 
+  use rounded-md instead for a more technical/industrial feel
+
+This should make the app look like a professional estimating 
+tool used by sign industry experts, not a generic SaaS app.

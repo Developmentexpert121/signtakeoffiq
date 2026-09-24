@@ -1,0 +1,43 @@
+Good — this is a separate, clear error. The training import is rejecting the XLSX because it's looking for columns named 'Sign Type' and 'Room Name', but the SOF 7087 spreadsheet has different column headers.
+The error shows the actual columns it found:
+
+Room #, Room, Bldg. Directory AA1, Floor Directory AA2, Floor Directory AA3, Permanent Room ID BB2A, Conference ID BB2C, Occupancy BB2D, Emergency Egress BB2E, Restroom BB7A, Restroom BB7B, Regulatory DD1, Stairwell BB3, Exit Tactile BB4, Ext. Bldg. Entry BB5, Stair ID SS1A, Programmable LED, NOTES
+
+This spreadsheet uses sign type names as column headers with quantities in the cells — it's a completely different format from what the import expects.
+Here's the Replit Agent prompt to fix it:
+
+Paste this into Replit Agent:
+
+Fix: Training Import rejects the SOF 7087 takeoff spreadsheet with HTTP 400.
+Error: "Spreadsheet must have 'Sign Type' and 'Room Name' columns"
+The import assumes a "tall" format with columns: Sign Type | Room # | Room Name | Level
+But real-world takeoff spreadsheets use a "wide" format where:
+
+Column 1 = Room #
+Column 2 = Room (room name)
+Remaining columns = one per sign type (BB2A, BB2B, SS1A, etc.) with a quantity or checkbox in each cell
+
+The actual columns found were: Room #, Room, Bldg. Directory AA1, Floor Directory AA2, Floor Directory AA3, Permanent Room ID BB2A, Conference ID BB2C, Occupancy BB2D, Emergency Egress BB2E, Restroom BB7A, Restroom BB7B, Regulatory DD1, Stairwell BB3, Exit Tactile BB4, Ext. Bldg. Entry BB5, Stair ID SS1A, Programmable LED, NOTES
+Fix the training import spreadsheet parser to auto-detect both formats:
+Format A (tall) — current expected format:
+Sign Type | Room # | Room Name | Level
+BB2A      | 1101   | UCC/COMP RM | Level 1
+BB2B      | 1119   | AUDITORIUM  | Level 1
+Format B (wide) — real-world estimator format:
+Room # | Room          | BB2A | BB2B | SS1A | BB3 | ...
+1101   | UCC/COMP RM   | 1    |      |      |     |
+1119   | AUDITORIUM    |      | 1    |      | 1   |
+Detection logic:
+
+If headers contain Sign Type → Format A, use existing parser
+If headers contain Room # or Room but NO Sign Type → Format B (wide)
+
+For each row: Room # = room number, Room = room name
+For each remaining column header that looks like a sign type code: if cell value is truthy (1, X, ✓, "yes", non-empty) → emit one row per sign type per room
+Sign type column headers to recognize: anything containing BB2, BB3, BB4, BB5, BB7, SS1, DD1, LED, AA1, AA2, AA3, or any known sign type code from the rules engine
+
+
+
+The parser lives in the training import route — find it with:
+bashgrep -rn "Sign Type\|Room Name\|spreadsheet" artifacts/api-server/src/routes/training.ts | head -20
+After fixing the parser, the SOF 7087 XLSX should import successfully and generate training corrections for all 123 signs (S1-S123) from the signage schedule.

@@ -1,0 +1,234 @@
+================================================================================
+SIGN TAKEOFF IQ — ALL LLM PROMPTS
+Extracted from: artifacts/api-server/src/lib/pipeline.ts
+Model used for all calls: claude-sonnet-4-6 (via Anthropic API)
+Coordinate system: x/y = integer percentage 0–100 of PNG image dimensions,
+  multiplied by 10 internally → stored as 0–1000 in rooms.coord_x / coord_y
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 1 — ROOM EXTRACTION (Step 3)
+Called for: every rasterized floor-plan sheet PNG
+Function:   buildRoomExtractionPrompt() → callClaudeVision()
+Returns:    JSON { isPlanView, floorLevel, missedRooms[] }
+────────────────────────────────────────────────────────────────────────────────
+
+SYSTEM PROMPT:
+You are a construction document analyst. Return only valid JSON — no explanations.
+Return coordinates relative to the floor plan area only, ignoring any schedule
+tables or legends on the same sheet.
+
+USER PROMPT:
+You are reading a floor plan sheet titled "{sheetTitle}" for level "{level}".
+
+Your task: locate every ADA room identification sign mounting position by finding
+door symbols.
+
+Step 1 — Find door swing symbols.
+A door on an architectural floor plan is drawn as a thin straight line (the door
+slab) meeting a wall at one end, plus a quarter-circle arc whose center is the
+hinge point and whose radius equals the door width. Look for these arc-and-line
+pairs. Every such symbol is a real door.
+
+Step 2 — Associate each door with the nearest room.
+For each door, identify the room number and room name whose label text is closest
+to that door. The label is usually printed inside the room polygon near its
+geometric center, but use it only to name the room — do NOT place the coordinate
+there.
+
+Step 3 — Place the coordinate at the door, not the room center.
+The x/y must be placed at the point where the door slab meets the wall (i.e. the
+latch/strike jamb corner of the opening, on the wall face). This is where an ADA
+room ID sign is physically mounted. Do NOT use the room label centroid.
+
+Include every door that leads into a named room or numbered space (offices,
+conference rooms, restrooms, mechanical rooms, stairwells, etc.). Exclude:
+- Doors inside the title block or legend panel
+- Doors with no identifiable adjacent room (pure corridor openings with no label)
+- Overhead door symbols (loading docks) — these are parallel lines, not arc-and-line
+
+Include ALL named rooms visible on the plan regardless of size — utility rooms,
+storage rooms, IDF/telecom rooms, custodial rooms, mechanical rooms, and any room
+with a visible label and number even if no door swing arc is visible. A room label
+with a number is sufficient — a door arc is not required.
+
+Before you begin, assess whether this sheet shows an overhead (plan-view) floor plan:
+- isPlanView = true  if the sheet shows an overhead layout of rooms with wall
+                     polygons and door symbols (quarter-circle arcs)
+- isPlanView = false if the sheet is an elevation, section, detail, schedule table,
+                     or any other non-plan view
+
+CRITICAL — identify the architectural floor level from the drawing title block,
+legend, or sheet notes.
+Look for text such as "BASEMENT PLAN", "LEVEL 1 FLOOR PLAN", "GROUND FLOOR",
+"2ND FLOOR PLAN", "SECOND FLOOR", etc.
+Return the canonical floor level in the "floorLevel" field using ONLY these exact
+string values:
+  "Basement"   — basement / lower level / sub-grade / B1
+  "Level 1"    — ground floor / first floor / grade level / 1st floor
+  "Level 2"    — second floor / 2nd floor
+  "Level 3"    — third floor / 3rd floor
+  "Mezzanine"  — mezzanine / mezz level
+  "Roof"       — roof level / rooftop
+Do NOT use page numbers, sheet IDs, or any other value. Return null if you cannot
+determine the floor level from the drawing content.
+
+Return valid JSON only:
+{
+  "isPlanView": true,
+  "floorLevel": "Level 1",
+  "missedRooms": [
+    {
+      "roomNumber": "101",
+      "roomName": "CONFERENCE ROOM",
+      "level": "{level}",
+      "x": 23,
+      "y": 67,
+      "isRestroom": false
+    }
+  ]
+}
+
+Field rules:
+- isPlanView: true only if the sheet shows an overhead floor plan view with room
+  outlines and door swing arcs; false for elevations, sections, details, schedules
+- floorLevel: canonical floor name from the title block — one of "Basement",
+  "Level 1", "Level 2", "Level 3", "Mezzanine", "Roof", or null
+- x / y: integer percentage of the image dimensions, 0–100.
+  (0,0) = top-left corner, (100,100) = bottom-right corner.
+  Place at the wall-face strike-jamb corner of the door opening.
+  Formula: x = round(pixelX / imageWidth * 100), y = round(pixelY / imageHeight * 100)
+
+IMPORTANT: If the sheet contains a sign schedule table, legend panel, or any
+non-floor-plan content occupying a portion of the image, place coordinates ONLY
+within the floor plan boundary. Do not place any coordinate in the schedule/legend
+area. The floor plan is the overhead room layout with wall polygons — coordinates
+must reference door positions within that area only.
+
+- isRestroom: true only for bathrooms / restrooms / toilet rooms
+- roomNumber: copy the room number EXACTLY as printed on the plan — do not infer,
+  increment, or guess. If a number is partially obscured, use only the digits/letters
+  you can clearly read. Never generate a room number that is not explicitly visible
+  on the plan. Use "" only if no number is visible at all.
+- roomName: copy the room label text exactly as printed on the plan; use "ROOM" if
+  no name label is visible; required field — never omit
+- level: use "{level}"
+- If isPlanView is false or the sheet has no identifiable rooms or no door symbols:
+  {"isPlanView": false, "floorLevel": null, "missedRooms": []}
+
+{trainingContext — appended if tenant has training corrections}
+
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 2 — PLAQUE SCHEDULE EXTRACTION (Step 4)
+Called for: signage_schedule sheets
+Function:   extractPlaqueSchedule() → callClaudeVision()
+Returns:    JSON array of plaque type objects
+────────────────────────────────────────────────────────────────────────────────
+
+SYSTEM PROMPT:
+You are an expert architectural sign takeoff assistant. Extract plaque schedule
+data accurately.
+
+USER PROMPT:
+Analyze this architectural drawing image. Look for a plaque schedule, sign
+schedule, or door hardware schedule table.
+Extract each plaque type with:
+- type_id: the plaque identifier (A, B, C, EXIT, etc.)
+- name: the full description
+- braille: true/false
+- has_insert: true/false if it takes an insert panel
+- insert_size: dimensions if applicable
+- letter_height: letter height specification
+- maps_to_column: which sign column it maps to (Room ID, Restroom, Exit, etc.)
+- material_notes: finish, material specifications
+
+Return a JSON array of objects. If no schedule is visible, return [].
+Example: [{"type_id": "A", "name": "Room ID Plaque", "braille": true,
+           "has_insert": false}]
+
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 3 — OCCUPANT LOAD EXTRACTION (Step 7)
+Called for: code/egress sheets (rarely fires)
+Function:   extractOccupantLoads() → callClaudeVision()
+Returns:    JSON array of occupant load entries
+────────────────────────────────────────────────────────────────────────────────
+
+SYSTEM PROMPT:
+You are an expert architectural sign takeoff assistant. Extract occupant load
+data accurately.
+
+USER PROMPT:
+Analyze this architectural drawing. Look for an occupant load table, code analysis
+table, or occupancy schedule.
+Extract each room's:
+- room_number: the room number (e.g., "101", "135")
+- occupant_load: integer occupant load (number of persons)
+- occupancy_group: IBC occupancy group if shown (A-1, A-2, A-3, B, E, I-1, I-2,
+  R-1, R-2, S-1, etc.)
+
+Return a JSON array. If no occupant load table is visible, return [].
+Example: [{"room_number": "138", "occupant_load": 75, "occupancy_group": "A-2"}]
+
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 4 — SIGN DICTIONARY EXTRACTION (Step B — currently disabled)
+Called for: signage notes sheet (A0.x or title containing "SIGNAGE NOTES")
+Function:   inline in processJob() → callClaudeVision()
+Returns:    JSON { signTypes[], scope, scopeNotes, roomLabel }
+────────────────────────────────────────────────────────────────────────────────
+
+SYSTEM PROMPT:
+You are a sign estimator reading a signage notes sheet from an architectural
+drawing set. Extract all sign type definitions, scope notes, and placement rules.
+Return ONLY valid JSON matching the schema exactly — no markdown, no commentary.
+
+USER PROMPT:
+Extract the sign type dictionary from this signage notes sheet.
+
+Return JSON with this exact shape:
+{
+  "signTypes": [
+    { "code": "A", "name": "Toilet Sign - Girls", "placement": "60 inches AFF, latch side",
+      "dimensions": "6x6", "category": "restroom" }
+  ],
+  "scope": "restroom_only" | "full_building" | "partial" | "unknown",
+  "scopeNotes": "Contractor to provide signage for restroom renovations only",
+  "roomLabel": "ROOM #" | "ROOM NAME" | "both"
+}
+
+Categories must be one of: restroom, room_id, exit, stair, elevator, wayfinding, other.
+If the sheet defines only restroom sign types, set scope to "restroom_only".
+If there are scope limitation notes, capture them in scopeNotes verbatim.
+
+
+────────────────────────────────────────────────────────────────────────────────
+NOTES ON ACCURACY ISSUES
+────────────────────────────────────────────────────────────────────────────────
+
+Plan marking (markerX / markerY) is inaccurate because:
+
+1. COORDINATE ORIGIN: Claude returns x/y as % of the full rasterized PNG image,
+   not of just the floor plan area. Title blocks, borders, north arrows, and legend
+   panels all shift the effective origin.
+
+2. PRECISION: At 150 DPI, door jamb corners are 1–3 pixels wide. Claude cannot
+   reliably identify the strike-jamb corner vs. hinge vs. door center.
+
+3. NO CALIBRATION: Coordinates are stored raw with no validation against known
+   reference points or page bounding boxes. The rooms table stores bboxX0, bboxY0,
+   pageWPts, pageHPts from pdfplumber word extraction, but these are not used to
+   validate or correct the vision-returned coordinates.
+
+4. SINGLE-PASS: No retry or correction pass verifies coordinate plausibility.
+
+5. CACHE: Once stored in ai_scans, coordinates are reused on all re-scans unless
+   forceAiRescan=true is passed.
+
+Recommendation: replace the percentage-based coordinate system with a
+PDF-native coordinate system using pdfplumber's word bbox data. The sidecar
+already extracts word positions in PDF points — cross-referencing Claude's room
+names with the sidecar's word coordinates would give sub-pixel accuracy without
+relying on the vision model for positioning.

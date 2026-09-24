@@ -1,0 +1,75 @@
+Run the following validation checks and report 
+pass/fail for each:
+
+TEST 1 — Building type standardization:
+- Check that buildingType enum in jobs schema 
+  contains exactly these 8 values:
+  commercial, residential, education, healthcare,
+  government, hotel, assembly, unknown
+- Check that old values (other, office, multifamily, 
+  hospital) are NOT in the enum
+- Check that the migration ran and no jobs have 
+  old building type values in the DB
+- PASS if all 8 values present and no legacy values
+
+TEST 2 — Building type required on new job:
+- Check that POST /api/jobs without buildingType 
+  returns 400 error
+- Check that POST /api/jobs with buildingType='other' 
+  returns 400 error  
+- Check that POST /api/jobs with buildingType='commercial' 
+  succeeds
+- PASS if 400 on missing/invalid, 200 on valid
+
+TEST 3 — Building type rule matrix:
+- Check that getRulesForBuildingType('residential') 
+  returns Unit ID rule and NO Office Directory rule
+- Check that getRulesForBuildingType('commercial') 
+  returns Office Directory rule and NO Unit ID rule
+- Check that getRulesForBuildingType('education') 
+  returns Room ID for CLASSROOM and Max Occupancy 
+  for GYMNASIUM
+- Check that getRulesForBuildingType('hotel') 
+  returns Unit ID for GUEST ROOM
+- Check that CORRIDOR is excluded from Room ID 
+  in all building types
+- PASS if all rule matrix checks correct
+
+TEST 4 — Canonical ADA guard:
+- Check that a sign with type 'Fire Extinguisher' 
+  is dropped by the canonical guard
+- Check that a sign with type 'B1b' is dropped
+- Check that a sign with type 'Room ID' passes through
+- Check that Unit ID is dropped when buildingType 
+  is 'commercial'
+- Check that Unit ID passes through when buildingType 
+  is 'residential'
+- PASS if non-canonical types dropped, canonical kept
+
+TEST 5 — Training DB cleanup:
+- Query training_corrections table:
+  SELECT COUNT(*) FROM training_corrections 
+  WHERE correct_sign_type IN (
+    'Fire Extinguisher', 'Fire Ext', 'No Smoking',
+    'In case of fire', 'Room w/no storage', 'Room S-1',
+    'B1b', 'ADA Room Sign', 'ADA Occupancy Sign',
+    'Electrical Room Sign'
+  ) AND is_active = true;
+- PASS if count = 0
+
+TEST 6 — Full pipeline smoke test:
+- Create a test job with buildingType='commercial'
+- Run pipeline with a simple 5-room test fixture
+- Verify output contains only canonical sign types
+- Verify no Fire Extinguisher, Unit #, or B1b signs
+- PASS if output clean
+
+Report format:
+TEST 1 Building type standardization: PASS/FAIL
+TEST 2 Building type required: PASS/FAIL
+TEST 3 Rule matrix: PASS/FAIL
+TEST 4 Canonical guard: PASS/FAIL
+TEST 5 DB cleanup: PASS/FAIL
+TEST 6 Pipeline smoke test: PASS/FAIL
+
+OVERALL: X/6 tests passing

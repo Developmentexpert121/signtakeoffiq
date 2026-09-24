@@ -1,0 +1,85 @@
+App: AI-Assist Takeoffs
+
+CRITICAL FIX — Force full re-process must 
+completely clear all caches before scanning.
+
+════════════════════════════════════════════════
+THE PROBLEM
+════════════════════════════════════════════════
+"Force full re-process" checkbox is checked but
+pipeline log still shows:
+  "~$0.18 saved by reusing 2 cached sheets"
+
+This means Force is NOT clearing cache — it is
+only changing which pipeline steps run, but
+cached sheet data is still being restored into
+the signs table. This corrupts every force rescan.
+
+════════════════════════════════════════════════
+FIX — Force checkbox must delete cache first
+════════════════════════════════════════════════
+In the API endpoint that handles rescan requests
+(likely POST /api/jobs/:jobId/scan or similar):
+
+Find where forceReprocess flag is read and add
+cache deletion AS THE FIRST ACTION:
+
+  if (forceReprocess === true) {
+    
+    // Step 1: Delete ALL cached sheets for this job
+    await db.query(
+      'DELETE FROM sheet_cache WHERE job_id = $1',
+      [jobId]
+    );
+    
+    // Step 2: Delete ALL existing signs for this job
+    await db.query(
+      'DELETE FROM signs WHERE job_id = $1',
+      [jobId]
+    );
+    
+    // Step 3: Reset job status fields
+    await db.query(
+      \`UPDATE jobs SET
+        total_signs = 0,
+        high_confidence_signs = 0,
+        needs_review = 0,
+        ai_cost = 0,
+        pipeline_version = NULL
+       WHERE id = $1\`,
+      [jobId]
+    );
+    
+    log(\`Force rescan: cleared all cache and signs 
+         for job \${jobId} before re-extraction\`);
+  }
+  
+  // THEN proceed with normal pipeline
+  await runPipeline(jobId, { force: true });
+
+════════════════════════════════════════════════
+ALSO FIX — "Saved by reusing cached sheets" 
+           message must not show on force rescan
+════════════════════════════════════════════════
+The pipeline log message "~$X saved by reusing 
+N cached sheets" should only appear when cache
+was actually used.
+
+When forceReprocess=true and cache was cleared:
+  Show: "Force rescan — full re-extraction from PDF"
+  Do NOT show the cache savings message.
+
+When forceReprocess=false and cache was used:
+  Show existing: "~$X saved by reusing N cached sheets"
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Check Force full re-process checkbox
+2. Click Rescan
+3. Pipeline log must show:
+   "Force rescan — full re-extraction from PDF"
+   NOT "saved by reusing cached sheets"
+4. AI Cost must be > $0.00 (real API calls made)
+5. All 4 Fox Hill sheets re-extracted fresh
+6. All 1,461 tests pass

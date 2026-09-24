@@ -1,0 +1,29 @@
+Good diagnostics. Both root causes are clear enough to write fixes directly:
+Issue 1: The "STAIR 3 ROOF" banner is a selectedTypes filter — not a room filter. When navigating from the Review tab via the location icon, a sign type filter is getting set and persisting. The fix is to clear selectedTypes and selectedStatuses when focusRoomId changes — navigating to a room should arrive with a clean filter state.
+Issue 2: setSelectedSheetId(null) on level change falls back to levelSheets[0] which is score-sorted by marker count + "PLAN" in title. PLAN-0-P2 (garage) scores highest because it has stair/exit markers. The fix is to prefer sheets where sheetId sorts numerically — PLAN-1-P2 before PLAN-0-P2 — so the first residential sheet wins over the garage podium.
+Here's the prompt:
+
+Session 10 — Plans Tab: Clear filter on navigation + smarter default sheet
+All changes in artifacts/web/src/components/FloorPlanTab.tsx only. Typecheck must pass, 1,727 tests must stay green. Do not rescan any job.
+
+Change 1 — Clear type/status filters when focusRoomId changes
+Find the existing useEffect for focusRoomId (around line 1470). At the top of that effect, before the sign lookup, add:
+typescript// Clear any active filters so the navigation arrives clean
+clearTypeFilter();
+clearStatusFilter();
+This ensures navigating from the Review tab via the location icon never lands with a stale sign type filter active.
+
+Change 2 — Smarter default sheet on level switch
+Find the sheet scoring sort at lines 1012/1039. The current sort scores by marker count and "PLAN" in title. Add a tiebreaker that sorts by the numeric suffix in sheetId ascending — so PLAN-1-P2 beats PLAN-0-P2 when scores are equal:
+typescript// Tiebreaker: prefer lower numeric sheet number (PLAN-1 before PLAN-0 is wrong — prefer PLAN-1 over PLAN-0)
+// Parse trailing digit from sheetId: "PLAN-1-P2" → 1, "PLAN-0-P2" → 0
+function sheetNumericOrder(s: { sheetId?: string | null }): number {
+  const match = (s.sheetId ?? "").match(/PLAN-(\d+)/i);
+  return match ? parseInt(match[1], 10) : 999;
+}
+In the sort comparator, after the existing score comparison, add:
+typescriptif (scoreA !== scoreB) return scoreB - scoreA; // existing: higher score wins
+return sheetNumericOrder(a) - sheetNumericOrder(b); // tiebreaker: lower number wins
+This means when multiple sheets have equal marker counts, PLAN-1-P2 is preferred over PLAN-0-P2, putting the first residential wing before the garage podium.
+
+After changes: Run typecheck, confirm 1,727 tests passing. Open Walking Court_2, navigate from Review tab to a room via the location icon — confirm Plans tab opens with no active filter banner. Switch to Level 2 — confirm PLAN-1-P2 or similar residential sheet loads by default instead of the garage podium. Do not rescan any job.

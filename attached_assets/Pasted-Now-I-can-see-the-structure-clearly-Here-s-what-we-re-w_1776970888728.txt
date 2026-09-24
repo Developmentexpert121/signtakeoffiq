@@ -1,0 +1,74 @@
+Now I can see the structure clearly. Here's what we're working with:
+
+Format: Wide format with custom column names
+
+Column A: Door # (= Room #)
+Column B: Text on Sign (= Room Name)
+Column C: Room ID (sign type — 1.0 = has this sign)
+Column D: Restroom (sign type — 1.0 = has this sign)
+2 sheets: Station 3, Station 5
+1003 rows of data
+The parser is failing because:
+
+Header is on row 2 not row 1
+Column names are Door # and Text on Sign instead of Room # and Room Name
+Only 2 sign type columns detected
+Here's your Replit prompt:
+
+Fix the XLSX parser in the training import to handle custom column name variations.
+
+In training.ts, find the parseSpreadsheet function (or wherever the XLSX is parsed). Update the column name matching to be flexible:
+
+Room number column — match any of these (case-insensitive):
+
+ts
+const ROOM_NUM_COLS = ["room #", "room#", "room number", "door #", "door#", "unit #", "space #", "rm #"];
+Room name column — match any of these:
+
+ts
+const ROOM_NAME_COLS = ["room name", "room", "name", "text on sign", "sign text", "description", "space name", "space"];
+Header row detection — instead of assuming row 1 is the header, scan the first 5 rows and find the row that contains the most matching column names:
+
+ts
+function findHeaderRow(rows: unknown[][]): number {
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const row = rows[i].map(v => String(v ?? "").toLowerCase().trim());
+    const hasRoomCol = ROOM_NAME_COLS.some(c => row.includes(c));
+    const hasNumCol = ROOM_NUM_COLS.some(c => row.includes(c));
+    if (hasRoomCol || hasNumCol) return i;
+  }
+  return 0; // fallback to first row
+}
+Multi-sheet support — when the XLSX has multiple sheets (like Station 3, Station 5), parse ALL sheets and combine the rows. Add the sheet name as a prefix to distinguish rooms:
+
+ts
+// For multi-sheet workbooks, parse each sheet and combine
+for (const sheetName of workbook.SheetNames) {
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+  const headerRowIdx = findHeaderRow(rows);
+  // ... parse rows starting from headerRowIdx + 1
+}
+Wide format detection — when sign types are column headers (not row values), detect this and convert:
+
+ts
+// Wide format: Room # | Room Name | SignType1 | SignType2 | ...
+// Any column after the room name that isn't a standard field is a sign type
+const signTypeCols = headers.slice(roomNameColIdx + 1).filter(h => 
+  h && !["level", "floor", "notes", "comments", "qty", "quantity"].includes(h.toLowerCase())
+);
+
+// For each room row, create one entry per sign type column that has a value
+for (const signTypeCol of signTypeCols) {
+  const val = row[signTypeCol];
+  if (val && val !== "" && val !== 0) {
+    parsedRows.push({
+      roomNumber: roomNum,
+      roomName: roomName,
+      signType: signTypeCol, // column header IS the sign type
+      qty: typeof val === "number" ? val : 1,
+    });
+  }
+}
+After saving, test by uploading the Chelmsford Fire Department XLSX again. It should parse both Station 3 and Station 5 sheets and show rooms with Room ID and Restroom sign types in the diff review.
+

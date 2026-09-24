@@ -1,0 +1,46 @@
+Here's a focused prompt for marker placement accuracy. **Paste this into Replit Agent:**
+
+> **Improve marker placement accuracy on floor plans**
+>
+> Currently markers are extracted from word positions in the PDF but often land in the wrong spot — outside room boundaries, on grid lines, or clustered together. The goal is to place each marker at the **center of its room**, not just where the room number text was found.
+>
+> **Step 1 — Diagnose current placement:**
+> ```bash
+> grep -n "normX\|normY\|coord_x\|coord_y\|markerX\|markerY\|rx\|ry\b" artifacts/api-server/src/lib/pipeline.ts | head -30
+> ```
+>
+> **Step 2 — Improve room center calculation:**
+>
+> Currently the marker is placed AT the room number text position. Instead it should be placed at the **centroid of the room label cluster** — the average position of the room number + room name text combined.
+>
+> Find where `rx` and `ry` are calculated (likely just the x0/y0 of the room number word). Change to use the center of the bounding box of ALL words in the label group:
+>
+> ```typescript
+> // Current: marker at top-left of room number word
+> const rx = roomWord.x0;
+> const ry = roomWord.y0;
+>
+> // Better: marker at center of the full label group
+> const allX = [roomWord.x0, roomWord.x1, ...nearbyWords.map(w => w.x0), ...nearbyWords.map(w => w.x1)];
+> const allY = [roomWord.y0, roomWord.y1, ...nearbyWords.map(w => w.y0), ...nearbyWords.map(w => w.y1)];
+> const rx = (Math.min(...allX) + Math.max(...allX)) / 2;
+> const ry = (Math.min(...allY) + Math.max(...allY)) / 2;
+> ```
+>
+> **Step 3 — Offset marker below the room label:**
+>
+> On architectural plans, the room number + name label sits at the TOP of the room space. Placing the marker directly on the text overlaps it. Add a downward offset of about 3% of page height so the marker sits just below the label, inside the room:
+>
+> ```typescript
+> const offsetY = pageHeight * 0.03; // 3% of page height
+> const normX = Math.max(10, Math.min(990, Math.round((rx / pageWidth) * 1000)));
+> const normY = Math.max(10, Math.min(990, Math.round(((ry + offsetY) / pageHeight) * 1000)));
+> ```
+>
+> **Step 4 — After changes:**
+> ```bash
+> cd artifacts/api-server && pnpm run build
+> ```
+> Then rescan SOF 7087 (Test 2). Take a screenshot of the Floor Plan tab and show me how the markers look.
+>
+> All 1186 tests should still pass — run them to confirm.

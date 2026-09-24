@@ -1,0 +1,50 @@
+Clear picture now. The slot override correctly tagged Example-8Page 2.pdf as room_schedule, but then the pipeline sent it through vision rasterization instead of table extraction. The extractTable call at line 5059 either wasn't reached or found zero rows because pdfplumber's extract_tables() couldn't parse A-710's table structure.
+The core issue: the room-schedule path at line 5059 calls extractTable which uses pdfplumber.extract_tables() — a structural table parser that looks for bordered grid tables. A-710's Room Finish Schedule may not have visible borders, making it invisible to pdfplumber. It's a text-based table, not a bordered grid.
+Send this diagnostic:
+
+DIAGNOSTIC ONLY — no changes, no rescans.
+bashgrep -n "room_schedule\|schedSheet\|comboSheet\|roomSchedule\|5059\|5050\|5070\|5080" \
+artifacts/api-server/src/lib/pipeline.ts | head -30
+Then test what pdfplumber actually finds on A-710 page 2:
+bashpython3 -c "
+import pdfplumber, sys
+
+path = '/tmp/example8_page2.pdf'
+
+# First check if file exists, if not use uploaded path
+import os
+if not os.path.exists(path):
+    # find it
+    import glob
+    files = glob.glob('/tmp/**/*.pdf', recursive=True) + glob.glob('/home/runner/**/*Page*2*.pdf', recursive=True)
+    print('Found PDFs:', files[:5])
+else:
+    with pdfplumber.open(path) as pdf:
+        pg = pdf.pages[0]
+        tables = pg.extract_tables()
+        print(f'Tables found: {len(tables)}')
+        for i, t in enumerate(tables):
+            print(f'Table {i}: {len(t)} rows x {len(t[0]) if t else 0} cols')
+            for row in t[:5]:
+                print(' ', row)
+        text = pg.extract_text()
+        print(f'Raw text (first 500 chars):')
+        print(text[:500] if text else 'NO TEXT')
+" 2>&1
+Also find where the uploaded PDF for Fresh Example 8 is stored:
+bashcurl -s -H "x-dev-bypass-auth: true" \
+"http://localhost:8080/api/jobs/$(curl -s -H 'x-dev-bypass-auth: true' \
+http://localhost:8080/api/jobs | python3 -c "
+import json,sys
+jobs=json.load(sys.stdin)
+for j in (jobs.get('jobs',jobs) if isinstance(jobs,dict) else jobs):
+  if 'Fresh Example' in j.get('name',''):
+    print(j['id'])
+")/files" | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+files=data if isinstance(data,list) else data.get('files',[])
+for f in files:
+  print(f.get('filename'),'|',f.get('storagePath'))
+"
+Report full output. No changes.

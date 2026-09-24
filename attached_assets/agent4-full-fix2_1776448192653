@@ -1,0 +1,178 @@
+Fix two separate bugs. Do all steps in order.
+
+═══════════════════════════════════════════
+BUG 1 — Room extraction finds 0 rooms
+═══════════════════════════════════════════
+
+**STEP 1 — Verify the fix is in source**
+
+Run:
+```
+grep "ROOM_NUMBER_RE" artifacts/api-server/src/lib/pipeline.ts
+```
+
+If output contains `\d{3,4}` → apply the fix below.
+If output contains `1[0-4]` → skip to STEP 2.
+
+**Fix to apply if needed — 3 edits in `artifacts/api-server/src/lib/pipeline.ts`:**
+
+Edit 1 — replace:
+```
+export const ROOM_NUMBER_RE = /^(\d{3,4}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+```
+with:
+```
+export const ROOM_NUMBER_RE = /^(\d{3}[A-Z]?|1[0-4]\d{2}[A-Z]?\.?\d?|2[0-4]\d{2}[A-Z]?\.?\d?|[A-Z]{1,2}P?\d?-\d{3}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+const YEAR_RE = /^(19|20)\d{2}$/;
+```
+
+Edit 2 — inside `extractRoomsFromWords`, find:
+```
+    if (!ROOM_NUMBER_RE.test(word.text)) continue;
+    if (usedIndices.has(i)) continue;
+    const roomNumber = word.text;
+    const rx = word.x0;
+    const ry = word.y0;
+```
+replace with:
+```
+    if (!ROOM_NUMBER_RE.test(word.text)) continue;
+    if (YEAR_RE.test(word.text)) continue;
+    if (usedIndices.has(i)) continue;
+    const roomNumber = word.text;
+    const rx = word.x0;
+    const ry = word.y0;
+    if (rx > pageWidth * 0.78 || ry > pageHeight * 0.88) continue;
+```
+
+Edit 3 — find:
+```
+    const roomName = rawName ? expandSynonyms(rawName) : `ROOM ${roomNumber}`;
+```
+replace with:
+```
+    const isAddressLike = rawName.includes(",") ||
+      /\b(AVE|BLVD|ST\b|RD\b|MA\b|NY\b|CA\b|COPYRIGHT|JACOBS|CORPS|DRAWING)\b/.test(rawName);
+    if (isAddressLike) continue;
+    const roomName = rawName ? expandSynonyms(rawName) : `ROOM ${roomNumber}`;
+```
+
+═══════════════════════════════════════════
+BUG 2 — Floor Plan viewer shows blank white canvas
+═══════════════════════════════════════════
+
+**STEP 2 — Diagnose where the floor plan image breaks**
+
+Run:
+```
+echo "SELECT id, name FROM jobs ORDER BY created_at DESC LIMIT 3;" | psql $DATABASE_URL
+```
+
+Run (replace JOB_ID with the Test 2 job id):
+```
+echo "SELECT id, sheet_id, sheet_type, rasterized_path, pdf_page FROM job_sheets WHERE job_id='JOB_ID' LIMIT 10;" | psql $DATABASE_URL
+```
+
+This tells us:
+- Are sheets being saved to the database?
+- Is `rasterized_path` populated or NULL?
+
+**STEP 3 — Check if rasterized PNGs exist in Object Storage**
+
+Run:
+```
+echo "SELECT rasterized_path FROM job_sheets WHERE job_id='JOB_ID' AND rasterized_path IS NOT NULL LIMIT 5;" | psql $DATABASE_URL
+```
+
+If `rasterized_path` is NULL for all rows → the rasterization step is failing silently. Fix below.
+If `rasterized_path` has values → the image exists but the frontend can't load it. Fix below.
+
+**STEP 4 — Fix: Rasterization saving NULL paths**
+
+Find the rasterization step in `artifacts/api-server/src/lib/pipeline.ts`. Search for:
+```
+grep -n "rasterize\|rasterized_path\|uploadToStorage" artifacts/api-server/src/lib/pipeline.ts | head -20
+```
+
+The rasterize step should:
+1. Call POST http://localhost:8008/rasterize with the PDF bytes and page number
+2. Receive base64 PNG back from the sidecar
+3. Upload the PNG to Object Storage (Replit bucket)
+4. Save the storage path to `job_sheets.rasterized_path`
+
+Check if the sidecar rasterize endpoint is working:
+```
+curl -s http://localhost:8008/healthz
+```
+
+**STEP 5 — Fix: Frontend not loading the floor plan image**
+
+Find the Floor Plan component in `artifacts/web/src`. Search for:
+```
+grep -rn "rasterized\|floor.*plan\|floorPlan\|page.*image\|img.*src" artifacts/web/src --include="*.tsx" | grep -i "floor\|raster\|plan" | head -15
+```
+
+The floor plan viewer loads the image via an API endpoint that serves the rasterized PNG. Common issues:
+- The image URL is constructed incorrectly (wrong base path or missing auth header)
+- The API route serving the image file doesn't exist or returns 404
+- The image is stored in Object Storage but the serving endpoint isn't implemented
+
+Check if there's an API route for serving floor plan images:
+```
+grep -rn "rasterized\|floor-plan\|page-image\|sheet.*image" artifacts/api-server/src/routes/ | head -10
+```
+
+If no route exists for serving the image, create one:
+```typescript
+// GET /api/jobs/:jobId/sheets/:sheetId/image
+router.get('/:jobId/sheets/:sheetId/image', requireAuth, async (req, res) => {
+  const sheet = await db.query.jobSheetsTable.findFirst({
+    where: and(
+      eq(jobSheetsTable.id, req.params.sheetId),
+      eq(jobSheetsTable.jobId, req.params.jobId)
+    )
+  });
+  if (!sheet?.rasterizedPath) return res.status(404).json({ error: 'Image not found' });
+  const buf = await downloadFromStorage(sheet.rasterizedPath);
+  res.set('Content-Type', 'image/png');
+  res.send(buf);
+});
+```
+
+**STEP 6 — Rebuild, restart, and test**
+
+Run:
+```
+cd artifacts/api-server && pnpm run build 2>&1 | tail -5
+```
+
+Restart the API server:
+```
+pkill -f "dist/index.mjs" 2>/dev/null; sleep 2; cd /home/runner/workspace/artifacts/api-server && node --enable-source-maps ./dist/index.mjs &
+```
+
+Verify health:
+```
+curl -s http://localhost:8080/healthz
+```
+
+**STEP 7 — Clear stale data and rescan**
+
+```
+echo "UPDATE jobs SET status='completed', total_signs=0 WHERE name='Test 2';" | psql $DATABASE_URL
+echo "DELETE FROM rooms WHERE job_id IN (SELECT id FROM jobs WHERE name='Test 2');" | psql $DATABASE_URL
+echo "DELETE FROM signs WHERE job_id IN (SELECT id FROM jobs WHERE name='Test 2');" | psql $DATABASE_URL
+echo "DELETE FROM job_sheets WHERE job_id IN (SELECT id FROM jobs WHERE name='Test 2');" | psql $DATABASE_URL
+```
+
+Then click **Rescan** in the UI on the Test 2 job.
+
+═══════════════════════════════════════════
+EXPECTED RESULTS
+═══════════════════════════════════════════
+
+After rescan completes:
+- Rooms tab: ~90 rooms (1100, 1101, 1119, 2102, etc.)
+- Sign Schedule: ~123 signs
+- Floor Plan tab: floor plan image visible with sign markers overlaid
+- Total Signs: non-zero number

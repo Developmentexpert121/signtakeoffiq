@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/api-spec",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts && pnpm -w run typecheck:libs",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^10.2.0",
+    "orval": "^8.5.2",
+    "typescript-eslint": "^8.58.2"
+  }
+}

@@ -1,0 +1,141 @@
+App: AI-Assist Takeoffs
+
+The rules engine (R1-R15) is already built.
+This prompt improves input quality and adds 
+missing logic — do NOT rebuild existing rules.
+
+════════════════════════════════════════════════
+IMPROVEMENT 1 — Structured room object schema
+════════════════════════════════════════════════
+Ensure every room saved to the DB and passed 
+to the rules engine includes these fields.
+Add any missing columns to the signs/rooms table:
+
+{
+  room_number:    string,   // "W119"
+  room_name:      string,   // "CLASSROOM"  
+  floor:          string,   // "LEVEL 1"
+  occupancy_group: string,  // "E", "B", "A-3"
+                            // null if unknown
+  occupant_load:  number,   // 25, 0, null
+  public_door_count: number, // default 1
+  coord_x:        number,
+  coord_y:        number,
+  confidence:     number,
+  coord_source:   string
+}
+
+occupancy_group and occupant_load should be 
+extracted from the egress/occupant load table 
+on the plans if present. Default null if not 
+found — rules engine handles null gracefully.
+
+════════════════════════════════════════════════
+IMPROVEMENT 2 — Occupancy group flag
+════════════════════════════════════════════════
+Add occupancy_group to the isAssembly flag logic.
+Currently isAssembly only checks room name keywords.
+Add: if occupancy_group starts with "A" → isAssembly = true
+regardless of room name.
+
+Updated flag:
+isAssembly = 
+  nameContains(GYMNASIUM, CAFETERIA, AUDITORIUM, 
+               SANCTUARY, THEATER, BALLROOM) 
+  OR occupancy_group IN ('A-1','A-2','A-3','A-4','A-5')
+  OR occupant_load >= 50
+
+════════════════════════════════════════════════
+IMPROVEMENT 3 — R3 Multi-door rule
+════════════════════════════════════════════════
+Add R3 to the rules engine. Currently every 
+room gets qty=1. Add:
+
+// R3: Multi-entry rooms
+if (room.public_door_count > 1) {
+  qty = room.public_door_count;
+  ruleRef = 'R3';
+}
+
+For rooms where public_door_count is null/unknown:
+default to 1 (conservative — estimator can adjust).
+
+Set public_door_count defaults by room type:
+- GYMNASIUM / GYM: 2
+- CAFETERIA: 2  
+- AUDITORIUM / THEATER: 2
+- MAIN OFFICE / PRINCIPAL: 2
+- All others: 1
+
+These are overridable per room in the Review tab.
+
+════════════════════════════════════════════════
+IMPROVEMENT 4 — Verification panel
+════════════════════════════════════════════════
+Add a Verification Results section to the 
+Overview tab (collapsed by default, expand on click).
+
+Show these checks with ✓ / ✗ / ⚠ status:
+
+✓ Total Signs: [count] across [N] rooms
+✓/✗ Stair Sets: Each stair should have 
+    (corridor sign + landing sign) × floors served
+    Flag if any stair is missing a set
+✓/✗ Elevator: "In Case of Fire" count should = 
+    number of elevator cabs (NOT cabs × floors)
+    Flag if count doesn't match
+✓/✗ Assembly Capacity: Every room with 
+    isAssembly=true should have Max Occupancy sign
+    Flag any assembly room missing it  
+✓/✗ Restroom Coverage: Every floor should have 
+    at least 1 restroom sign
+    Flag any floor with zero restroom signs
+⚠ Unspecified Rooms: [N] rooms have no 
+    occupancy group — review recommended
+
+Display in Overview tab below the metric cards.
+Collapsed by default, green header if all pass,
+amber if warnings, red if any failures.
+
+════════════════════════════════════════════════
+IMPROVEMENT 5 — CSV room list upload
+════════════════════════════════════════════════
+Add a "Upload Room List CSV" option to the 
+job's File Uploads section alongside the 
+existing PDF upload.
+
+CSV format (exportable from Bluebeam/Excel):
+room_number, room_name, floor, occupancy_group, 
+occupant_load, public_door_count
+
+When a CSV is uploaded:
+1. Parse and validate each row
+2. Merge with any rooms already extracted 
+   from the PDF — CSV data wins on conflicts
+3. Run the full rules engine against merged list
+4. Mark CSV-sourced rooms with 
+   coord_source = "csv_import"
+
+This gives estimators a fast path: export 
+room schedule from Bluebeam → upload CSV → 
+get sign schedule in seconds, no PDF parsing.
+
+════════════════════════════════════════════════
+DO NOT CHANGE
+════════════════════════════════════════════════
+- Existing R1, R2, R4-R15 logic
+- XLSX export format
+- Pricing tab
+- Marker placement on plans
+- All 1,430 tests
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Rescan Fox Hill — Gymnasium shows qty=2 (R3)
+2. Cafeteria shows qty=2 (R3)  
+3. Overview verification panel shows stair 
+   and elevator check results
+4. Upload test CSV with 5 rooms — confirm 
+   sign schedule generates correctly
+5. All 1,430 tests pass

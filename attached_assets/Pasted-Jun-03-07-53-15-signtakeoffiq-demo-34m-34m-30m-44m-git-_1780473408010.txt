@@ -1,0 +1,140 @@
+Jun 03 07:53:15 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Jun 03 07:53:15 [signtakeoffiq-demo] [34m│[0m [34m › fetching app source code[0m
+Jun 03 07:53:15 [signtakeoffiq-demo] [34m│[0m => Selecting branch "dev-work"
+Jun 03 07:53:25 [signtakeoffiq-demo] [34m│[0m => Checking out commit "15d6a7a3565e01266ebe32e51ccbfc6e8129d6ed"
+Jun 03 07:53:25 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:53:25 [signtakeoffiq-demo] [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jun 03 07:53:25 [signtakeoffiq-demo] [34m╰────────────────────────────────────────╼[0m
+Jun 03 07:53:25 [signtakeoffiq-demo] 
+Jun 03 07:53:25 [signtakeoffiq-demo] [34m › configuring build-time app environment variables:[0m
+Jun 03 07:53:25 [signtakeoffiq-demo]      SPACES_ENDPOINT SPACES_ACCESS_KEY_ID VITE_CLERK_PUBLISHABLE_KEY GUEST_JWT_SECRET CLERK_SECRET_KEY CLERK_PUBLISHABLE_KEY AI_INTEGRATIONS_ANTHROPIC_API_KEY SMTP_HOST DEFAULT_OBJECT_STORAGE_BUCKET_ID DO_DATABASE_URL DEV_BYPASS_AUTH PIPELINE_CACHE_ENABLED SPACES_SECRET_ACCESS_KEY SMTP_FROM SPACES_REGION PRIVATE_OBJECT_DIR AI_INTEGRATIONS_GEMINI_BASE_URL AI_INTEGRATIONS_GEMINI_API_KEY SMTP_PORT RASTERIZE_DPI SESSION_SECRET PUBLIC_OBJECT_SEARCH_PATHS AI_INTEGRATIONS_ANTHROPIC_BASE_URL SMTP_USER SMTP_PASS
+Jun 03 07:53:25 [signtakeoffiq-demo] 
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m Detected the following buildpacks suitable to build your app:
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    heroku/nodejs                  v0.341.5  (Node.js)
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    digitalocean/python-appdetect  v0.1.2    
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    heroku/python                  v5.339.5  (Python)
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m╰─────────────────────────────────────────────╼[0m
+Jun 03 07:53:26 [signtakeoffiq-demo] 
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m build caching [0m[0m[34m───────────╼[0m
+Jun 03 07:53:26 [signtakeoffiq-demo] [34m│[0m [34m › checking for cache from a previous build[0m
+Jun 03 07:53:27 [signtakeoffiq-demo] [34m│[0m Timer: Analyzer started at 2026-06-03T07:53:27Z
+Jun 03 07:53:27 [signtakeoffiq-demo] [34m│[0m Restoring metadata for "heroku/nodejs:shim" from cache
+Jun 03 07:53:27 [signtakeoffiq-demo] [34m│[0m Restoring metadata for "heroku/python:shim" from cache
+Jun 03 07:53:27 [signtakeoffiq-demo] [34m│[0m Timer: Analyzer ran for 576.217367ms and ended at 2026-06-03T07:53:27Z
+Jun 03 07:53:27 [signtakeoffiq-demo] [34m│[0m Timer: Restorer started at 2026-06-03T07:53:27Z
+Jun 03 07:53:28 [signtakeoffiq-demo] [34m│[0m Restoring data for "heroku/nodejs:shim" from cache
+Jun 03 07:53:28 [signtakeoffiq-demo] [34m│[0m Restoring data for "heroku/python:shim" from cache
+Jun 03 07:53:39 [signtakeoffiq-demo] [34m│[0m Timer: Restorer ran for 11.626235165s and ended at 2026-06-03T07:53:39Z
+Jun 03 07:53:39 [signtakeoffiq-demo] [34m╰───────────────────────────────────────╼[0m
+Jun 03 07:53:39 [signtakeoffiq-demo] 
+Jun 03 07:53:39 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jun 03 07:53:39 [signtakeoffiq-demo] [34m│[0m Timer: Builder started at 2026-06-03T07:53:39Z
+Jun 03 07:53:39 [signtakeoffiq-demo] [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m -----> Creating runtime environment
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        NODE_VERBOSE=false
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        NODE_ENV=
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        NODE_MODULES_CACHE=true
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m -----> Installing binaries
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        engines.node (package.json):   22.x
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        packageManager (package.json): pnpm@10.26.1
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        Resolving node version 22.x...
+Jun 03 07:53:40 [signtakeoffiq-demo] [34m│[0m        Downloading and installing node 22.22.2...
+Jun 03 07:53:41 [signtakeoffiq-demo] [34m│[0m        Validating checksum
+Jun 03 07:53:44 [signtakeoffiq-demo] [34m│[0m        Using default npm version: 10.9.7
+Jun 03 07:53:44 [signtakeoffiq-demo] [34m│[0m        Downloading and installing pnpm (10.26.1)
+Jun 03 07:53:47 [signtakeoffiq-demo] [34m│[0m        Using pnpm 10.26.1
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m -----> Restoring cache
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m        - pnpm cache
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m -----> Installing dependencies
+Jun 03 07:53:49 [signtakeoffiq-demo] [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jun 03 07:53:56 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:56 [signtakeoffiq-demo] [34m│[0m -----> Build
+Jun 03 07:53:56 [signtakeoffiq-demo] [34m│[0m        Running build
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 build /workspace
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > pnpm run typecheck && pnpm -r --if-present run build
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 typecheck /workspace
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 typecheck:libs /workspace
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        > tsc --build
+Jun 03 07:53:57 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m -----> Caching build
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m        - pnpm cache
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m -----> Pruning devDependencies
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m        Skipping because NODE_ENV is not 'production'
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:54:30 [signtakeoffiq-demo] [34m│[0m -----> Build succeeded!
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Using Python 3.11 specified in .python-version
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Restoring cache
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Using cached install of Python 3.11.15
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Using cached uv 0.10.9
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Installing dependencies using 'uv sync --locked --no-default-groups'
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m        [2mResolved [1m1 package[0m [2min 0.84ms[0m[0m
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m        [2mBytecode compiled [1m0 files[0m [2min 45ms[0m[0m
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m -----> Saving cache
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m Procfile: configuring type "web" process: "node --enable-source-maps artifacts/api-server/dist/index.mjs"
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m Procfile: will set process 'web' as the default process
+Jun 03 07:54:31 [signtakeoffiq-demo] [34m│[0m Timer: Builder ran for 52.20599674s and ended at 2026-06-03T07:54:31Z
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m╰───────────────────────────────────╼[0m
+Jun 03 07:54:32 [signtakeoffiq-demo] 
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m app upload [0m[0m[34m───────────╼[0m
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m│[0m [34m › uploading app container image to DOCR[0m
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m│[0m Reusing layers from image <registry-uri-0>
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m│[0m Timer: Exporter started at 2026-06-03T07:54:32Z
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m│[0m Reusing layer 'heroku/nodejs:profile'
+Jun 03 07:54:32 [signtakeoffiq-demo] [34m│[0m Adding layer 'heroku/python:profile'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Adding 1/1 app layer(s)
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Reusing layer 'buildpacksio/lifecycle:launcher'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Adding layer 'buildpacksio/lifecycle:config'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Reusing layer 'buildpacksio/lifecycle:process-types'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.lifecycle.metadata'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.build.metadata'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.project.metadata'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Setting default process type 'web'
+Jun 03 07:54:53 [signtakeoffiq-demo] [34m│[0m Timer: Saving <image-1>... started at 2026-06-03T07:54:53Z
+Jun 03 07:55:09 [signtakeoffiq-demo] [34m│[0m *** Images (sha256:122855dc8d9a4b0b4884b9cfc9cfeea575ccff78eed390ca56e37b9c9961c0bf):
+Jun 03 07:55:09 [signtakeoffiq-demo] [34m│[0m       <image-2>
+Jun 03 07:55:09 [signtakeoffiq-demo] [34m│[0m Timer: Saving <image-3>... ran for 15.603235876s and ended at 2026-06-03T07:55:08Z
+Jun 03 07:55:09 [signtakeoffiq-demo] [34m│[0m Timer: Exporter ran for 36.255655396s and ended at 2026-06-03T07:55:08Z
+Jun 03 07:55:09 [signtakeoffiq-demo] [34m│[0m Timer: Cache started at 2026-06-03T07:55:08Z
+Jun 03 07:55:17 [signtakeoffiq-demo] [34m│[0m Adding cache layer 'heroku/nodejs:shim'
+Jun 03 07:55:26 [signtakeoffiq-demo] [34m│[0m Adding cache layer 'heroku/python:shim'
+Jun 03 07:55:37 [signtakeoffiq-demo] [34m│[0m [32m ✔ uploaded app image to DOCR[0m
+Jun 03 07:55:37 [signtakeoffiq-demo] [34m╰────────────────────────────────────╼[0m
+Jun 03 07:55:37 [signtakeoffiq-demo] 
+Jun 03 07:55:37 [signtakeoffiq-demo] [32m ✔ [0m[30m[42m build complete [0m[0m
+Jun 03 07:55:37 [signtakeoffiq-demo] 
+Jun 03 07:56:20 [signtakeoffiq-demo] (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 07:56:20 [signtakeoffiq-demo] (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":30,"time":1780473380844,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","port":8080,"msg":"Server listening"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":30,"time":1780473380849,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":30,"time":1780473380849,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":50,"time":1780473380859,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"id\", \"building_type\" from \"jobs\" where \"jobs\".\"building_type\" in ($1, $2, $3, $4)\nparams: other,office,multifamily,hospital: getaddrinfo ENOTFOUND base","stack":"Error: Failed query: select \"id\", \"building_type\" from \"jobs\" where \"jobs\".\"building_type\" in ($1, $2, $3, $4)\nparams: other,office,multifamily,hospital\n    at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async migrateLegacyBuildingTypes (/workspace/artifacts/api-server/src/routes/jobs.ts:43:18)\ncaused by: Error: getaddrinfo ENOTFOUND base\n    at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n    at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async migrateLegacyBuildingTypes (/workspace/artifacts/api-server/src/routes/jobs.ts:43:18)","query":"select \"id\", \"building_type\" from \"jobs\" where \"jobs\".\"building_type\" in ($1, $2, $3, $4)","params":["other","office","multifamily","hospital"]},"msg":"Failed to migrate legacy building type values"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":40,"time":1780473380861,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"key\", \"value\", \"updated_at\" from \"system_settings\" where \"system_settings\".\"key\" = $1\nparams: cleanup_retention: getaddrinfo ENOTFOUND base","stack":"Error: Failed query: select \"key\", \"value\", \"updated_at\" from \"system_settings\" where \"system_settings\".\"key\" = $1\nparams: cleanup_retention\n    at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async loadCleanupRetentionSettings (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:76:19)\n    at async startGuestCleanupJob (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:451:3)\ncaused by: Error: getaddrinfo ENOTFOUND base\n    at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n    at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async loadCleanupRetentionSettings (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:76:19)\n    at async startGuestCleanupJob (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:451:3)","query":"select \"key\", \"value\", \"updated_at\" from \"system_settings\" where \"system_settings\".\"key\" = $1","params":["cleanup_retention"]},"msg":"Failed to load cleanup retention settings from DB — using env-var/default values"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":30,"time":1780473380861,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","maxAgeDays":90,"maxRows":1000,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 07:56:20 [signtakeoffiq-demo] {"level":50,"time":1780473380868,"pid":1,"hostname":"signtakeoffiq-demo-578667c975-grfh9","err":{"type":"_DrizzleQueryError","message":"Failed query: select \"id\" from \"tenants\" where (\"tenants\".\"id\" like $1 and COALESCE(\"tenants\".\"last_active_at\", \"tenants\".\"created_at\") < $2)\nparams: tenant_guest_%,Wed May 27 2026 07:56:20 GMT+0000 (Coordinated Universal Time): getaddrinfo ENOTFOUND base","stack":"Error: Failed query: select \"id\" from \"tenants\" where (\"tenants\".\"id\" like $1 and COALESCE(\"tenants\".\"last_active_at\", \"tenants\".\"created_at\") < $2)\nparams: tenant_guest_%,Wed May 27 2026 07:56:20 GMT+0000 (Coordinated Universal Time)\n    at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async deleteExpiredGuestTenants (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:391:26)\n    at async run (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:460:22)\ncaused by: Error: getaddrinfo ENOTFOUND base\n    at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13)\n    at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n    at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)\n    at async deleteExpiredGuestTenants (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:391:26)\n    at async run (/workspace/artifacts/api-server/src/lib/guestCleanup.ts:460:22)","query":"select \"id\" from \"tenants\" where (\"tenants\".\"id\" like $1 and COALESCE(\"tenants\".\"last_active_at\", \"tenants\".\"created_at\") < $2)","params":["tenant_guest_%","2026-05-27T07:56:20.863Z"]},"msg":"Guest cleanup job failed"}

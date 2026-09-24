@@ -1,0 +1,158 @@
+App: AI-Assist Takeoffs
+Applies to ALL building types, ALL plan sets.
+
+════════════════════════════════════════════════
+ISSUE — 86% vision_estimated markers
+Only 16/118 rooms get accurate pdf_native coords.
+Remaining 102 use Gemini vision estimates (±5-15%
+drift from true room center).
+════════════════════════════════════════════════
+
+ROOT CAUSE ANALYSIS
+First determine WHY pdf_native rate is low.
+Add this diagnostic to pipeline Step 10b:
+
+  console.log('[PDF-NATIVE] Page dimensions:', 
+    pageWidth, pageHeight);
+  console.log('[PDF-NATIVE] Total words extracted 
+    by pdfplumber:', allWords.length);
+  console.log('[PDF-NATIVE] Words matching room 
+    number pattern:', matchedWords.length);
+  console.log('[PDF-NATIVE] Sample words found:', 
+    allWords.slice(0,20).map(w => w.text));
+  console.log('[PDF-NATIVE] PDF type: vector or 
+    raster?', allWords.length > 100 
+    ? 'vector' : 'likely raster/scanned');
+
+Run force rescan and check console.
+If allWords.length < 50 → PDF is raster/scanned.
+  Solution: use OCR (tesseract) on rasterized pages
+If allWords.length > 200 but matchedWords low →
+  room number regex too strict.
+  Solution: loosen pattern matching
+
+════════════════════════════════════════════════
+FIX A — If PDF is raster: add OCR fallback
+════════════════════════════════════════════════
+When pdfplumber extracts < 50 words from a page,
+treat it as a raster/scanned PDF and run OCR:
+
+  import pytesseract
+  from PIL import Image
+
+  async function extractWordsWithOCR(pageImage) {
+    // Run tesseract on the rasterized page image
+    // (already rasterized in Step 3)
+    const ocrData = pytesseract.image_to_data(
+      pageImage,
+      output_type=pytesseract.Output.DICT,
+      config='--psm 11'  // sparse text mode
+    );
+    
+    // Return words with bounding boxes
+    return ocrData.text.map((text, i) => ({
+      text: text,
+      x: ocrData.left[i],
+      y: ocrData.top[i],
+      width: ocrData.width[i],
+      height: ocrData.height[i],
+      confidence: ocrData.conf[i]
+    })).filter(w => 
+      w.text.trim() !== '' && 
+      w.confidence > 60
+    );
+  }
+
+Then match OCR words to room numbers using the
+same pattern matching as the vector path.
+
+This converts raster PDFs to pdf_native coords
+instead of falling back to vision_estimated.
+
+Install if not present: pip install pytesseract
+Tesseract binary: apt-get install tesseract-ocr
+
+════════════════════════════════════════════════
+FIX B — If PDF is vector: fix regex too strict
+════════════════════════════════════════════════
+If pdfplumber finds >200 words but only matches
+16 room numbers, the pattern is too restrictive.
+
+Current pattern likely: /^[WE]C?\d{3}[A-Z]?$/
+This misses rooms where:
+  - Text has spaces: "W 139" instead of "W139"
+  - Text is split across lines: "W139" on one
+    line, "CLASSROOM" on next
+  - Lowercase: "w139" in some PDFs
+  - Extra characters: "W139-1" or "(W139)"
+
+Fix the matching to be more flexible:
+
+  // Normalize text before matching
+  const normalized = word.text
+    .toUpperCase()
+    .replace(/[\s\-\.]/g, '')  // remove spaces/dashes
+    .replace(/[()]/g, '');     // remove brackets
+  
+  // Match against building type patterns
+  const patterns = getBuildingTypePatterns(
+    job.building_type
+  );
+  const isRoomNumber = patterns.some(
+    p => p.test(normalized)
+  );
+
+════════════════════════════════════════════════
+FIX C — Improve vision_estimated accuracy
+════════════════════════════════════════════════
+For rooms that must use vision_estimated,
+improve Gemini's coordinate prompt precision:
+
+Current prompt asks for percentage (0-100).
+Change to ask for a more specific grid position:
+
+"""
+For each room label, estimate its CENTER position.
+
+The floor plan image is divided into a 20×20 grid.
+Report position as grid coordinates where:
+  (0,0) = top-left corner
+  (20,20) = bottom-right corner
+  (10,10) = exact center
+
+This gives 5% precision per grid cell.
+
+Return: { "roomId": "W139", "gridX": 14.5, 
+           "gridY": 8.2 }
+
+Convert to percentage: x_pct = gridX / 20 * 100
+"""
+
+This forces Gemini to think in smaller increments
+rather than rough percentages, improving accuracy
+from ±10% to ±5% typical error.
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+After fix, force rescan Fox Hill:
+
+Check console for:
+  [PDF-NATIVE] PDF type: vector or raster?
+  [PDF-NATIVE] Total words: N
+
+Target improvement:
+  If raster + OCR added:
+    pdf_native: 60%+ (up from 14%)
+    vision_estimated: 40% or less
+    
+  If vector + regex loosened:
+    pdf_native: 70%+ 
+    vision_estimated: 30% or less
+
+Visual check in Plans tab:
+  Click 5 random room markers
+  Each should land inside or very near the room
+  No markers in corridors or on walls
+
+All 1,461 tests pass.

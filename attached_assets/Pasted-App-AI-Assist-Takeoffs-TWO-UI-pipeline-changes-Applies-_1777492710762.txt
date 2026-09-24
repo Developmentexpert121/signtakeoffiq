@@ -1,0 +1,164 @@
+App: AI-Assist Takeoffs
+TWO UI + pipeline changes.
+Applies to ALL building types, ALL plans.
+
+════════════════════════════════════════════════
+CHANGE 1 — Remove Sign Schedule & Specs 
+           upload zone entirely
+════════════════════════════════════════════════
+The dual upload zone causes confusion:
+- Estimators don't know which zone to use
+- Pipeline behaves differently based on zone
+- Sign schedules uploaded to wrong zone
+  break room extraction
+- Warning banner fires incorrectly
+
+Replace dual zone with single upload zone:
+
+REMOVE:
+  Construction Plans zone (left)
+  Sign Schedule & Specs zone (right)
+  Warning banner logic
+  Zone-based routing in pipeline
+
+REPLACE WITH:
+  Single upload zone:
+  
+  "Upload Construction Documents"
+  
+  Drop PDFs here or browse
+  
+  ✓ Floor plans (A-series sheets)
+  ✓ Sign schedules & specs
+  ✓ Multiple PDFs OK
+  ✓ Multi-page PDFs OK
+  
+  All pages are automatically classified.
+
+UI notes:
+  - Keep the drag-and-drop functionality
+  - Keep multiple file upload support
+  - Keep the file list showing uploaded files
+    with ability to remove individual files
+  - Remove the two-column layout
+  - Single centered upload area
+
+════════════════════════════════════════════════
+CHANGE 2 — Pipeline: process ALL uploaded PDFs
+════════════════════════════════════════════════
+Currently only processes files from one zone.
+Must process ALL uploaded files regardless
+of which zone they came from.
+
+In the pipeline file loading step:
+  
+  // Process ALL uploaded files for this job
+  const allFiles = await db.query(\`
+    SELECT * FROM job_files
+    WHERE job_id = $1
+    AND file_type IN ('pdf', 'application/pdf')
+    ORDER BY uploaded_at ASC
+  \`, [jobId]);
+
+  // Process each file through sheet classifier
+  for (const file of allFiles) {
+    const sheets = await classifyAllSheets(file);
+    // Each sheet gets classified:
+    // floor_plan, sign_details, signage_schedule,
+    // specialty_signage, egress, skip
+    allClassifiedSheets.push(...sheets);
+  }
+
+  // Then process by type:
+  const floorPlans = allClassifiedSheets
+    .filter(s => s.type === 'floor_plan');
+  const signDetails = allClassifiedSheets
+    .filter(s => s.type === 'sign_details' || 
+                 s.type === 'signage_schedule');
+  const specialty = allClassifiedSheets
+    .filter(s => s.type === 'specialty_signage');
+
+  // Extract rooms from ALL floor plans
+  for (const sheet of floorPlans) {
+    await extractRooms(sheet, jobId);
+  }
+  
+  // Extract sign schedule from ALL detail sheets
+  for (const sheet of signDetails) {
+    await extractSignSchedule(sheet, jobId);
+  }
+  
+  // Extract specialty from ALL specialty sheets
+  for (const sheet of specialty) {
+    await extractSpecialtySigns(sheet, jobId);
+  }
+
+════════════════════════════════════════════════
+CHANGE 3 — Soft warning instead of hard failure
+           when 0 rooms extracted
+════════════════════════════════════════════════
+Step 10 currently throws hard error:
+"No rooms could be extracted"
+
+Change to soft warning — pipeline continues:
+
+  if (extractedRooms.length === 0) {
+    addPipelineLog(
+      '⚠️ No rooms extracted from floor plans. ' +
+      'Check that uploaded PDFs contain floor ' +
+      'plans with room labels. Egress signs ' +
+      'will still be generated.',
+      'warning'
+    );
+    // DO NOT throw — continue pipeline
+    // Rules engine runs with 0 rooms
+    // Egress signs still generated
+    // User sees warning, can re-upload
+  }
+
+════════════════════════════════════════════════
+CHANGE 4 — Pipeline log: show all files processed
+════════════════════════════════════════════════
+Update sheet coverage log to show all files:
+
+  // Instead of just sheet IDs:
+  "Sheets processed: A102(p1) — 1 floor plan"
+  
+  // Show files + sheets:
+  "Files: A101.pdf (2 sheets: floor_plan×1, 
+    skip×1), A102.pdf (1 sheet: floor_plan×1),
+    A700.pdf (1 sheet: sign_details×1)
+   Floor plans: 2 | Detail sheets: 1 | 
+   Skipped: 1"
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+TEST 1 — Gibson Lib (3 separate PDFs):
+  Upload A101.pdf + A102.pdf + A700.pdf
+  All to single upload zone
+  
+  Expected pipeline log:
+    "Files: A101.pdf, A102.pdf, A700.pdf
+     Floor plans: 2 (A101, A102)
+     Detail sheets: 1 (A700)
+     Skipped: 0"
+  
+  Expected results:
+    ~25-30 room signs (from A101+A102)
+    42 sign schedule entries matched
+    0 hard failures
+
+TEST 2 — Fox Hill (single 6-page PDF):
+  Upload fox_hill_signage_plans.pdf
+  Single file, all to one zone
+  
+  Expected: same as before — 200+ signs
+  No regression
+
+TEST 3 — Any plan with 0 rooms:
+  If extraction fails → warning shown
+  Job completes as 'completed' not 'error'
+  Estimator can see warning and re-upload
+
+All 1,461 tests pass.

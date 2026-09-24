@@ -1,0 +1,51 @@
+XLSX still shows 0 signs. But the Review tab screenshot tells a different story — 239 rooms found, 124 via AI vision. So rooms ARE being extracted now, but signs aren't being generated from them.
+Here's what's happening:
+Rooms found: 239 ✅ — 250 DPI is working, pipeline got past Step 2
+Signs generated: 0 ❌ — Rules engine isn't firing on these rooms
+Looking at the Review tab:
+
+Room names like "HTRON_A UNIT 2A", "HTUOS_B" — these are garbled OCR from the 1/16" scale plans. The text is being read but scrambled
+Rooms "01 TEEF", "03 ELACS TEEF" — "TEEF" is "FEET" backwards, "ELACS TEEF" is "FEET SCALE" backwards — the scale bar text is being picked up as room names
+Room type column is blank for all rows — the semantic mapper isn't recognizing these garbled names as residential unit types
+
+Two problems:
+
+Scale bar text being extracted as rooms (01 TEEF, 03 ELACS TEEF, 21 HCNI)
+Garbled unit names not mapping to residential type → rules engine skips them → 0 signs
+
+Fix 2 (DPI adaptive) won't fix this — this is a room name parsing + false positive filtering problem, not a DPI problem.
+Here's the targeted Replit prompt:
+
+AI-Assist Takeoffs — Two fixes for residential unit extraction. No rescans. Typecheck only.
+Fix 1 — Filter out scale bar false positives
+Rooms with names matching scale bar patterns are being extracted as real rooms. Add a filter in the room validation step that rejects rooms where the name matches any of these patterns:
+typescriptconst SCALE_BAR_PATTERNS = [
+  /^FEET\s*SCALE$/i,
+  /^INCH\s*SCALE$/i,
+  /^FEET$/i,
+  /^SCALE$/i,
+  /^TEEF/i,        // "FEET" reversed/garbled
+  /^ELACS/i,       // "SCALE" reversed/garbled
+  /^HCNI/i,        // "INCH" reversed/garbled
+];
+
+function isScaleBarText(name: string): boolean {
+  return SCALE_BAR_PATTERNS.some(p => p.test(name.trim()));
+}
+Also reject rooms where roomNumber is 1 or 2 digit only (e.g. "01", "03", "21") AND the name matches a scale bar pattern.
+Fix 2 — Recognize residential unit names in semantic mapper
+Room names like "HTRON_A UNIT 2A", "HTUOS_B", "UNIT 101C" are garbled versions of "UNIT 2A", "UNIT 1B" etc. The semantic mapper needs to recognize any room name containing "UNIT" as a residential unit type regardless of surrounding garble.
+In the semantic mapper keyword list for the residential building type, ensure these patterns map to unit type:
+
+Any name containing UNIT (case insensitive)
+Any name matching /UNIT\s*\d[ABC]?/i
+Any room number matching /^\d{3}[ABC]$/ (e.g. 101A, 202B) should default to type unit for residential building type even if name is unrecognized
+
+Fix 3 — Ensure residential unit type triggers Room ID sign rule
+In the rules engine, confirm that rooms with type unit or building type residential trigger R1 (Room ID sign). If unit type is not in the R1 trigger list, add it. Every residential unit gets exactly 1 Room ID sign per ADA §703.
+Rules:
+
+pipeline.ts and rules engine only
+No rescans, no DB changes
+Typecheck must pass clean
+Applies to all residential jobs, not just Tower Distri

@@ -1,0 +1,64 @@
+Fix large permit set handling in pipeline.ts. When a PDF is over 50MB the drawing index parse is timing out and falling back to scanning all pages. Add smarter sheet filtering to only scan architectural floor plan sheets.
+Fix 1 — Increase drawing index timeout for large files:
+In pipeline.ts find the parseDrawingIndex call with its timeout. Change the timeout based on file size:
+tsconst fileSizeMB = (file.sizeBytes ?? 0) / 1024 / 1024;
+const indexTimeoutMs = fileSizeMB > 50 
+  ? 180_000  // 3 minutes for large files
+  : fileSizeMB > 20
+  ? 120_000  // 2 minutes for medium files
+  : 60_000;  // 1 minute for small files
+Fix 2 — Filter sheets by title for large permit sets:
+After drawing index parse, when allSheets.length > 20 (large permit set detected), apply aggressive filtering to keep only floor plan sheets:
+tsif (allSheets.length > 20) {
+  const FLOOR_PLAN_KEYWORDS = [
+    "FLOOR PLAN", "FLOOR PLN", "FLR PLAN",
+    "ARCHITECTURAL", "ARCH PLAN",
+    "LEVEL", "BASEMENT", "GROUND FLOOR",
+    "PLAN VIEW", "ROOM LAYOUT",
+  ];
+  
+  const EXCLUDE_KEYWORDS = [
+    "ELECTRICAL", "MECHANICAL", "PLUMBING", 
+    "STRUCTURAL", "CIVIL", "LANDSCAPE",
+    "LIGHTING", "REFLECTED CEILING", "RCP",
+    "HVAC", "SPRINKLER", "FIRE PROTECTION",
+    "DETAIL", "SECTION", "ELEVATION",
+    "SCHEDULE", "LEGEND", "NOTES",
+    "SPECIFICATION", "COVER", "INDEX",
+    "SITE PLAN", "SURVEY", "DEMOLITION",
+  ];
+
+  const floorPlanSheets = allSheets.filter(sheet => {
+    const title = (sheet.sheetTitle ?? "").toUpperCase();
+    const id = (sheet.sheetId ?? "").toUpperCase();
+    
+    // Exclude MEP/structural sheets
+    if (EXCLUDE_KEYWORDS.some(kw => title.includes(kw))) return false;
+    
+    // Keep A-series sheets (architectural)
+    if (/^A[-\s]?\d/.test(id)) return true;
+    
+    // Keep sheets with floor plan keywords
+    if (FLOOR_PLAN_KEYWORDS.some(kw => title.includes(kw))) return true;
+    
+    // For large permit sets, be conservative — only keep A-series
+    return false;
+  });
+
+  if (floorPlanSheets.length > 0) {
+    logger.log(`[pipeline] Large permit set: filtered ${allSheets.length} sheets → ${floorPlanSheets.length} floor plan sheets`);
+    allSheets = floorPlanSheets;
+  } else {
+    logger.log(`[pipeline] Large permit set: no A-series sheets found — keeping all ${allSheets.length} sheets`);
+  }
+}
+Fix 3 — Cap vision scans for large permit sets:
+When fileSizeMB > 50, cap the effective vision scan limit at 10 regardless of tenant setting:
+tsconst effectiveVisionCap = fileSizeMB > 50
+  ? Math.min(rawVisionCap, 10)
+  : rawVisionCap;
+
+logger.log(`[pipeline] Vision cap: ${effectiveVisionCap} (file size: ${fileSizeMB.toFixed(1)}MB)`);
+After saving, rescan Cambridge Moses WITHOUT Force Fresh AI Scan first — let it use cached sheets. Check the pipeline log for:
+[pipeline] Large permit set: filtered X sheets → Y floor plan sheets
+If Y is between 3-10 then the filter is working. Share the Overview screenshot with new sign count.

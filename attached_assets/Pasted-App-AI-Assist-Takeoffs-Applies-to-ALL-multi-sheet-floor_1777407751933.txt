@@ -1,0 +1,152 @@
+App: AI-Assist Takeoffs
+Applies to ALL multi-sheet floor plans, ALL types.
+
+════════════════════════════════════════════════
+BUG 1 — Markers on wrong sheet (critical)
+E118 GYMNASIUM showing on Academic Wing sheet
+instead of Community Wing sheet
+════════════════════════════════════════════════
+When a floor has multiple sheets (e.g. Fox Hill
+Level 1 = sheet 3.9.51 Academic + 3.9.52 Community),
+all markers are being rendered on the FIRST sheet.
+E-prefix rooms belong on 3.9.52 but show on 3.9.51.
+
+Root cause: each sign has coord_x/coord_y that are
+relative to the sheet they were extracted from.
+But the renderer is not tracking WHICH sheet each
+room came from — it just uses the first sheet for
+that floor level.
+
+Fix: add sheet_id or sheet_number to each sign row
+so the renderer knows which sheet image to use.
+
+STEP 1 — Add sheet tracking to signs table:
+  ALTER TABLE signs 
+    ADD COLUMN IF NOT EXISTS source_sheet_id VARCHAR,
+    ADD COLUMN IF NOT EXISTS source_sheet_number VARCHAR;
+  -- e.g. source_sheet_number = '3.9.51' or '3.9.52'
+
+STEP 2 — During extraction, tag each room with
+its source sheet:
+  When extracting rooms from sheet 3.9.51:
+    INSERT INTO signs (..., source_sheet_number)
+    VALUES (..., '3.9.51')
+  When extracting rooms from sheet 3.9.52:
+    INSERT INTO signs (..., source_sheet_number)
+    VALUES (..., '3.9.52')
+
+STEP 3 — In the Plans tab renderer:
+  Current: render all Level 1 markers on sheet[0]
+  Fix: for each marker, look up source_sheet_number
+  and render it on the matching sheet image
+
+  // Group markers by source sheet
+  const markersBySheet = groupBy(
+    markers, m => m.source_sheet_number
+  );
+  
+  // Render each group on its correct sheet
+  for (const [sheetNum, sheetMarkers] of 
+       Object.entries(markersBySheet)) {
+    const sheetImage = sheets.find(
+      s => s.sheet_number === sheetNum
+    );
+    renderMarkersOnSheet(sheetImage, sheetMarkers);
+  }
+
+STEP 4 — Floor plan viewer: show sheet selector
+When a floor has multiple sheets, show a sheet
+sub-selector below the floor selector:
+
+  LEVEL 1 ▼
+  [3.9.51 Academic Wing] [3.9.52 Community Wing]
+
+User can toggle between wings to see markers
+for that specific sheet. Default: show all sheets
+as a combined view if possible, or show first
+sheet with a "Next Wing →" navigation button.
+
+════════════════════════════════════════════════
+BUG 2 — Phantom LEVEL 3 tab
+Fox Hill has 2 floors, showing 3 level tabs
+════════════════════════════════════════════════
+The floor selector shows LEVEL 1, LEVEL 2, LEVEL 3.
+Level 3 doesn't exist — it's being created because
+the pipeline is treating 3 sheets as 3 floors.
+
+Fix in sheet classification (Step 4b):
+Map sheet titles to floor numbers:
+
+  function getFloorFromSheetTitle(title) {
+    const t = title.toLowerCase();
+    if (t.includes('first floor') || 
+        t.includes('floor 1') ||
+        t.includes('level 1') ||
+        t.includes('ground floor')) return 'LEVEL 1';
+    if (t.includes('second floor') || 
+        t.includes('floor 2') ||
+        t.includes('level 2')) return 'LEVEL 2';
+    if (t.includes('third floor') || 
+        t.includes('floor 3') ||
+        t.includes('level 3')) return 'LEVEL 3';
+    if (t.includes('basement') || 
+        t.includes('lower level')) return 'LEVEL B1';
+    if (t.includes('roof')) return 'ROOF';
+    // Fallback: extract number from title
+    const match = t.match(/(\d+)(st|nd|rd|th)?\s*floor/);
+    if (match) return \`LEVEL \${match[1]}\`;
+    return null; // unknown — flag for review
+  }
+
+Fox Hill sheets:
+  "Signage Plan - First Floor Academic Wing"
+    → LEVEL 1
+  "Signage Plan - First Floor Community Wing"
+    → LEVEL 1 (same floor, different wing)
+  "Signage Plan - Second Floor Academic Wing"
+    → LEVEL 2
+  "Signage Plan - Second Floor Community Wing"
+    → LEVEL 2 (same floor, different wing)
+
+Result: 2 distinct floors → 2 level tabs only.
+Each level tab shows markers from BOTH wings
+for that floor, each marker on its correct sheet.
+
+Store floor assignment per sheet:
+  UPDATE sheet_cache SET floor_label = 'LEVEL 1'
+  WHERE sheet_number IN ('3.9.51', '3.9.52');
+  
+  UPDATE sheet_cache SET floor_label = 'LEVEL 2'  
+  WHERE sheet_number IN ('3.9.53', '3.9.54');
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+After fix, on Fox Hill Plans tab:
+
+1. Floor selector shows ONLY: LEVEL 1, LEVEL 2
+   No LEVEL 3 tab
+
+2. Click LEVEL 1 — shows markers from BOTH
+   Academic (W-prefix) and Community (E-prefix)
+   wings on their respective sheet images
+
+3. Click marker for E118 GYMNASIUM:
+   - Opens on the Community Wing sheet (3.9.52)
+   - Marker is inside or very near the gym area
+   - NOT on the Academic Wing sheet
+
+4. Click marker for W111 LABBB CONFERENCE ROOM:
+   - Opens on the Academic Wing sheet (3.9.51)
+   - Marker is near the conference room
+
+5. All marker types visible in legend:
+   Room ID w/Insert, Room ID, Max Occupancy,
+   Restroom, Exit, Evacuation Map, Stair
+
+Works for ALL building types with multiple
+sheets per floor (hospitals with wings,
+government buildings with secure/public sides,
+hotels with tower/podium, etc.)
+
+All 1,461 tests pass.

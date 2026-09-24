@@ -1,0 +1,26 @@
+{
+  "name": "@workspace/object-storage-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@uppy/aws-s3": "^5.0.0",
+    "@uppy/core": "^5.0.0",
+    "@uppy/dashboard": "^5.0.0",
+    "@uppy/react": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "scripts": {
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "eslint": "^10.2.0",
+    "typescript-eslint": "^8.58.2"
+  }
+}

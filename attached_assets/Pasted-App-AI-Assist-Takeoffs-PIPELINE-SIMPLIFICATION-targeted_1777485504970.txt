@@ -1,0 +1,162 @@
+App: AI-Assist Takeoffs
+PIPELINE SIMPLIFICATION — targeted rewrite.
+Do NOT change any logic outside pipeline.ts.
+Do NOT add new features.
+Goal: same accuracy, fewer failure points.
+
+Based on this audit of pipeline.ts (6,913 lines):
+- 11 Gemini call sites
+- 10 level assignment points (chaos)
+- 2 cache read points (simple)
+- 1 cache write point (simple)
+
+════════════════════════════════════════════════
+FIX 1 — Force cache: one line fix (line 3472)
+════════════════════════════════════════════════
+The cache is read at exactly ONE place: line 3472.
+Add the force bypass there:
+
+  // Line 3472 — Step 3 cache check
+  // ADD THIS GUARD:
+  const cachedRooms = (options?.forceAiRescan === true)
+    ? []  // bypass cache entirely
+    : (priorAiVisionBySheetKey.get(sheetKey) ?? []);
+
+That's the entire Force fix. One line.
+Do not change anything else for Force.
+
+════════════════════════════════════════════════
+FIX 2 — Level assignment: consolidate to ONE place
+════════════════════════════════════════════════
+Currently 10 places set level/floor_label.
+Each overwrites the previous causing chaos.
+
+Keep ONLY these two level sources in order:
+  Priority 1: Pass 0 room number inference (line 3714)
+    inferLevelFromRoomNumber(roomNumber)
+    W1xx→LEVEL 1, W2xx→LEVEL 2, E1xx→LEVEL 1 etc
+    This is the most reliable source.
+
+  Priority 2: Sheet title parsing (line 2525)
+    extractFloorFromTitle(sheet.title)
+    'First Floor' → LEVEL 1 etc
+    Only used when Pass 0 returns null.
+
+REMOVE these level assignment points entirely:
+  Line 2592: synthetic level labels — keep but
+    only for rooms where Pass 0 AND title both fail
+  Line 3504: parseLevelFromContext in cache path —
+    replace with same Priority 1/2 logic above
+  Line 3718: sheetLevelFallback bulk overwrite —
+    REMOVE. This is what kills Pass 0 results.
+    Already partially fixed but still present.
+  Line 4656: majorityLevel Step 5 — REMOVE.
+    Majority vote overwrites correct room inference.
+  Line 4704: topLevel propagate Step 5 — REMOVE.
+    Same problem.
+  Line 5250: Step 5b derivedLevel — KEEP as
+    last resort only when both Pass 0 and title fail.
+
+After consolidation, level is set ONCE per room:
+  1. Try inferLevelFromRoomNumber → use if found
+  2. Try extractFloorFromTitle(sheet.title) → use if found
+  3. Use synthetic LEVEL N → last resort only
+
+Never overwrite a level that was already set
+by a higher-priority source.
+
+Normalize ALL level values through one function:
+  function normalizeLevel(raw: string): string {
+    if (!raw) return 'LEVEL 1';
+    const t = raw.trim();
+    const m = t.match(
+      /^(level|floor|fl|l)\s*[-–]?\s*(\w+)$/i
+    );
+    if (m) return \`LEVEL \${m[2].toUpperCase()}\`;
+    if (/^\d+$/.test(t)) return \`LEVEL \${t}\`;
+    return t.toUpperCase();
+  }
+
+Call normalizeLevel() at line 5278 (final DB insert)
+and line 5939 (sign floorLabel). Nowhere else.
+
+════════════════════════════════════════════════
+FIX 3 — Sheet detection: fix sidecar for DiNisco
+════════════════════════════════════════════════
+Root cause confirmed: the sidecar returns 0 sheets
+for DiNisco PDFs → synthetic fallback creates
+PLAN-0-P1/P2/P3 → page 4 never found.
+
+The sidecar fails on DiNisco because their PDFs
+use numeric-dotted sheet numbers (3.9.51) which
+the sidecar's regex doesn't recognize.
+
+In the Python sidecar (main.py), find the sheet
+number extraction regex. Currently likely:
+  r'[A-Z]-\d{3}' or similar A-series pattern
+
+Add DiNisco and other numeric formats:
+  SHEET_NUMBER_PATTERNS = [
+    r'[A-Z]-\d{3}[A-Z]?',      # A-101, A-101A
+    r'[A-Z]\d+\.\d+',           # A1.1, A2.01
+    r'\d+\.\d+\.\d+',           # 3.9.51 ← ADD THIS
+    r'[A-Z]{2}-\d+',            # FP-1, SD-2
+    r'[A-Z]-\d{1,2}',           # S-1, G-2
+  ]
+
+Also fix the title extraction to use right half only:
+  # Only look at right 50% of page for title block
+  # (already partially fixed but verify it's in place)
+  title_words = [w for w in words 
+                 if w.x0 > page_width * 0.5]
+
+After this fix, DiNisco sheets should return:
+  sheet_number: '3.9.51'
+  title: 'SIGNAGE PLAN FIRST FLOOR ACADEMIC WING'
+  level: 'LEVEL 1'
+Instead of generic PLAN-0-P1.
+
+════════════════════════════════════════════════
+FIX 4 — Remove Step 8.5 (line 5448)
+         Extra 2.5-pro call causing confusion
+════════════════════════════════════════════════
+Step 8.5 at line 5448 runs a second Gemini 2.5-pro
+vision call to assign sign types from a dictionary.
+This runs AFTER the rules engine already assigned
+sign types, potentially overwriting correct results.
+
+Check what Step 8.5 does:
+  - If it assigns sign types already covered by
+    R1-R15 rules engine → remove it entirely
+  - If it handles edge cases the rules engine misses
+    → keep but make it additive (never overwrite
+    existing sign type assignments)
+
+If removing: delete the call at line 5448 and
+any downstream code that only runs from its output.
+This saves one expensive 2.5-pro call per job.
+
+════════════════════════════════════════════════
+VERIFY — targeted checks only
+No rescans during implementation.
+One manual rescan at the end.
+════════════════════════════════════════════════
+After all 4 fixes, typecheck must pass clean.
+Then ONE manual rescan on Fox Hill.
+
+Expected:
+  Force rescan: AI Cost > $0.00 ✓
+  Floor fields: LEVEL 1/LEVEL 2 populated ✓
+  6 sheets found (not 3) ✓  
+  Room count: 150+ ✓
+  Specialty tab present ✓
+  
+Console verification:
+  grep for '50000' in pipeline.ts → 0 results
+    (coord fallback fully removed)
+  grep for 'majorityLevel\|topLevel.*room.level\|
+    sheetLevelFallback' → 0 results
+    (overwrite points removed)
+
+All 1,461 tests pass.
+Do NOT run any rescans during implementation.

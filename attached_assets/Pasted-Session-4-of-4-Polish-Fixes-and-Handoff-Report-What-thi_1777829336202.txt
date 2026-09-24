@@ -1,0 +1,153 @@
+Session 4 of 4 — Polish, Fixes, and Handoff Report
+What this session does: Five targeted fixes and additions. No pipeline architecture changes.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — fix materialSpec extraction to run on text path too
+artifacts/web/src/components/StructuredUploader.tsx — add A-1xx/A-7xx hints, auto-split suggestion
+artifacts/api-server/src/routes/exports.ts — add handoff PDF report endpoint
+artifacts/api-server/src/routes/jobs.ts — add GET handoff route
+artifacts/web/src/pages/job-detail.tsx — add Download Handoff Report button
+
+What won't be affected: Rules engine, egress generator, training module, marker placement, all existing benchmark jobs, all existing XLSX export logic.
+Regression test: Fox Hill — rescan after tests pass, confirm stable.
+
+Fix 1 — Pricing tab material override not firing
+Root cause: The new Gemini prompt that extracts materialSpec only runs in the Gemini fallback branch (when text extraction returns fewer than 3 rows). When the sign schedule has machine-readable text and yields ≥3 rows, the text path is taken, Gemini is skipped, and jobMaterialSpec stays null.
+The fix: After the text path succeeds (≥3 rows), add a separate lightweight Gemini Flash call just for material spec extraction. This call is fast and cheap — it only returns the materialSpec object, not entries.
+In pipeline.ts, find the text path branch around line 3443 where textEntries.length >= 3 triggers the text path. After that branch sets sheetEntries = textEntries, add:
+typescript// Text path succeeded — still extract material spec via lightweight Gemini call
+if (jobMaterialSpec === null) {
+  try {
+    const specPrompt = `This is an architectural sign specification sheet.
+Extract only the project-wide material specification as a JSON object:
+{
+  "substrate": "the substrate material (e.g. photopolymer, aluminum, acrylic, ADA plastic)",
+  "finishMethod": "the finish or print method (e.g. direct UV print, painted, brushed, raised copy)",
+  "brailleSpec": "Braille requirement (e.g. Grade 2 Braille, no Braille)",
+  "mountingHeight": "mounting height if specified (e.g. 60 inches AFF)",
+  "manufacturer": "sign manufacturer or series if called out"
+}
+If a field is not found use null.
+Respond with JSON only. No markdown. No preamble.`;
+
+    const specResponse = await geminiAi.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [
+        { inlineData: { mimeType: "image/png", data: rasterizedPage } },
+        { text: specPrompt }
+      ]}]
+    });
+
+    const specText = specResponse.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const specParsed = JSON.parse(specText.replace(/```json|```/g, "").trim());
+    if (specParsed && typeof specParsed === "object") {
+      jobMaterialSpec = {
+        jobId,
+        substrate:      specParsed.substrate ?? null,
+        finishMethod:   specParsed.finishMethod ?? null,
+        brailleSpec:    specParsed.brailleSpec ?? null,
+        mountingHeight: specParsed.mountingHeight ?? null,
+        manufacturer:   specParsed.manufacturer ?? null,
+        source:         "sign_schedule",
+      };
+    }
+  } catch {
+    // Non-blocking — material spec extraction failure doesn't affect sign generation
+  }
+}
+Note: rasterizedPage is already available in this scope from the earlier rasterization call. If it isn't in scope at this exact point, move the material spec call to just after the existing rasterization in the text path branch, before sheetEntries is assigned.
+
+Fix 2 — Add A-1xx / A-7xx hints to slot card descriptions
+In artifacts/web/src/components/StructuredUploader.tsx, update these three exact strings:
+Floor Plans slot description — change from:
+"The pages showing the layout of each floor with room names and door locations labeled. These are the bird's-eye view pages."
+To:
+"The pages showing the layout of each floor with room names and door locations labeled (typically sheet A-1xx). These are the bird's-eye view pages."
+Room or Finish Schedule slot description — change from:
+"The page listing all rooms with finish information. Significantly improves room name accuracy. Often labeled A-7xx."
+To:
+"The page listing all rooms with finish information (typically sheet A-7xx). Significantly improves room name accuracy and room name extraction."
+Sign Schedule slot description — change from:
+"The sign specification document describing sign types, materials, and mounting requirements. Usually Division 10 14 00 in the spec book."
+To:
+"The sign specification document describing sign types, materials, and mounting requirements. Usually Division 10 14 00 in the spec book, or a sheet labeled SIM, ID, or Signage Types."
+
+Fix 3 — Auto-split suggestion for multi-page PDFs
+In artifacts/web/src/components/StructuredUploader.tsx, when a file is uploaded to the Floor Plans slot and its page count is greater than 1, show a non-blocking suggestion banner below that slot:
+ℹ️ This PDF has {n} pages. If it contains both floor plans and a finish schedule, 
+consider uploading just the floor plan pages (A-1xx) here and the finish schedule 
+page (A-7xx) to the Room Schedule slot above for better accuracy.
+[Dismiss]
+To get the page count: after upload, call GET /api/jobs/:jobId/files which already returns pageCount per file (the pageCount column exists in job_files schema). If pageCount > 1 for a file in the Floor Plans slot, show the banner. Dismissible with a local state flag per file.
+
+Fix 4 — Handoff PDF Report
+Add a downloadable handoff report — a formatted PDF the estimator can hand to an installer or include with a permit submission.
+New endpoint in artifacts/api-server/src/routes/exports.ts:
+GET /api/jobs/:jobId/export/handoff-pdf
+Uses pdf-lib (already imported in this file around line 925) to generate a PDF with:
+Page 1 — Cover page:
+
+Job name, building type, location, date
+Total signs count, high confidence count
+Generated by AI-Assist Takeoffs
+
+Page 2+ — Sign Summary by Floor:
+For each floor level, a table with columns:
+
+Room # | Room Name | Sign Type | Qty | ADA | Notes
+
+Pull data from the same source as the XLSX export — the signs query already used in exports.ts.
+Last page — Material Spec (if available):
+If getJobMaterialSpec(jobId) returns a spec:
+
+Substrate, Finish Method, Braille Spec, Mounting Height, Manufacturer
+Label: "Specifications extracted from uploaded sign schedule"
+
+If no material spec: skip this page.
+Formatting:
+
+Use pdf-lib's StandardFonts.Helvetica and StandardFonts.HelveticaBold
+Page size: PageSizes.Letter
+Header bar: amber/gold RGB(212, 160, 23) matching the app color scheme
+Table rows alternating white and light gray (RGB 245,245,245)
+Footer on every page: "AI-Assist Takeoffs | Generated {date}" + page number
+
+Add download button in job-detail.tsx:
+Next to the existing "Download XLSX" and "PDF" buttons in the job header, add:
+tsx<Button variant="outline" onClick={() => {
+  window.open(`/api/jobs/${job.id}/export/handoff-pdf`, '_blank');
+}}>
+  <FileDown className="h-4 w-4 mr-2" />
+  Handoff Report
+</Button>
+Import FileDown from lucide-react (already imported in this file).
+
+Step 5 — Typecheck and tests
+
+Typecheck: 0 errors
+Full test suite: 1,585 passing
+Do NOT rescan until tests pass
+Rescan Fox Hill — confirm stable
+Test: upload Walking Court sign schedule to a new job, rescan, download XLSX — confirm Pricing tab shows extracted material instead of Rowmark default
+Test: download Handoff Report on any completed job — confirm PDF opens and shows sign summary
+
+
+What Replit should NOT do
+
+Do not change the rules engine
+Do not change any existing XLSX export columns
+Do not change the Files tab
+Do not change any benchmark job files
+Do not add new DB tables
+Do not change extractTable
+
+
+Definition of done for Session 4
+
+Pricing tab shows extracted substrate/finish when sign schedule uploaded
+Slot cards show A-1xx and A-7xx hints
+Multi-page PDF upload shows auto-split suggestion banner
+Handoff Report PDF downloads and shows sign summary by floor
+Handoff Report shows material spec page when sign schedule was uploaded
+Fox Hill stable
+Typecheck 0 errors, 1,585 tests passing

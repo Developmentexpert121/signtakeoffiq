@@ -1,0 +1,32 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "DAP4VgMuYdECtd5-nBq-Z"
+uri = "file://pipeline.txt"
+type = "text"
+title = "pipeline.ts"
+
+[[outputs]]
+id = "-c4qdM6cHuswfrHJ97XC4"
+uri = "file://ba-lounge-pipeline-step3-diagnostic.log"
+type = "unspecified"
+title = "BA Lounge — Step 3 Pipeline Diagnostic Log"
+
+[[outputs]]
+id = "ZOEWG9K9i1xhYkrKmwHPG"
+uri = "file://downloads/prompts.txt"
+type = "text"
+title = "All LLM Prompts + Accuracy Notes"
+
+[[outputs]]
+id = "NOC-srAIJMu3HuCiDz8If"
+uri = "file://exports/example8-diagnostic.txt"
+type = "text"
+title = "Example 8 Diagnostic Report"
+
+[[outputs]]
+id = "SqvrsiejKduut0T1c9ZpE"
+uri = "file://exports/sidecar-titleblock-diagnostic.txt"
+type = "text"
+title = "Sidecar Title-Block Extraction Diagnostic"

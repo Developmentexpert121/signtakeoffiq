@@ -1,0 +1,187 @@
+In artifacts/api-server/src/lib/ find the XLSX 
+export generator and add a "Pricing" sheet tab.
+
+The pricing data comes from tenant_pricing_settings 
+table. If no tenant settings exist, use the MSRP 
+defaults from the ADA pricing sheet.
+
+════════════════════════════════
+XLSX STRUCTURE — 3 TABS TOTAL
+════════════════════════════════
+
+TAB 1 — "Takeoff" (already exists, keep as-is)
+
+TAB 2 — "Summary" (already exists, keep as-is)
+
+TAB 3 — "Pricing" (NEW)
+════════════════════════════════
+
+ROW 1 — Project header (merged A1:L1):
+"[Job Name] | [Building Type] | [Date] | 
+ Pricing based on: [material name]"
+Amber background (#F59E0B), white bold, 14pt
+
+ROW 2 — Pricing note (merged A2:L2):
+"Base prices from company settings. 
+ Adjust quantities or unit prices as needed. 
+ Yellow cells are editable."
+Light yellow background, italic gray text, 10pt
+
+ROW 3 — Column headers:
+A: Sign Type
+B: Size (W × H)
+C: Sq Inches
+D: Qty
+E: Material
+F: Finishing
+G: Base $/sq in
+H: Finishing $/sq in
+I: Total $/sq in
+J: Unit Price
+K: Extended Price
+L: Notes
+
+Header row: dark background (#1F2937), 
+white bold, 10pt, centered
+
+DATA ROWS — one per sign type from takeoff:
+A: Sign type name (Room ID, Restroom, Exit etc)
+B: Standard ADA size (6 × 6, 6 × 8 etc)
+C: Sq inches (formula: =WIDTH*HEIGHT, calculated)
+D: Qty (from takeoff — bold, editable, YELLOW fill)
+E: Material name (from tenant default for this sign type)
+F: Finishing name (from tenant default for this sign type)
+G: Base cost/sq in (from tenant settings, gray text)
+H: Finishing cost/sq in (from tenant settings, gray text)
+I: Total $/sq in (formula: =G+H, gray text)
+J: Unit Price (formula: =MAX(min_price, C*I))
+   YELLOW fill — estimator can override
+K: Extended Price (formula: =D*J, bold)
+L: Notes (blank, editable, YELLOW fill)
+
+Sign type defaults using tenant pricing:
+Room ID 6×6 (36 sq in):
+  Material: tenant default or Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 36 × $1.26) = $45.36
+
+Restroom 6×8 (48 sq in):
+  Material: tenant default or Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 48 × $1.26) = $60.48
+
+Exit Tactile 6×8 (48 sq in):
+  Material: P95 White 1/8" $0.50
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 48 × $1.23) = $59.04
+
+Stair Corridor 6×8 (48 sq in):
+  Material: Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 48 × $1.26) = $60.48
+
+Stair Landing 6×12 (72 sq in):
+  Material: Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 72 × $1.26) = $90.72
+
+Elevator 4×6 (24 sq in):
+  Material: Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 24 × $1.26) = $30.24
+
+Elevator Mach Rm 6×6 (36 sq in):
+  Material: Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 36 × $1.26) = $45.36
+
+Unit ID 4×6 (24 sq in):
+  Material: Rowmark 1/8" $0.53
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 24 × $1.26) = $30.24
+
+Max Occupancy 6×8 (48 sq in):
+  Material: P95 White 1/8" $0.50
+  Finishing: CMYK Flat Print $0.39
+  Unit Price: MAX($20, 48 × $0.89) = $42.72
+
+Accessible Entrance 6×8 (48 sq in):
+  Material: P95 White 1/8" $0.50
+  Finishing: Raised Copy + Braille $0.73
+  Unit Price: MAX($20, 48 × $1.23) = $59.04
+
+Evacuation Map (flat price):
+  Unit Price: $45.00 flat (no sq in calc)
+  Show: "Frame only" in Notes
+
+BOTTOM ROWS:
+Blank separator row
+
+"SUBTOTAL" row (cols A-K):
+  A: "Subtotal" bold
+  K: =SUM(all K data rows)
+  Light blue background (#DBEAFE), bold
+
+"RUSH FEE" row:
+  A: "Rush Fee (if applicable)"
+  D: "—" 
+  J: blank — YELLOW fill (estimator enters %)
+  K: formula: =K_subtotal * J_rushfee
+  White background
+
+"SHIPPING" row:
+  A: "Shipping"
+  K: blank — YELLOW fill (estimator enters)
+  White background
+
+"ADDITIONAL CHARGES" row:
+  A: "Additional Charges"
+  K: blank — YELLOW fill
+  White background
+
+"GRAND TOTAL" row:
+  A: "GRAND TOTAL" bold
+  K: =SUM(subtotal + rush + shipping + additional)
+  Amber background (#F59E0B), white bold, 12pt
+
+COLUMN WIDTHS:
+A: 22 (sign type)
+B: 10 (size)
+C: 10 (sq in)
+D: 8  (qty)
+E: 28 (material)
+F: 28 (finishing)
+G: 12 (base $/sq in)
+H: 14 (finishing $/sq in)
+I: 12 (total $/sq in)
+J: 12 (unit price)
+K: 14 (extended)
+L: 20 (notes)
+
+FORMATTING:
+- Freeze rows 1-3
+- Yellow cells (#FFFBEB): D (qty), J (unit price), L (notes)
+  These are clearly editable by estimator
+- Gray cells: E, F, G, H, I
+  These come from tenant settings (read-only reference)
+- Currency format: G, H, I, J, K → $#,##0.00
+- Borders: thin gray on all data cells
+- Font: Calibri 11pt throughout
+- Auto-filter on row 3
+
+TENANT SETTINGS INTEGRATION:
+When generating the XLSX:
+1. Query tenant_pricing_settings for current tenant
+2. For each sign type, look up:
+   - sign_defaults[signType].material → material name + cost
+   - sign_defaults[signType].finishing → finishing name + cost  
+   - additional_charges.minSignPrice → for MAX formula
+3. If no tenant settings found, use MSRP defaults above
+4. Log: "Pricing tab: using [tenant/MSRP default] pricing"
+
+NOTE at bottom of sheet (row after grand total):
+"* Prices shown are suggested bid prices based on 
+   your company settings (Settings → Pricing).
+   Yellow cells can be edited for this estimate.
+   To update default prices, go to Settings → Pricing."
+Italic, gray, small font

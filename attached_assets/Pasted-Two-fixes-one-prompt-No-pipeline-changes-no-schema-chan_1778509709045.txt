@@ -1,0 +1,89 @@
+Two fixes, one prompt. No pipeline changes, no schema changes, FloorPlanTab.tsx only.
+
+Fix 1 — Placement Tray shows ALL signs, not just unplaced.
+The tray currently hides placed signs, showing "No signs at this floor level" when all signs are placed. This breaks the correction workflow — user can't re-drag a misplaced marker.
+Change the tray to show two sections:
+PLACEMENT TRAY                                              [↑ Hide]
+Floor: LEVEL 1    [Search rooms...]    Unplaced: 9    Placed: 3
+
+── UNPLACED ──────────────────────────────────────────────────────
+┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐
+│ A209 │ │ A211 │ │ A213 │ │ A215 │ │ A217 │  ···
+└──────┘ └──────┘ └──────┘ └──────┘ └──────┘
+
+── PLACED ────────────────────────────────────────────────────────
+┌──────┐ ┌──────┐ ┌──────┐
+│✓A210 │ │✓A212 │ │✓A214 │  ···  (green left bar, still draggable)
+└──────┘ └──────┘ └──────┘
+Rules:
+
+Unplaced = marker_x IS NULL OR marker_x = 50000 — amber tag, full opacity
+Placed = marker_x is a real non-sentinel value — same tag but green #22C55E left bar, 70% opacity background, ✓ prefix on room number
+Both sections searchable via the same filter input
+If all signs are placed, "UNPLACED" section shows "All signs placed on this sheet ✓" in green
+If no signs are placed, "PLACED" section is hidden entirely
+Both unplaced and placed tags are draggable — dropping a placed tag moves its marker to the new position
+Section headers only show if that section has items
+
+Scoping: Tray shows signs whose floor_label matches the current sheet's level. If floor_label is null or empty, show all job signs. This handles Fox Hill (rules_engine, floor labels populated) and Walking Court (schedule_primary, floor labels may vary).
+
+Fix 2 — Marker culling bug: all markers should be visible at 30% zoom without hitting FIT.
+The current Branch 3 viewport culling is hiding markers that are within the visible canvas area. Root cause: the visibleMarkers useMemo fires before imgSize is known, computes pixX/pixY = 0 for all markers, and the viewport check fails because (0,0) is outside the visible bounds at 30% zoom after the initial pan.
+Replace Branch 3 with this corrected logic:
+typescript// Branch 3 — Individual mode (displayScale >= _CLUSTER_ZOOM)
+// If imgSize not yet known, return all signs up to cap — same as pre-transform path
+if (!imgSize) {
+  return sheetSigns
+    .filter(s => !s.isDeleted)
+    .slice(0, _MAX_MARKERS)
+    .map(s => ({ type: 'individual' as const, sign: s }))
+}
+
+// imgSize is known — do real viewport culling
+const containerW = containerRef.current?.clientWidth ?? 800
+const containerH = containerRef.current?.clientHeight ?? 600
+
+// Convert each sign's 0–100,000 coords to natural image pixels
+// then check if that pixel falls within the current viewport
+// Viewport in image-pixel space:
+const vLeft   = (-panOffset.x - containerW * 0.15) / displayScale
+const vRight  = (-panOffset.x + containerW * 1.15) / displayScale
+const vTop    = (-panOffset.y - containerH * 0.15) / displayScale
+const vBottom = (-panOffset.y + containerH * 1.15) / displayScale
+
+const inView = sheetSigns.filter(s => {
+  if (s.isDeleted) return false
+  // Signs with sentinel coords (50000, 50000) or null — always include
+  // so they show in tray and can be dragged; exclude from canvas render
+  const x = s.markerX ?? 50000
+  const y = s.markerY ?? 50000
+  if (x === 50000 && y === 50000) return false  // unplaced — don't render on canvas
+  const pixX = (x / 100000) * imgSize.w
+  const pixY = (y / 100000) * imgSize.h
+  return pixX >= vLeft && pixX <= vRight && pixY >= vTop && pixY <= vBottom
+})
+
+// Always include the actively dragged/selected sign even if off-viewport
+const selected = sheetSigns.find(s => s.id === selectedSignId)
+const candidates = selected && !inView.find(s => s.id === selected.id)
+  ? [...inView, selected]
+  : inView
+
+return candidates
+  .slice(0, _MAX_MARKERS)
+  .map(s => ({ type: 'individual' as const, sign: s }))
+Key changes from current code:
+
+imgSize null guard returns all signs immediately — no culling until image dimensions are known
+Buffer expanded from 10% to 15% on each side — reduces marker pop-in at edges
+Sentinel signs (50000, 50000) explicitly excluded from canvas render — they live in the tray, not on the plan
+Selected sign always included regardless of viewport position
+
+
+Regression tests:
+
+Walking Court PLAN-3-P1 at 30% zoom — all 12 placed markers visible on canvas immediately without hitting FIT
+Fox Hill 3.9.51 — all 74 markers visible at 30% zoom, tray shows PLACED section with all 74 signs (green), UNPLACED section empty with "All signs placed ✓"
+Walking Court tray — UNPLACED shows sentinel signs, PLACED shows real-coordinate signs, search filters both sections
+Drag a placed marker to new position — marker moves on canvas, XLSX dirty flag set
+1,555 API + 149 web tests pass. Typecheck 0 errors.

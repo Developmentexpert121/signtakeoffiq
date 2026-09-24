@@ -1,0 +1,43 @@
+Batch of 3 fixes — no rescans until all three are in, typecheck passes, and tests pass.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — all three fixes
+
+
+Fix 1 — Step 4b skip already-typed sheets
+Find Step 4b. Filter sheetDbRows to only sheets where sheetType is null or "unknown" before running any classification logic. If zero sheets need classification, skip the step entirely:
+typescriptconst sheetsNeedingClassification = sheetDbRows.filter(
+  s => !s.sheetType || s.sheetType === "unknown"
+);
+logger.log(
+  `[Step 4b] ${sheetsNeedingClassification.length} of ${sheetDbRows.length} sheet(s) need classification — ${sheetDbRows.length - sheetsNeedingClassification.length} already typed, skipping`
+);
+if (sheetsNeedingClassification.length === 0) {
+  await wp("4b", "Reclassifying signage sheets — all already typed, skipped");
+} else {
+  // existing Step 4b logic using sheetsNeedingClassification instead of sheetDbRows
+}
+
+Fix 2 — Level replication schedule matching
+In Step 9 schedule matching, replicated rooms (cloned to Levels 4/5/6 from AA103) are not getting schedule signs because the matcher only matches Level 3 source rooms.
+Find the schedule-to-room matching logic in Step 9. When matching schedule entries to rooms, normalize the room number by stripping the floor prefix digit before comparing. For example, room number "A407" should match schedule entry "A307" if the base identifier after the floor digit matches ("07" in both cases... actually the full identifier minus the hundreds digit).
+More precisely — for residential buildings, unit numbers follow the pattern [Wing][Floor][Unit] e.g. A307 = Wing A, Floor 3, Unit 07. A407 = Wing A, Floor 4, Unit 07. The schedule lists one entry per unit type (A307) but the replicated rooms have numbers A407/A507/A607.
+Add a normalization function:
+typescriptfunction normalizeUnitNumber(roomNum: string): string {
+  // For residential unit numbers like A307, A407, B215 etc.
+  // Strip the floor digit (position 1) to get the base unit: A07, B15
+  const match = roomNum.match(/^([A-Z])(\d)(\d{2,})$/);
+  if (match) return `${match[1]}${match[3]}`; // A + 07 = A07
+  return roomNum;
+}
+In the schedule matching loop, try exact match first, then normalized match as fallback. Log when normalized matching fires:
+typescriptlogger.log(`[Step 9] Normalized match: schedule "${scheduleRoom}" → room "${roomNum}" via base "${normalizeUnitNumber(roomNum)}"`);
+
+Fix 3 — specialty_signs delete-before-insert
+Replace the onConflictDoNothing() approach with a clean delete-before-insert so stale specialty signs never block the insert:
+typescript// Delete stale specialty signs for this job before inserting fresh ones
+await db.delete(specialtySignsTable).where(eq(specialtySignsTable.jobId, jobId));
+logger.log(`[Step 9.2] Cleared stale specialty_signs for job ${jobId}`);
+// Insert fresh — no conflict handling needed
+await db.insert(specialtySignsTable).values(specialtyRows);
+Apply this to both the primary insert (line ~7666) and the fallback insert (line ~7700).

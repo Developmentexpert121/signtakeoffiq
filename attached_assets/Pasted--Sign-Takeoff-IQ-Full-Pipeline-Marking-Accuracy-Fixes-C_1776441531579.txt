@@ -1,0 +1,343 @@
+# Sign Takeoff IQ — Full Pipeline & Marking Accuracy Fixes
+
+## Context
+
+The room extraction regex bug has already been fixed (ROOM_NUMBER_RE and title block
+exclusion). These are the remaining fixes needed for accurate plan review and correct
+marker placement on floor plans.
+
+-----
+
+## FIX 1: Building Type Detection (HIGH PRIORITY)
+
+The pipeline must auto-detect whether a project is residential, commercial, school,
+hospital, hotel, etc. because the rules engine applies different rules per type.
+
+In `artifacts/api-server/src/lib/pipeline.ts` or `rules-engine.ts`, add this function
+and call it during the buildInventory step (after rooms are extracted, before rules run):
+
+```typescript
+export function detectBuildingType(rooms: Array<{ roomName: string }>, metadata?: { occupancyGroup?: string }): string {
+  const allNames = rooms.map(r => r.roomName.toUpperCase()).join(" ");
+
+  // Explicit metadata wins
+  if (metadata?.occupancyGroup) {
+    if (metadata.occupancyGroup.startsWith("R")) return "residential";
+    if (metadata.occupancyGroup.startsWith("E")) return "school";
+    if (metadata.occupancyGroup.startsWith("I-2")) return "hospital";
+    if (metadata.occupancyGroup.startsWith("A")) return "church";
+    if (metadata.occupancyGroup.startsWith("S") || metadata.occupancyGroup.startsWith("F")) return "warehouse";
+  }
+
+  // Room name keyword detection
+  const unitCount = rooms.filter(r => r.roomName.toUpperCase().startsWith("UNIT")).length;
+  if (unitCount > rooms.length * 0.3) return "residential";
+
+  if (/PATIENT|NURSE STATION|EXAM ROOM|ICU|OPERATING/.test(allNames)) return "hospital";
+  if (/CLASSROOM|GYMNASIUM|CAFETERIA|PRINCIPAL|GYMNASIUM/.test(allNames)) return "school";
+  if (/GUEST ROOM|FRONT DESK|HOUSEKEEPING|CONCIERGE/.test(allNames)) return "hotel";
+  if (/NAVE|SANCTUARY|ALTAR|PARISH|FELLOWSHIP/.test(allNames)) return "church";
+  if (/CLEAN ROOM|FUME HOOD|BSL-|LAB BENCH/.test(allNames)) return "lab";
+  if (/VAULT|TELLER|SAFE DEPOSIT/.test(allNames)) return "bank";
+  if (/LOADING DOCK|SHIPPING|ASSEMBLY LINE|FORKLIFT/.test(allNames)) return "warehouse";
+  if (/MERCHANDISE|FITTING ROOM|STOCK ROOM/.test(allNames)) return "retail";
+
+  return "commercial"; // default
+}
+```
+
+Save the detected building type to `jobs.buildingType` in the database.
+
+-----
+
+## FIX 2: Building Trait System — Rules Must Change Per Building Type (HIGH PRIORITY)
+
+The rules engine in `artifacts/api-server/src/lib/rules-engine.ts` must apply
+different rules based on building type. Add this trait system:
+
+```typescript
+export interface BuildingTraits {
+  hasUnitNumbers: boolean;       // residential units get Unit # plaque (not Room ID)
+  mepPolicy: "all" | "occupied_only" | "minimal"; // how MEP rooms are handled
+  hasAssemblyRules: boolean;     // Max Occupancy + assembly EXIT rules apply
+  hasDirectory: boolean;         // Office Directory signs apply
+  elevatorMode: "per_building" | "per_level"; // elevator sign counting
+  stairMode: "separate" | "combined"; // stair column output format
+}
+
+export const BUILDING_TRAITS: Record<string, BuildingTraits> = {
+  residential:   { hasUnitNumbers: true,  mepPolicy: "all",           hasAssemblyRules: false, hasDirectory: false, elevatorMode: "per_level",    stairMode: "combined" },
+  commercial:    { hasUnitNumbers: false, mepPolicy: "occupied_only",  hasAssemblyRules: true,  hasDirectory: true,  elevatorMode: "per_building", stairMode: "separate" },
+  school:        { hasUnitNumbers: false, mepPolicy: "minimal",        hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_building", stairMode: "separate" },
+  hospital:      { hasUnitNumbers: false, mepPolicy: "minimal",        hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_level",    stairMode: "separate" },
+  hotel:         { hasUnitNumbers: true,  mepPolicy: "all",           hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_level",    stairMode: "combined" },
+  retail:        { hasUnitNumbers: false, mepPolicy: "all",           hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_building", stairMode: "separate" },
+  warehouse:     { hasUnitNumbers: false, mepPolicy: "all",           hasAssemblyRules: false, hasDirectory: false, elevatorMode: "per_building", stairMode: "separate" },
+  lab:           { hasUnitNumbers: false, mepPolicy: "occupied_only",  hasAssemblyRules: false, hasDirectory: true,  elevatorMode: "per_building", stairMode: "separate" },
+  bank:          { hasUnitNumbers: false, mepPolicy: "occupied_only",  hasAssemblyRules: false, hasDirectory: true,  elevatorMode: "per_building", stairMode: "separate" },
+  government:    { hasUnitNumbers: false, mepPolicy: "occupied_only",  hasAssemblyRules: true,  hasDirectory: true,  elevatorMode: "per_building", stairMode: "separate" },
+  church:        { hasUnitNumbers: false, mepPolicy: "occupied_only",  hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_building", stairMode: "separate" },
+  senior_living: { hasUnitNumbers: true,  mepPolicy: "all",           hasAssemblyRules: true,  hasDirectory: false, elevatorMode: "per_level",    stairMode: "combined" },
+};
+```
+
+Then in `applyRules()`, use the traits to control which rules fire:
+
+- R1 (Room ID): If `traits.mepPolicy === "all"`, ALL rooms get Room ID including MEP.
+  If `"occupied_only"`, MEP rooms only if occupant_load > 0. If `"minimal"`, MEP excluded.
+- R2 (Variable-use inserts): Only apply when `traits.hasAssemblyRules === true`
+- R10 (Max Occupancy): Only apply when `traits.hasAssemblyRules === true`
+- R14 (Office Directory): Only apply when `traits.hasDirectory === true`
+- R16 (Unit # plaque): Only apply when `traits.hasUnitNumbers === true` AND room name starts with “UNIT”
+- R12 (Elevator): Use `traits.elevatorMode` to determine counting method
+- R11 (Stairs): Use `traits.stairMode` to determine output column format
+
+-----
+
+## FIX 3: Multi-Building Support — R17 (HIGH PRIORITY)
+
+The NOVO Riverside project has TWO buildings (292 Baker + 294 Baker) that must
+be tracked independently. Each building needs its own subtotals.
+
+In the pipeline `buildInventory` step, detect multiple buildings by:
+
+1. Looking for rooms with different building prefixes (292-xxx vs 294-xxx)
+1. Or looking for multiple “BUILDING” labels on the drawing index
+
+In `artifacts/api-server/src/lib/pipeline.ts` buildInventory step:
+
+```typescript
+// Detect buildings from room number prefixes like "292-101" or building labels
+function detectBuildings(rooms: ExtractedRoom[]): string[] {
+  const prefixes = new Set<string>();
+  for (const room of rooms) {
+    // Match building prefix patterns: "292", "294", "BLDG-A", "BUILDING 1"
+    const m = room.roomNumber.match(/^(\d{3})-/) || 
+              room.roomName.match(/^(BUILDING|BLDG)\s*([A-Z0-9]+)/i);
+    if (m) prefixes.add(m[1]);
+  }
+  return prefixes.size > 1 ? Array.from(prefixes) : ["main"];
+}
+```
+
+Store `buildingId` on each room and sign. The sign schedule export should group
+by building with separate subtotals per building.
+
+-----
+
+## FIX 4: Marker Coordinate System — Markers Are Offset from Room Labels (MEDIUM PRIORITY)
+
+Currently markers sit ON TOP of the room label text, making the label unreadable.
+They should be OFFSET to the side with a leader line.
+
+In the floor plan viewer component (`artifacts/web/src/...`), when rendering markers:
+
+```typescript
+// Instead of placing marker exactly at room coordinates,
+// offset it 30px to the right of the label bounding box
+const markerX = room.bbox_x1 + 30; // right edge of label + 30px
+const markerY = room.center_y;     // same vertical center
+
+// Draw a dashed leader line from label right edge to marker
+// Use SVG or canvas: dashed line from (bbox_x1, center_y) to (markerX - 8, markerY)
+```
+
+Also: use GOLD (#fbbf24) for normal rooms and RED (#ef4444) for rooms that were
+missed by the original human takeoff (was_missed_by_human = true in DB).
+
+-----
+
+## FIX 5: Dynamic Column Schema — Output Only Relevant Columns (MEDIUM PRIORITY)
+
+The sign schedule export currently uses a fixed column set. It should only show
+columns where signs were actually assigned.
+
+In `artifacts/api-server/src/routes/exports.ts`, replace hardcoded column list:
+
+```typescript
+// Build columns dynamically from what sign types were actually assigned
+const assignedSignTypes = await db
+  .selectDistinct({ signType: signsTable.signType })
+  .from(signsTable)
+  .where(eq(signsTable.jobId, jobId));
+
+// Standard column order (only include if present in results)
+const COLUMN_ORDER = [
+  "Room/Service ID",
+  "Unit #",           // residential only
+  "Room ID w/insert", // commercial only
+  "Restroom",
+  "Exit",
+  "Max Occupancy",    // commercial/assembly only
+  "Stair (Corridor)", // commercial (separate columns)
+  "Stair (Landing)",  // commercial (separate columns)
+  "Stairs (C+L)",     // residential (combined column)
+  "Elevator",
+  "Evacuation Map",
+  "In Case of Fire",
+  "Office Directory", // commercial only
+];
+
+const activeColumns = COLUMN_ORDER.filter(col =>
+  assignedSignTypes.some(t => t.signType === col)
+);
+```
+
+-----
+
+## FIX 6: Floor Plan Sheet Detection — Only Extract from Floor Plan Pages (MEDIUM PRIORITY)
+
+The pipeline should only run room extraction on pages identified as floor plans,
+NOT on cover pages, detail sheets, or schedules.
+
+In the pipeline’s `filterSheets` step, ensure the sheet type detection correctly
+identifies floor plan sheets. The current keywords may miss some patterns.
+
+Add these floor plan detection keywords to the sidecar’s `parse-index` endpoint
+or the Node-side sheet filtering:
+
+```typescript
+const FLOOR_PLAN_SHEET_IDS = /^A[1-9]-?\d{2,3}$/i; // A1-100, A2-200, A-101, A101
+const FLOOR_PLAN_TITLE_KEYWORDS = [
+  "floor plan", "floorplan", "level", "basement", "podium",
+  "parking", "garage", "ground floor", "typical floor",
+  "construction plan" // e.g. "1ST FLOOR CONSTRUCTION PLAN" on Example-1
+];
+
+// Only run extractRoomsFromWords on sheets where:
+// 1. sheet_type === 'floor_plan' AND
+// 2. The sheet ID matches the floor plan pattern
+```
+
+Do NOT run room extraction on sheets typed as: signage_schedule, egress,
+code_review, detail, schedule, elevation, section.
+
+-----
+
+## FIX 7: Synonym Matching — Expand Room Name Abbreviations (MEDIUM PRIORITY)
+
+The current `expandSynonyms` function may be incomplete. Ensure these synonyms
+are in the `ROOM_SYNONYMS` map in `pipeline.ts`:
+
+```typescript
+export const ROOM_SYNONYMS: Record<string, string> = {
+  // Existing ones to verify are present:
+  "VEST": "VESTIBULE",
+  "VESTIBULE": "VESTIBULE",
+  "EMERG": "EMERGENCY",
+  "INTERROG": "INTERROGATION",
+  "CORR": "CORRIDOR",
+  "ELEC": "ELECTRICAL",
+  "MECH": "MECHANICAL",
+  "STOR": "STORAGE",
+  "CONF": "CONFERENCE",
+  "RR": "RESTROOM",
+  "WC": "WATER CLOSET",
+  "JAN": "JANITOR",
+  "EQUIP": "EQUIPMENT",
+  "DECON": "DECONTAMINATION",
+  // Multi-family specific:
+  "EMR": "EMERGENCY POWER ROOM",
+  "PKG": "PACKAGE",
+  "ELEV": "ELEVATOR",
+};
+```
+
+-----
+
+## FIX 8: Confidence Scoring — Rules-Based Signs Should Be High Confidence (MEDIUM PRIORITY)
+
+Signs assigned by the deterministic rules engine (R1-R17) should have high
+confidence (≥85%). Currently they may be getting lower scores.
+
+In the rules engine confidence computation:
+
+```typescript
+function computeConfidence(sign: SignAssignment, room: RoomInventory, overrides: RuleOverride[]): number {
+  // Rules-based assignment = high confidence
+  if (sign.source === "rule_engine") {
+    // Check if a tenant override confirms this assignment → 95%
+    if (overrides.some(o => matchesCondition(room, o.condition))) return 0.95;
+    // Standard rule application → 85%
+    return 0.85;
+  }
+  // LLM-assisted → lower confidence
+  if (sign.source === "llm") return 0.65;
+  // Manual → confirmed
+  if (sign.source === "manual") return 1.0;
+  return 0.70;
+}
+```
+
+-----
+
+## FIX 9: Stair & Elevator Signs — These Are Not Per-Room (LOW PRIORITY)
+
+Stairs and elevators are “non-room entities” — they need signs but don’t appear
+as rooms in the room inventory. They need special handling.
+
+In the pipeline’s `applyRules` step, after processing all rooms, add:
+
+```typescript
+// Apply stair rules (R11): find all stair entries in rooms
+const stairs = rooms.filter(r => r.isStair);
+for (const stair of stairs) {
+  const traits = BUILDING_TRAITS[buildingType];
+  if (traits.stairMode === "separate") {
+    // Add Stair (Corridor) and Stair (Landing) as separate signs
+    signs.push({ signType: "Stair (Corridor)", qty: stair.corridorEntries || 1, ruleRef: "R11" });
+    signs.push({ signType: "Stair (Landing)", qty: 1, ruleRef: "R11" });
+  } else {
+    // Combined: corridorEntries + 1 landing
+    const qty = (stair.corridorEntries || 1) + 1;
+    signs.push({ signType: "Stairs (C+L)", qty, ruleRef: "R11" });
+  }
+}
+
+// Apply elevator rules (R12): per building or per level
+const elevators = rooms.filter(r => r.isElevator);
+for (const elev of elevators) {
+  if (traits.elevatorMode === "per_building") {
+    signs.push({ signType: "In Case of Fire", qty: 1, ruleRef: "R12" });
+  } else {
+    // per_level: one sign per level the elevator serves
+    signs.push({ signType: "Elevator", qty: levelCount, ruleRef: "R12" });
+  }
+}
+```
+
+-----
+
+## FIX 10: Training Import — Bulk Upload Historical Takeoffs (LOW PRIORITY)
+
+The Training page should allow uploading a historical PDF + XLSX pair to
+generate bulk corrections. This is the primary way to improve accuracy.
+
+In `artifacts/web/src/pages/Training.tsx` (or wherever the training tab renders),
+ensure the “Training Import” section:
+
+1. Accepts a PDF upload (the plan) and an XLSX upload (human takeoff)
+1. Calls `POST /api/training/import` with both files
+1. The API runs the pipeline on the PDF, diffs against the XLSX
+1. Returns a comparison showing: “Pipeline says X, human says Y” for each discrepancy
+1. User can confirm corrections in bulk
+1. Confirmed corrections are stored in `training_corrections` table
+
+-----
+
+## After all fixes, rebuild and test
+
+```bash
+cd artifacts/api-server && pnpm run build
+```
+
+Then test with:
+
+1. Re-scan the existing “NOVO Riverside” job → expect 400+ rooms, 412 signs
+1. Upload a new commercial plan → expect correct commercial column schema
+1. Check markers on floor plan → expect offset markers with leader lines, not overlapping labels
+
+## Validation benchmarks
+
+- NOVO Riverside (residential): 292 Baker = 198 signs, 294 Baker = 214 signs, total = 412
+- Cohasset Public Safety (commercial): Level 1 = 69 signs including 8 rooms human missed

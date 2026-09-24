@@ -1,0 +1,118 @@
+Send this updated prompt to Replit:
+
+Fix — Type B: Room finish schedule extraction. pipeline.ts only. Typecheck + full test suite after.
+Fix 1 — Remove FINISH SCHEDULE from EXCLUDE_UNLESS_PLAN
+Find where EXCLUDE_UNLESS_PLAN is defined (lines 1665-1671 and 1707-1708). Remove "FINISH SCHEDULE" from both locations.
+Fix 2 — Add title-based room_schedule classification to classifySheetStep2
+Add before the default skip:
+typescriptconst ROOM_SCHEDULE_KW = [
+  "FINISH SCHEDULE",
+  "ROOM SCHEDULE",
+  "ROOM FINISH SCHEDULE", 
+  "FINISH PLAN",
+  "ROOM FINISH PLAN",
+  "FINISH & SCHEDULE",
+  "SCHEDULES",
+];
+
+if (ROOM_SCHEDULE_KW.some(kw => title.toUpperCase().includes(kw))) {
+  return "room_schedule";
+}
+Fix 3 — Content-based detection for sheets with no useful title
+For sheets classified as floor_plan that have a useless title (short, numeric, or generic like "SIM 2"), run a quick content check using already-extracted words. If the sheet contains a high density of room-number + room-name pairs in a tabular pattern, reclassify as room_schedule:
+typescript// Content-based finish schedule detection
+// Fires when title gives no signal (short/generic titles like "SIM 2", "200", etc.)
+const titleGivesNoSignal = title.length < 6 || 
+  /^[A-Z]-?\d+$/.test(title) ||  // A-710, A111 etc
+  /^SIM\s*\d*$/i.test(title) ||   // SIM 2 etc
+  title === "";
+
+if (titleGivesNoSignal && sidecarType === "floor_plan") {
+  // Check if this sheet has a room finish schedule table
+  // by looking for room number patterns in extracted words
+  const words = wordResult?.words ?? [];
+  const roomNumberMatches = words.filter(w => 
+    /^\d{3}[A-Z]?$/.test(w.text?.trim() ?? '')
+  ).length;
+  const totalWords = words.length;
+  
+  // If >15% of words are room numbers → likely a schedule not a floor plan
+  if (totalWords > 20 && roomNumberMatches / totalWords > 0.15) {
+    logger.log(
+      `[pipeline] Content-based reclassification: ` +
+      `${sheet.sheetId} → room_schedule ` +
+      `(${roomNumberMatches}/${totalWords} room number words)`
+    );
+    return "room_schedule";
+  }
+}
+Fix 4 — Extract rooms from room_schedule sheets using extractTable
+After the existing signage schedule extraction block, add:
+typescript// Extract rooms from room/finish schedule sheets
+const roomScheduleSheets = sheetDbRows.filter(
+  s => s.sheetType === "room_schedule"
+);
+
+for (const schedSheet of roomScheduleSheets) {
+  const sheetFile = files.find(f => f.id === schedSheet.fileId);
+  if (!sheetFile) continue;
+  
+  try {
+    const pdfBuf = await downloadFromStorage(sheetFile.storagePath);
+    const tableResult = await extractTable(
+      pdfBuf,
+      schedSheet.pdfPage ?? 1,
+      sheetFile.filename
+    );
+    
+    if (!tableResult?.rows?.length) continue;
+    
+    logger.log(
+      `[pipeline] Room schedule: ${tableResult.rows.length} rows ` +
+      `from sheet ${schedSheet.sheetId}`
+    );
+    
+    for (const row of tableResult.rows) {
+      const cells = Array.isArray(row) ? row : Object.values(row);
+      if (cells.length < 2) continue;
+      
+      const roomNumber = String(cells[0] ?? '').trim();
+      const roomName = String(cells[1] ?? '').trim();
+      
+      // Skip header rows
+      if (!roomNumber ||
+          /^(ROOM|NO\.|NUMBER|#)$/i.test(roomNumber) ||
+          !/^\w/.test(roomNumber)) continue;
+      
+      // Only add if not already found from floor plan
+      const exists = extractedRooms.find(
+        r => r.roomNumber?.toUpperCase() === roomNumber.toUpperCase()
+      );
+      
+      if (!exists) {
+        extractedRooms.push({
+          roomNumber,
+          roomName,
+          x: 50_000,
+          y: 50_000,
+          pageWidth: 1000,
+          pageHeight: 1000,
+          coordSource: "pdf_native" as const,
+          aiVision: false,
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      `[pipeline] Room schedule extraction failed for ` +
+      `${schedSheet.sheetId}: ${err}`
+    );
+  }
+}
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm 1,585 tests passing
+If any tests fail — fix them before finishing
+Do NOT rescan — report clean tests and sto

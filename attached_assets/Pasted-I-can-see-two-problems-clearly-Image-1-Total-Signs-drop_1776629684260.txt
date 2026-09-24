@@ -1,0 +1,48 @@
+I can see two problems clearly:
+
+**Image 1:** Total Signs dropped to 101 (was 88 before, now even further from 123)
+
+**Image 2:** The Floor Plan tab is showing **"ELUDEHCS" (1/4)** — that's "SCHEDULE" reversed — and it's displaying the **signage schedule table** (sheet I-601) as a floor plan, not the actual floor plan. "No signs on this sheet" because there are no room coordinate markers on a schedule page.
+
+The sheet classifier is now classifying the signage schedule sheet as a floor plan instead of a signage schedule. The dedup or rasterization fix accidentally broke the sheet type detection.
+
+**Paste this into Replit Agent:**
+
+> The rescan made things worse. Two new problems:
+>
+> **Problem 1 — Sheet "ELUDEHCS" showing as floor plan**
+> "ELUDEHCS" is "SCHEDULE" reversed — this is the signage schedule sheet (I-601) being classified as a floor plan. The Floor Plan tab is now showing the schedule table instead of the architectural drawing.
+>
+> Check what sheet_type was assigned to each sheet:
+> ```sql
+> SELECT sheet_id, sheet_title, sheet_type, pdf_page, rasterized_path
+> FROM job_sheets
+> WHERE job_id = (SELECT id FROM jobs ORDER BY updated_at DESC LIMIT 1)
+> ORDER BY pdf_page;
+> ```
+>
+> The reversed text ("ELUDEHCS", "SLIATED") means the title block text is being read right-to-left from rotated annotations. The `detect_sheet_type()` function in `artifacts/pdf-sidecar/main.py` needs to handle reversed text — reverse the string before checking keywords:
+>
+> ```python
+> def detect_sheet_type(sheet_id: str, title: str) -> str:
+>     # Normalize: try both forward and reversed title
+>     title_lower = title.lower()
+>     title_reversed = title_lower[::-1]  # reverse the string
+>     # Use whichever matches keywords better
+>     check_title = title_lower
+>     if any(k in title_reversed for k in SIGNAGE_KEYWORDS + FLOOR_PLAN_KEYWORDS):
+>         if not any(k in title_lower for k in SIGNAGE_KEYWORDS + FLOOR_PLAN_KEYWORDS):
+>             check_title = title_reversed
+>     # ... rest of detection logic using check_title
+> ```
+>
+> **Problem 2 — Sign count dropped from 88 to 101**
+> Wait — actually 101 > 88, not less. But it's still not 123. Show me:
+> ```sql
+> SELECT sign_type, COUNT(*) as count
+> FROM signs
+> WHERE job_id = (SELECT id FROM jobs ORDER BY updated_at DESC LIMIT 1)
+> GROUP BY sign_type ORDER BY count DESC;
+> ```
+>
+> **Do NOT make any code changes yet. Just run the SQL queries and show results.**

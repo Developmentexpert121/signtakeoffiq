@@ -1,0 +1,39 @@
+Two safe changes only — no pipeline logic changes:
+Change 1 — Add keyword exclusions to shouldRunVisionScan in pipeline.ts:
+Add to ALWAYS_EXCLUDE_TITLE array:
+ts"LIGHTING SCHEDULE",
+"LIGHTING PLAN",
+"ELECTRICAL SCHEDULE",
+"PLUMBING SCHEDULE",
+"MECHANICAL SCHEDULE",
+"REFLECTED CEILING",
+"FINISH PLAN",
+"FURNITURE PLAN",
+"POWER PLAN",
+"DATA PLAN",
+Change 2 — Replace Confidence column with Source badges in Sign Table in job-detail.tsx:
+Rename column header from "Confidence" to "Source". Replace confidence percentage with SignSourceBadge component:
+tsxfunction SignSourceBadge({ source, confidence }: { source: string; confidence: number }) {
+  const tip = `${Math.round(confidence * 100)}% confidence`;
+  if (source === "schedule") return <span title={tip} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-900/40 text-green-400 border border-green-700">✓ Verified</span>;
+  if (source === "confirmed") return <span title={tip} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-900/40 text-emerald-400 border border-emerald-700">◎ Text+Vision</span>;
+  if (source === "training_correction") return <span title={tip} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-900/40 text-violet-400 border border-violet-700">▲ Trained</span>;
+  if (source === "rules_engine") return <span title={tip} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-900/40 text-amber-400 border border-amber-700">⚡ Rules</span>;
+  return <span title={tip} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-600">👁 AI Vision</span>;
+}
+Add legend above Sign Table:
+tsx<div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground pb-2 border-b border-border mb-2">
+  <span className="font-medium text-foreground">Source:</span>
+  {[
+    { color: "bg-green-500", label: "Verified" },
+    { color: "bg-violet-500", label: "Trained" },
+    { color: "bg-amber-500", label: "Rules" },
+    { color: "bg-slate-500", label: "AI Vision" },
+  ].map(({ color, label }) => (
+    <span key={label} className="flex items-center gap-1">
+      <span className={`w-2 h-2 rounded-full ${color}`} />
+      {label}
+    </span>
+  ))}
+</div>
+After saving verify build is clean. Then trigger Force Fresh rescans on BA Lounge, Park Lane, and Cambridge Moses and let them run overnight.

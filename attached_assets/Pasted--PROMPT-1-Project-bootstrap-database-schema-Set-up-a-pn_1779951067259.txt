@@ -1,0 +1,109 @@
+ PROMPT 1 — Project bootstrap & database schema
+Set up a pnpm monorepo with three artifacts: a React + Vite web app (artifacts/web), an Express + TypeScript API server (artifacts/api-server), and a shared lib/db package using Drizzle ORM + PostgreSQL.
+
+Create the following Drizzle schema tables in lib/db/src/schema/:
+
+tenants — id (text, pk), name, slug (unique), plan (text, default 'free'), externalCompanyId (nullable, unique), createdAt, updatedAt.
+
+users — id (text, pk), tenantId (fk → tenants.id, nullable for super_admin), email (unique, lowercase), fullName, role (enum: 'super_admin' | 'owner' | 'user', default 'user'), passwordHash (nullable for pending), externalId (nullable, unique), companyId (nullable), phone, username, jobTitle, location, createdAt, updatedAt.
+
+invitations — id (text, pk), tenantId (nullable — owner invites create tenant on accept), email, role, ownerId (fk → users.id, who sent it), tokenHash (sha256), expiresAt, acceptedAt (nullable), createdAt. Index on (email, tenantId) and tokenHash.
+
+sessions — id (text, pk), userId (fk → users.id, cascade delete), tokenHash, userAgent, ipAddress, expiresAt, lastSeenAt, createdAt. Index on tokenHash and userId.
+
+Provide a Drizzle config, migration command, and a seed.ts that inserts one super_admin and one demo tenant + owner.
+
+📋 PROMPT 2 — Authentication & session middleware
+Implement session-based authentication in artifacts/api-server:
+
+POST /api/auth/login — verify email + password (bcrypt), create a session row, return Set-Cookie: session=<token>; HttpOnly; Secure; SameSite=Lax.
+POST /api/auth/logout — delete the session row and clear the cookie.
+GET /api/auth/me — return the current user from the session.
+POST /api/auth/change-password — require current password, validate new password strength, update passwordHash, invalidate all other sessions for that user.
+Create a lib/tenantAuth.ts middleware module exporting:
+
+requireAuth(req, res, next) — loads session, attaches req.ctx = { userId, tenantId, role }. 401 if missing/expired. Updates sessions.lastSeenAt.
+requireSuperAdmin — 403 unless role === 'super_admin'.
+requireOwnerOrAbove — allows super_admin and owner.
+requireAdmin — alias of requireOwnerOrAbove (accepts legacy 'admin' value too).
+All non-super_admin queries must be tenant-scoped via req.ctx.tenantId. Add a helper scopeToTenant(query, ctx) that injects the WHERE clause.
+
+📋 PROMPT 3 — User management API routes
+Create artifacts/api-server/src/routes/userManagement.ts with:
+
+GET /api/users — requireOwnerOrAbove. Super_admin sees all users across tenants; owner sees only users in their tenant. Returns id, email, fullName, role, tenantId, createdAt.
+POST /api/users/:id/reset-password — requireOwnerOrAbove. Owner can only reset users in their tenant and only user role. Generates a temporary password, returns it once (do not log).
+DELETE /api/users/:id — requireOwnerOrAbove. Same tenant scoping. Block deletion of self and last owner of a tenant.
+Add unit tests with Vitest covering: cross-tenant access denied (403), owner cannot delete another owner, super_admin can delete any user, cannot delete self.
+
+📋 PROMPT 4 — Invitations API & accept flow
+Create artifacts/api-server/src/routes/invitations.ts:
+
+POST /api/invitations — requireOwnerOrAbove. Body: { email, role }. Owner can only invite 'user'; super_admin can invite 'owner' (auto-creates a new tenant) or 'user'. Generates a 32-byte token, stores sha256 hash, returns the plaintext token in the invite URL once. Sends email via the configured provider (stub with console.log if none).
+GET /api/invitations — list pending invites scoped by tenant/role.
+DELETE /api/invitations/:id — revoke pending invite.
+GET /api/invitations/lookup/:token — public. Returns { email, role, tenantName } if token is valid and not expired/accepted.
+POST /api/invitations/accept — public. Body: { token, fullName, password }. Creates user (or attaches to tenant), creates first session, sets cookie, marks invite acceptedAt. For owner invites with no tenant, create the tenant here.
+Tokens expire in 7 days. Add tests for: expired token, already-accepted token, wrong email, owner invite tenant creation.
+
+📋 PROMPT 5 — Frontend auth context & route guards
+In artifacts/web/src/:
+
+contexts/AuthContext.tsx — provides { user, loading, login, logout, refetch }. On mount, calls GET /api/auth/me. Uses React Query for caching.
+hooks/use-current-user.ts — returns { user, isSuperAdmin, isOwnerOrAbove, isAuthenticated }.
+components/AdminRoute.tsx — renders children only if isSuperAdmin, else redirects to /.
+components/OwnerRoute.tsx — renders children only if isOwnerOrAbove, else redirects to /.
+pages/login.tsx — email + password form, redirects to /dashboard on success.
+components/sidebar.tsx — navigation menu that conditionally renders items by role:
+All authenticated: Home, Dashboard, Jobs, Upload, Personal Settings
+Owner+: Users, Pricing Settings
+Super_admin only: Training, Admin
+📋 PROMPT 6 — Users page UI
+Create artifacts/web/src/pages/users.tsx (guarded by OwnerRoute):
+
+A two-tab layout: Members and Pending Invitations.
+
+Members tab:
+
+Table: Email, Full Name, Role (badge), Joined date, Actions
+Actions per row: Reset Password (shows temp password in a one-time modal with copy button), Delete (with confirm dialog). Owner cannot act on other owners; nobody can act on themselves.
+Pending Invitations tab:
+
+Table: Email, Role, Sent date, Expires, Actions (Copy link, Revoke)
+"+ Invite User" button opens a modal: email input, role dropdown (owner sees only "User"; super_admin sees "User" and "Owner"). Submit calls POST /api/invitations and shows the invite link to copy.
+Use shadcn/ui components (Table, Dialog, Button, Badge, Tabs, Input, Select). Wire to React Query mutations with optimistic updates and toast notifications.
+
+📋 PROMPT 7 — Accept invite page
+Create artifacts/web/src/pages/accept-invite.tsx (public route at /accept-invite?token=...):
+
+On mount, call GET /api/invitations/lookup/:token.
+If invalid/expired, show an error with a "Back to login" button.
+If valid, show a form with email (readonly, pre-filled), full name, password, confirm password. Validate password strength client-side (min 8 chars, 1 number, 1 letter).
+Submit POST /api/invitations/accept. On success, redirect to /dashboard.
+📋 PROMPT 8 — Tenant scoping & dashboard access control
+Audit every API route to ensure tenant scoping:
+
+All resource routes (/api/jobs, /api/signs, /api/rooms, /api/sheets, /api/dashboard/summary, /api/storage/*) must use requireAuth and filter by req.ctx.tenantId (super_admin bypasses).
+All admin routes (/api/admin/*) must use requireSuperAdmin.
+All tenant-management routes (/api/users, /api/invitations, /api/pricing/settings) must use requireOwnerOrAbove and scope to req.ctx.tenantId.
+In the frontend, wrap admin pages in AdminRoute and owner pages in OwnerRoute. Hide menu items the user cannot access.
+
+Add an integration test that creates two tenants (A and B), a user in each, and verifies user A cannot see/modify any resource belonging to tenant B (expect 403/404).
+
+📋 PROMPT 9 — SSO / external provisioning webhook (optional)
+Create POST /api/internal/provision-user protected by a shared secret header X-Internal-Token (env var INTERNAL_PROVISIONING_SECRET).
+
+Body: { action: 'upsert' | 'delete', externalId, email, fullName, role, externalCompanyId, companyName }.
+
+On upsert: find-or-create tenant by externalCompanyId, then upsert user by externalId. Update role, fullName, email.
+On delete: soft-delete by clearing passwordHash and revoking all sessions.
+Return { ok: true, userId, tenantId }. Never expose this route through the auth middleware.
+
+📋 PROMPT 10 — Add the gaps (audit log, sessions, role editor)
+Extend the system with the features missing from the source project:
+
+Audit log: new table audit_events (id, tenantId, actorUserId, action, targetType, targetId, metadata jsonb, createdAt). Write entries from invite/accept/revoke, role change, password reset, user delete. Add a super_admin-only /admin/audit page with filters (actor, action, date range) and CSV export.
+
+Active sessions panel: on each user row in /users, add an "Active sessions" expandable showing device, IP, last seen, created. Add "Revoke" per session and "Revoke all" button. Owners can revoke for users in their tenant; users can revoke their own.
+
+Role editor: add a "Change role" action in the Users table. Super_admin can set any of the three roles; owner can only toggle between user (no demote/promote of owners). Prevent self-demotion and prevent removing the last owner of a tenant. Log every change to the audit log.

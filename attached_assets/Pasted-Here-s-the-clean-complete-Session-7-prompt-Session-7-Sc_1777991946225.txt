@@ -1,0 +1,294 @@
+Here's the clean, complete Session 7 prompt:
+
+Session 7 — Schedule-Primary Pipeline + Upload Reorder
+Core philosophy: Sign schedule drives count and type. Floor plans drive location only. Rules engine handles egress only in schedule_primary mode. Upload slots ordered to match human estimator workflow.
+Files that change:
+
+artifacts/web/src/components/StructuredUploader.tsx
+artifacts/api-server/src/lib/pipeline.ts
+artifacts/api-server/src/routes/exports.ts
+artifacts/web/src/pages/job-detail.tsx
+lib/db/src/schema/jobs.ts — pricing_overrides column only
+
+Do not change:
+
+Sidecar, any routes except exports.ts, any other UI components
+
+Regression jobs:
+
+Fox Hill job_a81ec18d15cec894 — must stay 185-215, strategy=floor_plan_primary
+Walking Court_2 — must produce ~178 signs, strategy=schedule_primary
+
+
+Change 1 — Reorder upload slots (StructuredUploader.tsx)
+Change slot order and descriptions to match human estimator workflow. Exact order:
+Slot 1 — Sign Schedule / Specs (optional, 20MB)
+label: "Sign Schedule / Specs"
+badge: none
+description: "Upload your interior signage schedule (e.g. AA831). 
+  If present, this drives the sign count and type — most accurate path. 
+  Accepts image-based or text-based schedules."
+hint: "Look for sheets labeled AA8xx, sign schedule, or interior signage schedule"
+fileCategory: "sign_schedule"
+Slot 2 — Sign Drawings / Details (optional, 20MB)
+label: "Sign Drawings / Details"
+badge: none
+description: "Upload sign type detail sheets showing dimensions, materials, 
+  and copy layout for each sign type. Used to accurately price each sign."
+hint: "Look for sheets showing sign type elevations, dimensions, and material callouts"
+fileCategory: "sign_details"
+Slot 3 — Floor Plans (required, 50MB)
+label: "Floor Plans"
+badge: Required (keep existing)
+description: "Upload architectural floor plan sheets (A-1xx). 
+  Used for room locations and installer marker placement."
+hint: "Look for sheets labeled A-1xx showing room layouts and door locations"
+fileCategory: "floor_plan"
+Keep existing floor label input ("What floors does this contain?")
+Slot 4 — Room / Finish Schedule (optional, 20MB)
+label: "Room / Finish Schedule"
+badge: none (remove Recommended badge if present)
+description: "Upload room schedule or finish schedule if available. 
+  Provides additional room name and finish data."
+hint: "Look for sheets labeled A-7xx or room data schedules"
+fileCategory: "room_schedule"
+Also:
+
+Add sign_details to the Upload Status checklist
+Update building type tooltip (i) hints to reference new slot names and order
+Add sign_details to the file-category bypass in pipeline.ts so sign_details files are never rasterized in Step 3 as floor plans
+
+
+Change 2 — Wire message field through dedicated schedule file path (pipeline.ts)
+Find the two scheduleSignRows.push() calls in the dedicated sign schedule file path (Step 4b/4d — the pdfplumber text-parsed path and the Gemini fallback path). For each, update the message field:
+typescriptscheduleSignRows.push({
+  ...existingFields,
+  message: [entry.roomNumber, entry.roomName, entry.signType, entry.message]
+    .filter(Boolean)
+    .join(" | "),
+});
+Also check the A-7XX signage sheet path and apply the same message construction where roomNumber/roomName are available.
+
+Change 3 — Step 3 vision: filter to egress rooms only in schedule_primary mode (pipeline.ts)
+In the Step 3 sheet vision loop, after Gemini returns rooms for a floor plan sheet, when pipelineStrategy === "schedule_primary":
+Step A — Filter rooms for extractedRooms:
+typescriptif (pipelineStrategy === "schedule_primary") {
+  const EGRESS_ROOM_PATTERNS = [
+    /stair/i, /exit/i, /elevator/i, /elev/i, /lobby/i,
+    /vestibule/i, /mechanical/i, /electrical/i, /fire/i,
+  ];
+
+  const egressRooms = geminiRooms.filter(r =>
+    EGRESS_ROOM_PATTERNS.some(p => p.test(r.roomName))
+  );
+
+  const skippedCount = geminiRooms.length - egressRooms.length;
+
+  logger.log(
+    `[Step 3] ${sheet.sheetId}: schedule_primary — ` +
+    `keeping ${egressRooms.length} egress rooms, ` +
+    `skipping ${skippedCount} unit/office/corridor rooms ` +
+    `(schedule is source for those)`
+  );
+
+  // Only push egress rooms — schedule owns unit/office/corridor rooms
+  extractedRooms.push(...egressRooms);
+}
+Step B — Capture ALL coordinates from full Gemini response for Step 3b:
+typescript  // Capture coordinates from the full unfiltered response for schedule matching
+  // Store per-sheet so Step 3b can match without a second Gemini call
+  const sheetCoordinates = geminiRooms.map(r => ({
+    roomNumber: r.roomNumber,
+    x: r.x ?? null,
+    y: r.y ?? null,
+    sheetId: sheet.sheetId,
+    fileId: sheet.fileId,
+    level: sheet.level,
+  }));
+
+  // Accumulate across all sheets
+  allSheetCoordinates.push(...sheetCoordinates);
+Declare allSheetCoordinates: CoordinateEntry[] = [] before the Step 3 loop starts.
+
+Change 4 — Step 3b: coordinate matching for schedule_primary jobs (pipeline.ts)
+Add Step 3b immediately after the Step 3 loop closes. Only runs when pipelineStrategy === "schedule_primary". No additional Gemini calls — uses allSheetCoordinates captured in Change 3.
+typescriptif (pipelineStrategy === "schedule_primary" && signSchedule.length > 0) {
+  await wp("3b", "Matching schedule rooms to floor plan coordinates");
+
+  let matched = 0;
+  let unlocated = 0;
+
+  for (const scheduleRoom of signSchedule) {
+    const roomNum = scheduleRoom.roomNumber?.trim().toUpperCase();
+    if (!roomNum) { unlocated++; continue; }
+
+    // Try exact match first, then normalized match
+    const coordMatch =
+      allSheetCoordinates.find(c =>
+        c.roomNumber?.trim().toUpperCase() === roomNum
+      ) ??
+      allSheetCoordinates.find(c =>
+        normalizeUnitNumber(c.roomNumber?.trim().toUpperCase() ?? "") ===
+        normalizeUnitNumber(roomNum)
+      );
+
+    if (coordMatch) {
+      // Create extracted_rooms entry for this schedule room
+      extractedRooms.push({
+        id: newId("room"),
+        jobId,
+        tenantId,
+        roomNumber: scheduleRoom.roomNumber,
+        roomName: scheduleRoom.roomName,
+        level: coordMatch.level ?? scheduleRoom.floor ?? null,
+        x: coordMatch.x,
+        y: coordMatch.y,
+        coordSource: "schedule_matched",
+        source: "schedule",
+        sheetId: coordMatch.sheetId,
+        fileId: coordMatch.fileId,
+        confidence: "1.000",
+        status: "extracted",
+      });
+      matched++;
+    } else {
+      // Create unlocated entry — will show in Plans tab sidebar
+      extractedRooms.push({
+        id: newId("room"),
+        jobId,
+        tenantId,
+        roomNumber: scheduleRoom.roomNumber,
+        roomName: scheduleRoom.roomName,
+        level: scheduleRoom.floor ?? null,
+        x: null,
+        y: null,
+        coordSource: "unlocated",
+        source: "schedule",
+        sheetId: null,
+        fileId: null,
+        confidence: "1.000",
+        status: "extracted",
+      });
+      unlocated++;
+    }
+  }
+
+  logger.log(
+    `[Step 3b] schedule_primary — ${signSchedule.length} schedule rooms: ` +
+    `${matched} coordinate-matched, ${unlocated} unlocated`
+  );
+}
+
+Change 5 — Rules engine egress-only filter in schedule_primary mode (pipeline.ts)
+In Step 9, after the rules engine produces ruleOutput, when pipelineStrategy === "schedule_primary":
+typescriptif (pipelineStrategy === "schedule_primary") {
+  const EGRESS_RULES = ["R1", "R2", "R3", "R4"];
+  const beforeCount = signRows.length;
+
+  signRows = signRows.filter(s =>
+    EGRESS_RULES.some(r => s.ruleRef?.startsWith(r))
+  );
+
+  logger.log(
+    `[Step 9] schedule_primary — rules engine filtered from ` +
+    `${beforeCount} to ${signRows.length} egress signs only`
+  );
+}
+Expected: ~15 egress signs from rules engine + ~163 schedule signs = ~178 total for Walking Court.
+
+Change 6 — XLSX sort by room number within each floor (exports.ts)
+Before writing signs to XLSX, sort by floor level then room number:
+typescriptsigns.sort((a, b) => {
+  // Sort by floor level first
+  const levelA = a.level ?? "Unspecified";
+  const levelB = b.level ?? "Unspecified";
+  if (levelA !== levelB) return levelA.localeCompare(levelB);
+
+  // Extract room number — schedule signs carry it in message field
+  const roomA = a.message?.split(" | ")[0]?.trim() ?? a.roomNumber ?? "";
+  const roomB = b.message?.split(" | ")[0]?.trim() ?? b.roomNumber ?? "";
+
+  // Natural numeric sort so A100 < A101 < A200 < B100
+  return roomA.localeCompare(roomB, undefined, { numeric: true });
+});
+
+Change 7 — Sign type pricing foundation (exports.ts + job-detail.tsx + schema)
+In exports.ts, add default pricing table and lookup helper:
+typescriptconst DEFAULT_SIGN_PRICING: Record<string, number> = {
+  "Typical Toilet Room Sign": 185,
+  "Room Sign with Insert": 195,
+  "Emergency Exit": 145,
+  "Fire Extinguisher": 95,
+  "Room Sign with No Storage": 185,
+  "Occupancy Sign": 95,
+  '24" Letter Signage': 450,
+  "Typical Room Sign": 165,
+  "Egress Map": 285,
+  "Egress Stair Sign at Corridor": 165,
+  "Typical Stair Sign at Landing": 195,
+  "Sign at Elevator": 165,
+  "Sign at Unit": 95,
+  "Elevator Machine Room Sign": 145,
+  "Sign at Corridor": 245,
+  "Elevator Control Room Location Sign": 145,
+  "default": 150,
+};
+
+function getPriceForSignType(
+  signType: string,
+  overrides?: Record<string, number>
+): number {
+  const merged = { ...DEFAULT_SIGN_PRICING, ...overrides };
+  const key = Object.keys(merged).find(k =>
+    k !== "default" &&
+    signType.toLowerCase().includes(k.toLowerCase())
+  );
+  return merged[key ?? "default"] ?? 150;
+}
+Use getPriceForSignType(sign.signType, job.pricingOverrides) when calculating unit price in the XLSX Pricing tab.
+In schema (jobs table), add:
+typescriptpricingOverrides: jsonb("pricing_overrides").$type<Record<string, number>>(),
+Run migration.
+In job-detail.tsx Export tab, add "Pricing Config" section:
+
+Table showing all distinct sign types detected in this job
+Unit price column (from getPriceForSignType) — editable inline number input
+"Reset to defaults" button — clears job.pricingOverrides via PATCH
+Save on blur — PATCH /api/jobs/:id with updated pricingOverrides
+
+
+Change 8 — XLSX Assumptions tab strategy-aware content (exports.ts)
+Update Assumptions tab to include:
+Pipeline Strategy:    schedule_primary / floor_plan_primary / hybrid
+Sign Count Source:    [Schedule name + entry count] / AI floor plan extraction / Combined  
+Egress Signs:         Rules engine R1-R4 only / Full rules engine
+Floor Plan Usage:     Coordinate extraction + egress rooms / Full room extraction
+Pricing Basis:        Custom rates / Default rates
+Last Scan:            [date and time]
+Disclaimer:           This takeoff is an AI-assisted estimate. Verify quantities 
+                      before fabrication. Contractor is responsible for final counts.
+
+Typecheck + regression sequence
+
+Typecheck — 0 errors required
+Tests — all 1,461 passing
+Visual check — confirm new slot order in UI: Sign Schedule → Sign Drawings → Floor Plans → Room Schedule
+Rescan Fox Hill job_a81ec18d15cec894:
+
+Logs show Strategy: floor_plan_primary
+Step 3 runs full Gemini room extraction (not filtered)
+Step 3b does NOT run
+Sign count 185-215
+
+
+Rescan Walking Court_2:
+
+Logs show Strategy: schedule_primary
+Step 3 logs: keeping N egress rooms, skipping M unit/corridor rooms
+Step 3b logs: 163 schedule rooms: X coordinate-matched, Y unlocated
+Step 9 logs: filtered from N to M egress signs only
+Total signs ~178 (163 schedule + ~15 egress)
+XLSX sorted by room number within each floor
+Message field populated for all schedule signs
+Pricing tab shows per-sign-type prices
+Assumptions tab shows schedule_primary strategy

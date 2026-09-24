@@ -1,0 +1,208 @@
+Two exact fixes for UnifiedPlanViewer.tsx
+Both fixes are in artifacts/web/src/components/UnifiedPlanViewer.tsx. Make ONLY these changes, nothing else.
+
+
+FIX 1 — Marker coordinates (markers outside the plan)
+The pipeline stores coordinates as 0–1000. The viewer multiplies them by renderedW/renderedH expecting 0–1, so markers land far outside the plan.
+Change 1a — Line 721: divide by 1000 when reading stored coords
+Find this exact line:
+
+          x: s.xPos, y: s.yPos,
+
+Replace with:
+
+          x: (s.xPos ?? 500) / 1000, y: (s.yPos ?? 500) / 1000,
+Change 1b — Line 803: multiply by 1000 when saving word-match coords
+Find this exact line:
+
+        body: JSON.stringify({ xPos: m.x, yPos: m.y, pageNumber, placementSource: "word_match" }),
+
+Replace with:
+
+        body: JSON.stringify({ xPos: m.x * 1000, yPos: m.y * 1000, pageNumber, placementSource: "word_match" }),
+Change 1c — Line 808: multiply by 1000 in optimistic update
+Find this exact line:
+
+            s.id === m.signId ? { ...s, xPos: m.x, yPos: m.y, pageNumber } : s
+
+Replace with:
+
+            s.id === m.signId ? { ...s, xPos: m.x * 1000, yPos: m.y * 1000, pageNumber } : s
+Change 1d — Line 875: multiply by 1000 when saving gemini vision coords
+Find this exact line:
+
+            body: JSON.stringify({ xPos: candidate.x, yPos: candidate.y, placementSource: "gemini_vision" }),
+
+Replace with:
+
+            body: JSON.stringify({ xPos: candidate.x * 1000, yPos: candidate.y * 1000, placementSource: "gemini_vision" }),
+Change 1e — Line 900: multiply by 1000 when saving user-confirmed coords
+Find this exact line:
+
+        body: JSON.stringify({ xPos: candidate.x, yPos: candidate.y, placementSource: "user_confirmed" }),
+
+Replace with:
+
+        body: JSON.stringify({ xPos: candidate.x * 1000, yPos: candidate.y * 1000, placementSource: "user_confirmed" }),
+Change 1f — Line 1570: multiply by 1000 when saving drag coords
+Find this exact line:
+
+                          body: JSON.stringify({ xPos: nx, yPos: ny, placementSource: "user_drag" }),
+
+Replace with:
+
+                          body: JSON.stringify({ xPos: nx * 1000, yPos: ny * 1000, placementSource: "user_drag" }),
+
+
+FIX 2 — Plan view too small (auto-fit not working)
+The plan is showing at ~30-40% zoom because the container height is unknown when hasSetScaleRef fires, so ch is 0 and fitH becomes Infinity, then the cap at 1.5 takes over.
+Change 2a — Line 1200: remove padding from scroll container
+Find this exact line:
+
+      <div ref={pdfContainerRef} className="flex-1 overflow-auto p-4">
+
+Replace with:
+
+      <div ref={pdfContainerRef} className="flex-1 overflow-auto" style={{ padding: "16px" }}>
+Change 2b — Remove the 1.5 cap in the image onLoad auto-fit
+Find this block (around line 1236-1244):
+
+                    if (!hasSetScaleRef.current && pdfContainerRef.current) {
+
+                      const cw = pdfContainerRef.current.clientWidth - 32;
+
+                      const ch = pdfContainerRef.current.clientHeight - 32;
+
+                      if (cw > 0) {
+
+                        hasSetScaleRef.current = true;
+
+                        const fitW = cw / nw;
+
+                        const fitH = ch > 0 ? ch / nh : Infinity;
+
+                        const fit = Math.min(1.5, Math.max(0.3, Math.min(fitW, fitH)));
+
+                        setFitScale(fit);
+
+                        setScale(fit);
+
+                      }
+
+                    }
+
+Replace with:
+
+                    if (!hasSetScaleRef.current && pdfContainerRef.current) {
+
+                      const cw = pdfContainerRef.current.clientWidth - 32;
+
+                      const ch = pdfContainerRef.current.clientHeight - 32;
+
+                      if (cw > 0) {
+
+                        hasSetScaleRef.current = true;
+
+                        const fitW = cw / nw;
+
+                        // If container height is unknown, use width-fit only
+
+                        const fitH = ch > 50 ? ch / nh : fitW;
+
+                        const fit = Math.min(4.0, Math.max(0.3, Math.min(fitW, fitH)));
+
+                        setFitScale(fit);
+
+                        setScale(fit);
+
+                      }
+
+                    }
+Change 2c — Remove the 1.5 cap in the FIT button handler too
+Find this block (around line 1022-1032):
+
+            if (nativeSize && pdfContainerRef.current) {
+
+              const cw = pdfContainerRef.current.clientWidth - 32;
+
+              const ch = pdfContainerRef.current.clientHeight - 32;
+
+              const fitW = cw / nativeSize.w;
+
+              const fitH = ch > 0 ? ch / nativeSize.h : Infinity;
+
+              const fit = Math.min(1.5, Math.max(0.3, Math.min(fitW, fitH)));
+
+              setFitScale(fit);
+
+              setScale(fit);
+
+            }
+
+Replace with:
+
+            if (nativeSize && pdfContainerRef.current) {
+
+              const cw = pdfContainerRef.current.clientWidth - 32;
+
+              const ch = pdfContainerRef.current.clientHeight - 32;
+
+              const fitW = cw / nativeSize.w;
+
+              const fitH = ch > 50 ? ch / nativeSize.h : fitW;
+
+              const fit = Math.min(4.0, Math.max(0.3, Math.min(fitW, fitH)));
+
+              setFitScale(fit);
+
+              setScale(fit);
+
+            } else {
+
+              setScale(fitScale);
+
+            }
+Change 2d — Force a re-fit after container is mounted
+After the hasSetScaleRef declaration (around line 550), add a useEffect that re-triggers fit when the container is ready:
+
+  // Re-fit when container becomes visible (handles tab switching delay)
+
+  useEffect(() => {
+
+    if (!pdfContainerRef.current || !nativeSize) return;
+
+    const el = pdfContainerRef.current;
+
+    if (el.clientHeight > 50 && !hasSetScaleRef.current) {
+
+      const cw = el.clientWidth - 32;
+
+      const ch = el.clientHeight - 32;
+
+      const fitW = cw / nativeSize.w;
+
+      const fitH = ch > 50 ? ch / nativeSize.h : fitW;
+
+      const fit = Math.min(4.0, Math.max(0.3, Math.min(fitW, fitH)));
+
+      hasSetScaleRef.current = true;
+
+      setFitScale(fit);
+
+      setScale(fit);
+
+    }
+
+  }, [nativeSize]);
+
+
+After making all changes
+cd artifacts/web && pnpm run build
+
+Then in the app:
+
+Click the FIT button in the floor plan viewer — this forces a recalculation
+The plan should now fill the full viewer area
+Markers should appear ON the floor plan, not scattered outside
+
+If markers are still slightly off after the coordinate fix, the existing DB records have old 0-1000 values that are now being divided by 1000 correctly. A Rescan on each job will re-extract and re-place all markers at the correct positions.

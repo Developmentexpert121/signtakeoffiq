@@ -1,0 +1,156 @@
+In artifacts/web/src/pages/job-detail.tsx and 
+create new file artifacts/web/src/components/FloorPlanViewer.tsx:
+
+Build a professional floor plan viewer with 
+interactive sign markers.
+
+═══════════════════════════════
+MARKER DESIGN
+═══════════════════════════════
+Replace current dot markers with numbered badge markers:
+
+Shape: Circle (28px diameter) with number inside
+       + small label tag extending right (50px wide)
+Border: 2px solid, slightly darker than fill
+Font: Bold, white, 11px for number
+Label: 3-letter abbreviation, white, 9px
+
+Color by sign type:
+  Room ID:          #F59E0B (amber)
+  Restroom:         #06B6D4 (cyan)  
+  Exit/Stair:       #10B981 (green)
+  Elevator:         #8B5CF6 (purple)
+  Unit ID:          #F59E0B (amber)
+  Evacuation Map:   #EF4444 (red)
+  Max Occupancy:    #F97316 (orange)
+  Accessible:       #06B6D4 (cyan)
+  Needs Review:     #EF4444 (red) + dashed border
+  Dismissed:        gray, 40% opacity
+
+Confidence affects opacity:
+  High (>85%):  100% opacity
+  Medium (60-85%): 75% opacity  
+  Low (<60%):   50% opacity + dashed border
+
+═══════════════════════════════
+MARKER NUMBER
+═══════════════════════════════
+Each marker shows the ROW NUMBER from the sign 
+table (1, 2, 3...) so estimator can cross-reference.
+Clicking a row in sign table → pulses that marker.
+Clicking a marker → highlights + scrolls to row.
+
+═══════════════════════════════
+FLOOR PLAN VIEWER LAYOUT
+═══════════════════════════════
+Full-width viewer taking up 60% of the Plans tab.
+Sign table panel on the right 40%.
+
+Toolbar above plan:
+  [← →] Sheet navigation  |  [Sheet 2/5 ▾] dropdown
+  [-] [100%] [+] [FIT]     |  [🔍 Zoom to markers]
+  [Snap to grid toggle]    |  [+ Add Marker] button
+
+Sheet selector shows only floor plan sheets:
+  "A2.20 - Ground Floor Plan"
+  "A2.21 - Second Floor Plan"
+  NOT electrical/mechanical sheets
+
+Level filter pills below toolbar:
+  [All] [Level 1] [Level 2] [Level 3]
+  Click to show/hide markers for that level only
+
+═══════════════════════════════
+MARKER INTERACTIONS
+═══════════════════════════════
+HOVER on marker:
+  Tooltip shows:
+  ┌─────────────────────┐
+  │ #5 · Room ID        │
+  │ Room 103 LOBBY      │
+  │ 6 × 6 · ADA ✓      │
+  │ High Confidence     │
+  └─────────────────────┘
+
+CLICK on marker:
+  - Highlight marker with white ring animation
+  - Scroll sign table to that row
+  - Highlight that row in amber
+
+CLICK on sign table row:
+  - Pan/zoom plan to center on that marker
+  - Pulse marker 3× with scale animation
+  - If marker not placed: show "No marker placed" 
+    message with "+ Place Marker" button
+
+RIGHT-CLICK on marker:
+  Context menu:
+  ✏️ Edit sign type
+  🗑️ Remove sign
+  📍 Move marker
+  ✓ Confirm sign
+
+═══════════════════════════════
+ADD MARKER WORKFLOW
+═══════════════════════════════
+When "+ Add Marker" clicked:
+1. Cursor changes to crosshair + marker preview
+2. Click anywhere on plan to place
+3. Dropdown appears: "What sign type?"
+   Show only canonical 15 types
+4. Enter room # and name (auto-suggest from 
+   existing rooms)
+5. Marker placed, sign added to table
+6. Toast: "Room ID sign added for Room 103"
+
+═══════════════════════════════
+MARKER LEGEND
+═══════════════════════════════
+Fixed legend below plan:
+● Room ID  ● Restroom  ● Exit/Stair  
+● Elevator  ● Unit ID  ⚠ Needs Review
+
+═══════════════════════════════
+MARKER PLACEMENT FROM PIPELINE
+═══════════════════════════════
+When pipeline detects a room, store the 
+x/y coordinates from the PDF text extraction:
+
+In pipeline.ts, when extracting room text:
+- Store the bounding box center of the room 
+  number text as the marker position
+- Convert PDF coordinates to % of page:
+  markerX = (bbox.x + bbox.width/2) / pageWidth
+  markerY = (bbox.y + bbox.height/2) / pageHeight
+- Store as: room.markerX, room.markerY (0-1 range)
+
+When rendering on PNG:
+  pixelX = markerX × imageWidth
+  pixelY = markerY × imageHeight
+
+This gives native PDF-coordinate accuracy for 
+markers instead of AI vision guesses.
+
+For rooms without coordinates (AI vision rooms):
+  Show marker in center of detected region
+  Display with dashed border (needs confirmation)
+
+Human-corrected marker positions:
+  When user drags a marker to new position:
+  - Save new x/y as room.markerX, room.markerY
+  - Set room.markerSource = 'human_corrected'
+  - These are never overwritten by pipeline rescans
+  - Feed back to training for future accuracy
+
+═══════════════════════════════
+MARKER EXPORT TO PDF
+═══════════════════════════════
+When "Download PDF" clicked:
+1. Render each floor plan page with markers overlaid
+2. Each marker shows: number + sign type abbreviation
+3. Include legend on each page
+4. Include sign table as final pages
+5. File name: [JobName]_MarkedPlans_[Date].pdf
+
+This gives the estimator a marked-up set of plans 
+to share with the client or use for field verification.

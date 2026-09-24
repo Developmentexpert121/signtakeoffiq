@@ -1,0 +1,97 @@
+Fix — Single-page PDF fast path in pipeline.ts. No rescans. Typecheck + full test suite after.
+The problem: Gibson Lib has two single-page PDFs. The sidecar's drawing index parser fails on them (garbled titles, wrong page assignments). But single-page PDFs don't need a drawing index — they have exactly one sheet on page 1.
+Find the sheet synthesis/classification block and add a fast path for single-page PDFs:
+After the sidecar returns allSheets for a file, check if the file has exactly 1 page AND the sidecar returned a garbled or unhelpful title. If so, override the sheet entry with clean synthesized data:
+typescript// Fast path for single-page PDFs with bad sidecar classification
+for (const file of planFiles) {
+  const filePageCount = (file as any).pageCount as number | null;
+  if (filePageCount !== 1) continue;
+  
+  // Find sheets for this file
+  const fileSheets = allSheets.filter(s => s.fileId === file.id);
+  
+  // Check if the title looks garbled or unhelpful
+  const hasGarbledTitle = fileSheets.some(s => {
+    const title = (s.sheetTitle ?? '').toUpperCase();
+    return (
+      title.includes('TCEJORP') ||  // reversed "PROJECT"
+      title.includes('LIATNEDICNI') || // reversed text
+      /^[0-9\s]+$/.test(title) || // just numbers
+      title.length < 3 // too short
+    );
+  });
+  
+  const hasUselessTitle = fileSheets.some(s => {
+    const title = (s.sheetTitle ?? '').toUpperCase();
+    return (
+      title.includes('NEW CONCRETE') ||
+      title.includes('FLOOR INFILL') ||
+      title.includes('GENERAL NOTES') ||
+      title.includes('RE-INSTALL')
+    );
+  });
+  
+  if (hasGarbledTitle || hasUselessTitle) {
+    // Remove bad sheet entries for this file
+    const idsToRemove = new Set(
+      fileSheets.map(s => s.id)
+    );
+    allSheets.splice(
+      0,
+      allSheets.length,
+      ...allSheets.filter(s => !idsToRemove.has(s.id))
+    );
+    
+    // Add clean synthesized sheet
+    const cleanSheetId = `PLAN-${file.id.slice(-6)}-P1`;
+    const floorHint = file.filename.toUpperCase().includes('FIRST') ? 'Level 1' :
+                      file.filename.toUpperCase().includes('SECOND') ? 'Level 2' :
+                      file.filename.toUpperCase().includes('THIRD') ? 'Level 3' :
+                      file.filename.toUpperCase().includes('FOURTH') ? 'Level 4' :
+                      'Floor Plan Level 1';
+    
+    logger.log(
+      `[pipeline] Single-page PDF ${file.filename} has garbled title — ` +
+      `synthesizing clean sheet as "${floorHint}"`
+    );
+    
+    allSheets.push({
+      id: `sheet_synth_${file.id}_p1`,
+      jobId,
+      tenantId,
+      fileId: file.id,
+      sheetId: cleanSheetId,
+      sheetTitle: floorHint,
+      sheetType: "floor_plan" as const,
+      pdfPage: 1,
+      pageWidth: null,
+      pageHeight: null,
+      rasterizedPath: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+}
+Also update pageCount for Gibson files — run this in Shell after the fix lands:
+bash# Update pageCount for Gibson files
+curl -s -H "x-dev-bypass-auth: true" \
+  "http://localhost:8080/api/jobs/$(curl -s -H 'x-dev-bypass-auth: true' \
+  http://localhost:8080/api/jobs | python3 -c "
+import json,sys
+jobs=json.load(sys.stdin)
+for j in (jobs.get('jobs',jobs) if isinstance(jobs,dict) else jobs):
+    if 'Gibson' in j.get('name',''):
+        print(j['id'])
+" | head -1)/files" | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+files=data if isinstance(data,list) else data.get('files',[])
+for f in files:
+    print(f.get('id'), f.get('filename'))
+"
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing

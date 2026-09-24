@@ -1,0 +1,121 @@
+Here's Prompt 3 — wiring example retrieval into the pipeline plus auto-approve logic:
+
+---
+
+Add two things: auto-approve patterns by evidence threshold, and wire validated patterns into the Claude vision prompt so every new scan benefits from training data.
+
+**Part 1 — Auto-approve patterns in `training.ts`:**
+
+In `detectPatterns()`, after upserting each pattern into `training_patterns`, add this logic:
+```ts
+// Auto-approve patterns with evidence >= 3
+if (evidenceCount >= 3 && pattern.status === "detected") {
+  await db.update(trainingPatternsTable)
+    .set({ 
+      status: "approved",
+      approvedBy: "system",
+      approvedAt: new Date(),
+    })
+    .where(eq(trainingPatternsTable.id, pattern.id));
+}
+```
+
+Also apply this retroactively when `POST /training/patterns/analyze` runs — update all existing `detected` patterns with evidence >= 3 to `approved` automatically.
+
+**Part 2 — Example retrieval function in `training.ts`:**
+
+Add a new exported function `getTrainingContext(tenantId, buildingType)` that:
+
+1. Fetches all `approved` patterns for the tenant from `training_patterns`
+2. Fetches the top 3 most similar validated import snapshots from `import_snapshots` by matching `building_type` and highest `accuracy_score`
+3. Returns a formatted string for injection into the Claude prompt:
+
+```ts
+export async function getTrainingContext(
+  tenantId: string,
+  buildingType: string | null,
+): Promise<string> {
+  // Get approved patterns
+  const patterns = await db.select()
+    .from(trainingPatternsTable)
+    .where(and(
+      eq(trainingPatternsTable.tenantId, tenantId),
+      eq(trainingPatternsTable.status, "approved"),
+    ))
+    .orderBy(desc(trainingPatternsTable.evidenceCount))
+    .limit(15);
+
+  // Get similar validated examples
+  const examples = await db.select()
+    .from(importSnapshotsTable)
+    .where(and(
+      eq(importSnapshotsTable.tenantId, tenantId),
+      isNotNull(importSnapshotsTable.accuracyScore),
+      ...(buildingType ? [eq(importSnapshotsTable.buildingType, buildingType)] : []),
+    ))
+    .orderBy(desc(importSnapshotsTable.accuracyScore))
+    .limit(3);
+
+  if (patterns.length === 0 && examples.length === 0) return "";
+
+  let context = "TRAINING CONTEXT — patterns validated by human estimators:\n\n";
+
+  if (patterns.length > 0) {
+    context += "KNOWN SIGN TYPE RULES (apply these during extraction):\n";
+    for (const p of patterns) {
+      context += `- ${p.description} → ${p.suggestedFix}\n`;
+    }
+    context += "\n";
+  }
+
+  if (examples.length > 0) {
+    context += "VALIDATED REFERENCE JOBS (similar building type, human-verified):\n";
+    for (const e of examples) {
+      const score = e.accuracyScore ? `${Math.round(parseFloat(e.accuracyScore) * 100)}%` : "unknown";
+      context += `- ${e.buildingType ?? "Unknown type"} project: ${e.totalHumanSigns ?? "?"} signs, accuracy ${score}\n`;
+    }
+  }
+
+  return context;
+}
+```
+
+**Part 3 — Inject training context into `pipeline.ts`:**
+
+In `pipeline.ts`, import `getTrainingContext` from the training routes file:
+```ts
+import { getTrainingContext } from "./routes/training";
+```
+
+In Step 1 (after tenant settings are loaded), call:
+```ts
+const trainingContext = await getTrainingContext(tenantId, job.buildingType ?? null);
+```
+
+In `buildRoomExtractionPrompt()`, add a third parameter `trainingContext?: string` and inject it into the user prompt just before the field rules section:
+
+```ts
+if (trainingContext) {
+  userPrompt += `\n\n${trainingContext}`;
+}
+```
+
+Pass `trainingContext` into every `buildRoomExtractionPrompt()` call in Step 3.
+
+**Part 4 — Add `GET /training/context/preview` route:**
+
+So you can see exactly what training context will be injected for a given building type:
+
+```
+GET /training/context/preview?buildingType=Commercial
+```
+
+Returns `{ context: string, patternCount: number, exampleCount: number }` so you can verify what Claude will see before running a real scan.
+
+**After saving:**
+
+1. Run Analysis in Patterns tab — verify Exit (38), Room ID (10+8), Restroom (6) all auto-approve to green "Approved" status
+2. Hit `GET /training/context/preview?buildingType=Commercial` in browser and paste the response here so we can verify Claude will see the right training data
+3. Rescan the Novo job and compare sign count vs previous run
+
+---

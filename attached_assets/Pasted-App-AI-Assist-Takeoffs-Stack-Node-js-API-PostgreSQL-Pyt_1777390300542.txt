@@ -1,0 +1,305 @@
+App: AI-Assist Takeoffs
+Stack: Node.js API, PostgreSQL, Python PDF sidecar,
+       Gemini 2.5 Pro
+
+GOAL: Implement the 3-step processing pipeline 
+with building-type lexicons. This replaces the 
+current single-pass extraction with a structured 
+classify-then-apply approach.
+
+The rules engine (R1-R15) is CORRECT — do not 
+change it. Only change the data flowing INTO it.
+
+════════════════════════════════════════════════
+STEP 1 — VISUAL INVENTORY EXTRACTION (fix Gemini prompt)
+════════════════════════════════════════════════
+The Gemini vision call must output ONLY a raw 
+JSON room inventory. Nothing else. No sign 
+assignments, no flags, no interpretation.
+
+Replace current Gemini room extraction prompt with:
+
+SYSTEM:
+"""
+You are a precise architectural drawing reader.
+Your ONLY job is to extract room labels exactly 
+as they appear on the floor plan.
+
+OUTPUT FORMAT — return ONLY valid JSON, no other text:
+{
+  "rooms": [
+    {
+      "room_number": "W119",
+      "room_name": "CLASSROOM",
+      "floor": "LEVEL 1",
+      "confidence": 0.95,
+      "x_pct": 34.2,
+      "y_pct": 45.1
+    }
+  ],
+  "sheets_read": ["3.9.51", "3.9.52"],
+  "total_rooms_found": 87
+}
+
+STRICT RULES:
+- Extract room number and name EXACTLY as printed
+- Do NOT interpret, classify, or assign signs
+- Do NOT include anything that is not a room label
+- confidence: 1.0 = clearly readable, 
+              0.7 = partially obscured,
+              0.5 = inferred/estimated
+
+IGNORE COMPLETELY — do not include in output:
+- Any tag ending in .1 .2 .3 (e.g. W139.1) → drawing refs
+- Dimension strings: 8'-0'', 6'-0'', 60X21, 48X21
+- Grid lines: single letters A B C D or numbers 1 2 3 4
+- Legend codes: 19A 19B 19C MB TB CB
+- Marker callouts: MB 8'-0'', TB 4'-0''
+- Partial/split words: KIT EN, CAF ERIA, MECHANI CAL
+- Room numbers shorter than 3 characters after prefix
+  W1, E1, M0, V01 are NOT valid room numbers
+  
+VALID room number patterns for this building type: 
+{BUILDING_TYPE_PATTERNS}
+"""
+
+Pass {BUILDING_TYPE_PATTERNS} from the job's 
+building type profile at runtime.
+
+════════════════════════════════════════════════
+STEP 2 — SEMANTIC MAPPING (new — add this layer)
+════════════════════════════════════════════════
+After Gemini returns raw room JSON, run a 
+semantic mapping pass BEFORE the rules engine.
+
+Create: /api-server/src/lib/semantic-mapper.ts
+
+This maps each raw room name to standardized 
+flags using the building type lexicon:
+
+interface RoomFlags {
+  isRestroom: boolean;
+  isAssembly: boolean;
+  isVariableUse: boolean;       // gets insert sign
+  isMepUnoccupied: boolean;
+  isCorridorOrHall: boolean;
+  isStair: boolean;
+  isElevator: boolean;
+  isVestibule: boolean;
+  isPublicFacing: boolean;
+  isStaffOnly: boolean;
+  isSecure: boolean;            // govt: holding, evidence
+  isResidentialUnit: boolean;   // residential: apt numbers
+}
+
+LEXICONS — seed these in the DB as 
+building_type_lexicons table:
+
+EDUCATION lexicon:
+  isVariableUse (→ Room ID w/Insert per R2):
+    CLASSROOM, LAB, LABORATORY, MEDIA CENTER,
+    LIBRARY, LITERACY LIBRARY, LEARNING CENTER,
+    CONFERENCE ROOM, TRAINING ROOM, STAFF DINING,
+    WORKROOM, STAFF WORKROOM, BREAK OUT,
+    SENSORY ROOM, PROJECT AREA*, LABBB*, DSC*
+    (*Education-specific terms)
+    
+  isAssembly (→ Max Occupancy per R10):
+    GYMNASIUM, GYM, CAFETERIA, AUDITORIUM,
+    THEATER, MULTIPURPOSE, ASSEMBLY HALL,
+    MUSIC ROOM, MUSIC LOBBY, LECTURE HALL
+    
+  isRestroom:
+    TOILET, RESTROOM, BATHROOM, BOYS, GIRLS,
+    MENS, WOMENS, UNISEX, FAMILY RESTROOM,
+    ACCESSIBLE RESTROOM, WC, SHOWER, LAVATORY
+    
+  isMepUnoccupied:
+    MECHANICAL, ELECTRICAL, ELEC, HVAC,
+    IDF, MDF, DATA, SERVER, TELECOM,
+    JANITOR, CUSTODIAN, CUST, FAN ROOM,
+    ELEVATOR MACHINE, ELEV MACH, BOILER,
+    SPRINKLER, STORAGE (when occupant_load=0)
+    
+  isCorridorOrHall:
+    CORRIDOR, HALL, HALLWAY, LOBBY, FOYER,
+    VESTIBULE, PASSAGE, ALCOVE, PROJECT AREA
+    
+HEALTHCARE lexicon:
+  isVariableUse:
+    EXAM ROOM, PATIENT ROOM, CONSULTATION,
+    PROCEDURE ROOM, TREATMENT ROOM,
+    THERAPY ROOM, RECOVERY ROOM
+  isAssembly:
+    WAITING ROOM, CHAPEL, FAMILY LOUNGE
+  isRestroom: (same base + PATIENT TOILET)
+  isMepUnoccupied: (same base)
+
+COMMERCIAL lexicon:
+  isVariableUse:
+    OFFICE, PRIVATE OFFICE, SUITE, TENANT,
+    CONFERENCE ROOM, MEETING ROOM, BOARDROOM,
+    TRAINING ROOM, SHOWROOM
+  isAssembly:
+    BALLROOM, BANQUET, AUDITORIUM,
+    CONFERENCE CENTER (large)
+  isPublicFacing:
+    LOBBY, RECEPTION, WAITING, ATRIUM,
+    MAIN ENTRANCE, VISITOR
+
+GOVERNMENT lexicon:
+  isVariableUse:
+    OFFICE, COURTROOM, CHAMBERS, HEARING ROOM,
+    COUNCIL CHAMBER, JURY ROOM, CONFERENCE
+  isAssembly:
+    COURTROOM, COUNCIL CHAMBER, HEARING ROOM
+    (these get BOTH Room ID + Max Occupancy)
+  isSecure:
+    HOLDING, SECURE HOLDING, EVIDENCE,
+    RECORDS VAULT, SALLY PORT, BOOKING
+  isStaffOnly:
+    DISPATCH, EOC, COMMUNICATIONS, RECORDS
+
+HOTEL lexicon:
+  isResidentialUnit: (guest room numbers)
+    GUEST ROOM, KING, QUEEN, DOUBLE, SUITE,
+    ACCESSIBLE ROOM, STANDARD ROOM
+  isAssembly:
+    BALLROOM, BANQUET HALL, GRAND BALLROOM,
+    MEETING ROOM (>49 occ), RESTAURANT, BAR
+  isVariableUse:
+    MEETING ROOM, BOARDROOM, SALON
+
+RESIDENTIAL lexicon:
+  isResidentialUnit:
+    UNIT, APT, APARTMENT, SUITE, STUDIO,
+    1BR, 2BR, 3BR (any unit number pattern)
+  isAssembly:
+    CLUBROOM, AMENITY ROOM, PARTY ROOM,
+    FITNESS CENTER (>49 occ)
+  isMepUnoccupied: (same base)
+
+ASSEMBLY lexicon:
+  isAssembly (ALL of these):
+    SANCTUARY, NAVE, CHANCEL, NARTHEX,
+    AUDITORIUM, THEATER, THEATRE, ARENA,
+    GYMNASIUM, FELLOWSHIP HALL, GALLERY,
+    EXHIBITION HALL, CONCERT HALL
+  isVariableUse:
+    GREEN Room, DRESSING ROOM, REHEARSAL,
+    CHOIR ROOM, RECORDING STUDIO
+
+UNKNOWN lexicon:
+  Use broadest matching across all types.
+  Set confidence = 0.6 on all flag assignments.
+  Prompt user to confirm building type.
+
+════════════════════════════════════════════════
+STEP 3 — RULES ENGINE (unchanged, gets clean data)
+════════════════════════════════════════════════
+Rules engine R1-R15 receives structured input:
+{
+  room_number: "W119",
+  room_name: "CLASSROOM", 
+  floor: "LEVEL 1",
+  flags: {
+    isVariableUse: true,    ← from semantic mapper
+    isAssembly: false,
+    isRestroom: false,
+    ...
+  },
+  occupancy_group: "E",     ← from egress sheet if found
+  occupant_load: 25,        ← from egress sheet if found
+  public_door_count: 1
+}
+
+Rules engine produces sign assignments with 
+rule reference (R1, R2, R8, R10, etc.) for 
+every sign. This is already working correctly.
+
+════════════════════════════════════════════════
+UNKNOWN BUILDING TYPE — Auto-detect
+════════════════════════════════════════════════
+If building_type = 'unknown', add a pre-scan step:
+
+Before room extraction, send the title block 
+and sheet index to Gemini with this prompt:
+
+"Read this architectural drawing title block 
+and sheet index. Identify the building type 
+from these options: education, healthcare, 
+commercial, government, hotel, residential, 
+assembly.
+
+Look for keywords:
+- education: Elementary, School, University, 
+  Library, Daycare, Learning Center
+- healthcare: Hospital, Clinic, Medical, 
+  Health Center, Surgery
+- commercial: Office, Retail, Mixed-Use, 
+  Corporate, Airport
+- government: Municipal, Federal, Courthouse,
+  Fire Station, Police
+- hotel: Hotel, Motel, Resort, Inn, Suites
+- residential: Apartments, Condos, Residences,
+  Senior Living, Housing
+- assembly: Church, Theater, Arena, Museum,
+  Convention
+
+Return JSON: { 'detected_type': 'education', 
+               'confidence': 0.95,
+               'evidence': 'Sheet title says Elementary School' }"
+
+If confidence > 0.8: auto-set building type, 
+  show green banner "Detected: K-12 Education"
+If confidence 0.5-0.8: show amber banner 
+  "Suggested: Education — confirm before scan"
+If confidence < 0.5: prompt user to select manually
+
+════════════════════════════════════════════════
+MANUAL OVERRIDE IN REVIEW TAB
+════════════════════════════════════════════════
+The pencil icon per row already allows name/type 
+edits. Extend it to also show the derived flags:
+
+When user clicks pencil on a room:
+Show current flags as toggles:
+  [ ] Variable Use (Insert sign)
+  [ ] Assembly (Max Occupancy)  
+  [✓] MEP/Unoccupied (excluded)
+  [ ] Restroom
+  
+User can toggle any flag → re-runs rules engine 
+for that room only → updates sign assignment.
+Show: "Flag overridden manually — will persist 
+through rescans"
+
+Also add: public_door_count spinner (default 1, 
+max 8) so R3 multi-door can be set per room.
+
+════════════════════════════════════════════════
+VERIFY — 3 test cases
+════════════════════════════════════════════════
+TEST 1 — Fox Hill (Education):
+  Force full rescan with building type = Education
+  Expected: 
+  - CLASSROOM → isVariableUse → Room ID w/Insert
+  - GYMNASIUM → isAssembly → Max Occupancy
+  - TOILET → isRestroom → Restroom sign
+  - CUST → isMepUnoccupied → Room ID only
+  - Zero garbled rows (Step 1 filter)
+
+TEST 2 — Unknown building type:
+  Upload any plan with building_type = Unknown
+  Expected: 
+  - Auto-detect runs on title block
+  - Banner shows detected type
+  - User can confirm or override
+
+TEST 3 — Manual flag override:
+  In Fox Hill Review tab, find any CLASSROOM
+  Toggle isAssembly ON manually
+  Expected: Max Occupancy sign added for that room
+  Re-rescan: override persists
+
+All 1,430 tests pass.

@@ -1,0 +1,230 @@
+App: AI-Assist Takeoffs
+Applies to ALL jobs, ALL building types.
+Do NOT hardcode any Fox Hill specific values.
+
+════════════════════════════════════════════════
+FIX 1 — EVAC room_number string concat bug
+         All building types, all plans
+════════════════════════════════════════════════
+In egress-sign-generator.ts, the evacuation map
+room_number is generating 'EVAC-LLEVEL 1' instead
+of 'EVAC-L1' because the floor loop variable is
+being used as both the integer index AND the
+display string.
+
+Find ALL places in egress-sign-generator.ts where
+egress signs are inserted and ensure the loop
+uses TWO separate variables:
+
+  // CORRECT pattern — use throughout the file
+  for (let f = 1; f <= floorsServed; f++) {
+    
+    // Integer for IDs — never changes format
+    const floorIndex = f;  // 1, 2, 3...
+    
+    // Display string — matches job's floor format
+    const floorLabel = buildFloorLabel(f, job);
+    
+    // Use floorIndex for room_number (always clean)
+    // Use floorLabel for floor column (job format)
+    
+    // Stair signs:
+    room_number: \`STAIR-\${stairLabel}-L\${floorIndex}\`,
+    floor:        floorLabel,
+    
+    // Exit signs:
+    room_number: \`EXIT-STAIR-\${stairLabel}-L\${floorIndex}\`,
+    floor:        floorLabel,
+    
+    // Evac maps:
+    room_number: \`EVAC-L\${floorIndex}\`,   // 'EVAC-L1' ✅
+    floor:        floorLabel,               // 'LEVEL 1'
+    
+    // Area of rescue (govt/assembly):
+    room_number: \`AOR-STAIR-\${stairLabel}-L\${floorIndex}\`,
+    floor:        floorLabel,
+  }
+
+Check EVERY egress sign INSERT in the file and
+apply this pattern. The bug may exist in multiple
+places for different sign types.
+
+════════════════════════════════════════════════
+FIX 2 — Stair/egress floor field blank in XLSX
+         All building types, all plans
+════════════════════════════════════════════════
+All stair, exit, evac, and AOR sign rows have
+blank floor field in XLSX and Review tab.
+
+TWO things to fix:
+
+PART A — Build floor label correctly
+for ALL plan floor naming conventions:
+
+  function buildFloorLabel(
+    floorIndex: number,
+    job: Job
+  ): string {
+    
+    // First: detect format from existing rooms
+    // in this job's signs table
+    const sampleFloor = await db.queryOne(\`
+      SELECT floor FROM signs
+      WHERE job_id = $1
+      AND floor IS NOT NULL
+      AND floor != ''
+      AND floor NOT LIKE 'STAIR%'
+      AND floor NOT LIKE 'EXIT%'
+      AND floor NOT LIKE 'EVAC%'
+      AND floor NOT LIKE 'AOR%'
+      AND source != 'rules'
+      LIMIT 1
+    \`, [job.id]);
+    
+    if (sampleFloor?.floor) {
+      // Extract prefix from existing floor label
+      // 'LEVEL 1' → prefix='LEVEL ', num=1
+      // 'Floor 2' → prefix='Floor ', num=2
+      // 'FL-3'    → prefix='FL-', num=3
+      // '2'       → prefix='', num=2
+      const match = sampleFloor.floor.match(
+        /^([A-Za-z\s\-]*)(\d+)$/
+      );
+      if (match) {
+        const prefix = match[1]; // 'LEVEL ' etc
+        return \`\${prefix}\${floorIndex}\`;
+      }
+    }
+    
+    // Fallback if no existing rooms yet
+    // Use job's detected floor format or default
+    return job.floor_label_format
+      ? job.floor_label_format.replace('{n}', 
+          String(floorIndex))
+      : \`LEVEL \${floorIndex}\`;
+  }
+
+PART B — Verify floor column name in signs table
+Different deployments may have different column
+names for floor. Check and use exact name:
+
+  // Add this check at module startup
+  const floorColumnName = await db.queryOne(\`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'signs'
+    AND column_name ILIKE ANY(
+      ARRAY['%floor%','%level%','%story%']
+    )
+    LIMIT 1
+  \`);
+  
+  console.log('[EGRESS-GEN] Floor column name:',
+    floorColumnName?.column_name);
+  
+  // Use this exact name in ALL INSERT statements
+  // throughout egress-sign-generator.ts
+
+PART C — Add diagnostic logging before INSERT:
+  console.log('[EGRESS-INSERT]', {
+    signType: signType,
+    roomNumber: roomNumber,
+    floor: floorLabel,        // must not be empty
+    floorIndex: floorIndex,   // must be integer
+    floorLabelType: typeof floorLabel
+  });
+  
+  // Guard: never insert with blank floor
+  if (!floorLabel || floorLabel.trim() === '') {
+    console.error('[EGRESS-INSERT] ⚠️ Blank floor!',
+      { floorIndex, jobId: job.id });
+    floorLabel = \`LEVEL \${floorIndex}\`; // safe fallback
+  }
+
+════════════════════════════════════════════════
+FIX 3 — floorsServed detecting wrong count
+         All building types, all plans
+════════════════════════════════════════════════
+Fox Hill shows 3 floors (should be 2) because
+egress generator rows from previous runs are
+being counted as real floors.
+
+Fix detectFloorCount to exclude egress generator
+rows from the floor count:
+
+  async function detectFloorCount(
+    jobId: string
+  ): Promise<number> {
+    
+    const result = await db.query(\`
+      SELECT COUNT(DISTINCT floor) as floor_count
+      FROM signs
+      WHERE job_id = $1
+      AND floor IS NOT NULL
+      AND floor != ''
+      AND floor ~ '^[A-Za-z\s]*\d+$'
+      AND source != 'rules'
+      AND room_number NOT LIKE 'STAIR-%'
+      AND room_number NOT LIKE 'EXIT-%'
+      AND room_number NOT LIKE 'EVAC-%'
+      AND room_number NOT LIKE 'AOR-%'
+      AND room_number NOT LIKE 'EV-%'
+    \`, [jobId]);
+    
+    const count = parseInt(
+      result.rows[0]?.floor_count
+    ) || 0;
+    
+    console.log('[FLOOR-COUNT]', count, 
+      'floors detected for job', jobId);
+    
+    return count > 0 ? count : 2; // min fallback 2
+  }
+
+This works for ALL building types:
+  Education 2-floor:    returns 2
+  Healthcare 4-floor:   returns 4
+  Hotel 10-floor:       returns 10
+  Residential 6-floor:  returns 6
+  Single-story assembly: returns 1
+  Unknown:              returns detected or 2
+
+════════════════════════════════════════════════
+VERIFY — universal checks for all building types
+════════════════════════════════════════════════
+After fix, force rescan Fox Hill:
+
+Console must show:
+  [FLOOR-COUNT] 2 floors detected
+  [EGRESS-INSERT] { signType: 'Stair (Corridor)',
+    floor: 'LEVEL 1', floorIndex: 1, ... }
+  [EGRESS-INSERT] { signType: 'Stair (Corridor)',
+    floor: 'LEVEL 2', floorIndex: 2, ... }
+  No [EGRESS-INSERT] ⚠️ Blank floor warnings
+
+XLSX Takeoff tab stair rows must show:
+  STAIR-A | Stair A | Stair (Corridor) | LEVEL 1
+  STAIR-A | Stair A | Stair (Landing)  | LEVEL 1
+  STAIR-A | Stair A | Stair (Corridor) | LEVEL 2
+  STAIR-A | Stair A | Stair (Landing)  | LEVEL 2
+  (not blank floor)
+
+Stair count: 4 stairs × 2 floors = 8+8 = 16
+  NOT 4 stairs × 3 floors = 12+12 = 24
+
+Evac map room numbers:
+  EVAC-L1 (not EVAC-LLEVEL 1)
+  EVAC-L2 (not EVAC-LLEVEL 2)
+
+Universal building type checks:
+  Healthcare (4 floors): 
+    floorsServed = 4, stair rows show LEVEL 1-4
+  Hotel (8 floors):
+    floorsServed = 8, stair rows show LEVEL 1-8
+  Single-story assembly:
+    floorsServed = 1, stair rows show LEVEL 1 only
+  Residential (6 floors):
+    floorsServed = 6, evac = EVAC-L1 through EVAC-L6
+
+All 1,461 tests pass.
+Gleason Lib rescan unchanged.

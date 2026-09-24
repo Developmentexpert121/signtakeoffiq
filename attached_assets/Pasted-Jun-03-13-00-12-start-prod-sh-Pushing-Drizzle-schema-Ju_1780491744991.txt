@@ -1,0 +1,134 @@
+Jun 03 13:00:12  [start-prod.sh] Pushing Drizzle schema…
+Jun 03 13:00:13  
+Jun 03 13:00:13  > @workspace/db@0.0.0 push /workspace/lib/db
+Jun 03 13:00:13  > drizzle-kit push --config ./drizzle.config.ts
+Jun 03 13:00:13  
+Jun 03 13:00:14  Reading config file '/workspace/lib/db/drizzle.config.ts'
+Jun 03 13:00:15  Using 'pg' driver for database querying
+Jun 03 13:00:17  [⣷] Pulling schema from database...
+Jun 03 13:00:17  Error: getaddrinfo ENOTFOUND base
+Jun 03 13:00:17      at /workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+Jun 03 13:00:17      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:17      at async Object.query (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+Jun 03 13:00:17      at async fromDatabase2 (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:19276:25) {
+Jun 03 13:00:17    errno: -3008,
+Jun 03 13:00:17    code: 'ENOTFOUND',
+Jun 03 13:00:17    syscall: 'getaddrinfo',
+Jun 03 13:00:17    hostname: 'base'
+Jun 03 13:00:17  }
+Jun 03 13:00:17  [start-prod.sh] Running seeder…
+Jun 03 13:00:17  [seed] Seeding default tenant "Default Workspace" (default)…
+Jun 03 13:00:18  [seed] FAILED: _DrizzleQueryError: Failed query: insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing
+Jun 03 13:00:18  params: default,Default Workspace,default,starter,{}
+Jun 03 13:00:18      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 13:00:18      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18      at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18    query: 'insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing',
+Jun 03 13:00:18    params: [ 'default', 'Default Workspace', 'default', 'starter', '{}' ],
+Jun 03 13:00:18    cause: error: column "signsuiteiq_company_id" of relation "tenants" does not exist
+Jun 03 13:00:18        at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)
+Jun 03 13:00:18        at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18        at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:149:14)
+Jun 03 13:00:18        at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)
+Jun 03 13:00:18        at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18      length: 142,
+Jun 03 13:00:18      severity: 'ERROR',
+Jun 03 13:00:18      code: '42703',
+Jun 03 13:00:18      detail: undefined,
+Jun 03 13:00:18      hint: undefined,
+Jun 03 13:00:18      position: '54',
+Jun 03 13:00:18      internalPosition: undefined,
+Jun 03 13:00:18      internalQuery: undefined,
+Jun 03 13:00:18      where: undefined,
+Jun 03 13:00:18      schema: undefined,
+Jun 03 13:00:18      table: undefined,
+Jun 03 13:00:18      column: undefined,
+Jun 03 13:00:18      dataType: undefined,
+Jun 03 13:00:18      constraint: undefined,
+Jun 03 13:00:18      file: 'parse_target.c',
+Jun 03 13:00:18      line: '1068',
+Jun 03 13:00:18      routine: 'checkInsertTargets'
+Jun 03 13:00:18    }
+Jun 03 13:00:18  }
+Jun 03 13:00:18  [start-prod.sh] WARN: seed failed (continuing).
+Jun 03 13:00:18  [start-prod.sh] pdf-sidecar started (PID: 79) on 8008
+Jun 03 13:00:25  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 13:00:25  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 13:00:25  {"level":30,"time":1780491625305,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","port":8080,"msg":"Server listening"}
+Jun 03 13:00:25  {"level":30,"time":1780491625306,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 13:00:25  {"level":30,"time":1780491625307,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 13:00:25  {"level":30,"time":1780491625542,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 13:00:25  INFO:     Started server process [79]
+Jun 03 13:00:25  INFO:     Waiting for application startup.
+Jun 03 13:00:25  INFO:     Application startup complete.
+Jun 03 13:00:25  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+Jun 03 13:01:19  [start-prod.sh] Pushing Drizzle schema…
+Jun 03 13:01:20  
+Jun 03 13:01:20  > @workspace/db@0.0.0 push /workspace/lib/db
+Jun 03 13:01:20  > drizzle-kit push --config ./drizzle.config.ts
+Jun 03 13:01:20  
+Jun 03 13:01:21  Reading config file '/workspace/lib/db/drizzle.config.ts'
+Jun 03 13:01:22  Using 'pg' driver for database querying
+Jun 03 13:01:24  [⣷] Pulling schema from database...
+Jun 03 13:01:24  Error: getaddrinfo ENOTFOUND base
+Jun 03 13:01:24      at /workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+Jun 03 13:01:24      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:24      at async Object.query (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+Jun 03 13:01:24      at async fromDatabase2 (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:19276:25) {
+Jun 03 13:01:24    errno: -3008,
+Jun 03 13:01:24    code: 'ENOTFOUND',
+Jun 03 13:01:24    syscall: 'getaddrinfo',
+Jun 03 13:01:24    hostname: 'base'
+Jun 03 13:01:24  }
+Jun 03 13:01:24  [start-prod.sh] Running seeder…
+Jun 03 13:01:24  [seed] Seeding default tenant "Default Workspace" (default)…
+Jun 03 13:01:25  [seed] FAILED: _DrizzleQueryError: Failed query: insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing
+Jun 03 13:01:25  params: default,Default Workspace,default,starter,{}
+Jun 03 13:01:25      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 13:01:25      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:25      at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:01:25    query: 'insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing',
+Jun 03 13:01:25    params: [ 'default', 'Default Workspace', 'default', 'starter', '{}' ],
+Jun 03 13:01:25    cause: error: column "signsuiteiq_company_id" of relation "tenants" does not exist
+Jun 03 13:01:25        at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)
+Jun 03 13:01:25        at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:25        at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:149:14)
+Jun 03 13:01:25        at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)
+Jun 03 13:01:25        at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:01:25      length: 142,
+Jun 03 13:01:25      severity: 'ERROR',
+Jun 03 13:01:25      code: '42703',
+Jun 03 13:01:25      detail: undefined,
+Jun 03 13:01:25      hint: undefined,
+Jun 03 13:01:25      position: '54',
+Jun 03 13:01:25      internalPosition: undefined,
+Jun 03 13:01:25      internalQuery: undefined,
+Jun 03 13:01:25      where: undefined,
+Jun 03 13:01:25      schema: undefined,
+Jun 03 13:01:25      table: undefined,
+Jun 03 13:01:25      column: undefined,
+Jun 03 13:01:25      dataType: undefined,
+Jun 03 13:01:25      constraint: undefined,
+Jun 03 13:01:25      file: 'parse_target.c',
+Jun 03 13:01:25      line: '1068',
+Jun 03 13:01:25      routine: 'checkInsertTargets'
+Jun 03 13:01:25    }
+Jun 03 13:01:25  }
+Jun 03 13:01:25  [start-prod.sh] WARN: seed failed (continuing).
+Jun 03 13:01:25  [start-prod.sh] pdf-sidecar started (PID: 79) on 8008
+Jun 03 13:01:31  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 13:01:31  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 13:01:31  {"level":30,"time":1780491691683,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","port":8080,"msg":"Server listening"}
+Jun 03 13:01:31  {"level":30,"time":1780491691686,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 13:01:31  {"level":30,"time":1780491691686,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 13:01:31  {"level":30,"time":1780491691829,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 13:01:32  INFO:     Started server process [79]
+Jun 03 13:01:32  INFO:     Waiting for application startup.
+Jun 03 13:01:32  INFO:     Application startup complete.
+Jun 03 13:01:32  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)

@@ -1,0 +1,138 @@
+In artifacts/api-server/src/lib/pipeline.ts, rewrite the main 
+run() function to enforce the estimator-first pipeline as a 
+strict, ordered sequence. No silent fallbacks. No orphaned 
+functions. Every step must log its start, its result, and its 
+exit condition.
+
+=== CRITICAL REQUIREMENTS ===
+
+1. Every step MUST emit a log line visible in the UI pipeline 
+   log viewer (not just stdout). Use the same logging mechanism 
+   that Steps 1-10 currently use.
+
+2. Step order is LOCKED. No step can be skipped unless its 
+   prerequisite genuinely doesn't exist.
+
+3. If a step fails, LOG THE FAILURE explicitly. Do not silently 
+   fall back to the old pipeline without a loud log entry 
+   explaining why.
+
+4. At the end of run(), emit a PIPELINE SUMMARY block showing 
+   which mode executed (estimator vs rules_engine) and why.
+
+=== ENFORCED PIPELINE SEQUENCE ===
+
+STEP 1 — Reading file manifest (existing)
+STEP 2 — Parsing drawing index (existing, uses new title-block parser)
+STEP 3 — Rasterizing floor plan pages (existing)
+
+STEP 4 — Extracting plaque schedule (existing)
+
+STEP 4b — SHEET RECLASSIFICATION (MUST RUN)
+  Log: "[Step 4b] Reclassifying sheets — scanning N sheets..."
+  For each sheet in job.sheets:
+    Run SIGNAGE_NOTES_DETECT regex on title
+    Run A0.x pattern check on sheet number
+    If match → set sheet.classification = "signage_schedule"
+    Log each match: "[Step 4b] → A0.6 classified as signage_schedule"
+  Log: "[Step 4b] Found N signage notes sheets: [list]"
+
+STEP 5 — Room inventory (existing)
+
+STEP B — PROJECT SIGN DICTIONARY EXTRACTION (MUST RUN IF STEP 4b FOUND ANY)
+  Log: "[Step B] Starting dictionary extraction..."
+  
+  IF no signage_schedule sheets found in Step 4b:
+    Log: "[Step B] SKIPPED — no signage notes sheet in project"
+    Set job.metadata.projectSignDictionary = null
+    Set job.metadata.estimatorModeEligible = false
+    Continue to Step 6
+  
+  ELSE:
+    Check cache: if job.metadata.projectSignDictionary exists 
+    AND not force_fresh → use cached
+    Log: "[Step B] Using cached dictionary" OR "[Step B] Calling Claude..."
+    
+    Send first signage_schedule sheet image to Claude Sonnet
+    Parse JSON response with signTypes, scope, scopeNotes
+    
+    IF Claude call fails:
+      Log: "[Step B] FAILED — Claude error: {error}"
+      Set estimatorModeEligible = false
+      Continue to Step 6
+    
+    IF parsed dictionary has zero signTypes:
+      Log: "[Step B] FAILED — dictionary has no sign types"
+      Set estimatorModeEligible = false
+      Continue to Step 6
+    
+    ELSE:
+      Store projectSignDictionary in job.metadata
+      Set estimatorModeEligible = true
+      Log: "[Step B] Extracted N sign types, scope: {scope}"
+      Log each sign type: "[Step B] → Type A: Girls Toilet (category: restroom)"
+
+STEP 6 — AI vision extraction (existing)
+STEP 7 — Extracting occupant loads (existing)
+STEP 8 — Building room inventory (existing)
+
+STEP 8.5 — ESTIMATOR MODE ROOM ASSIGNMENT (MUST RUN IF ELIGIBLE)
+  Log: "[Step 8.5] Starting estimator mode..."
+  
+  IF job.metadata.estimatorModeEligible !== true:
+    Log: "[Step 8.5] SKIPPED — not eligible (no dictionary)"
+    Set estimatorSignRows = []
+    Continue to Step 9
+  
+  ELSE:
+    Log: "[Step 8.5] Calling Claude with N rooms + M sign types..."
+    
+    For each floor plan sheet, send to Claude with dictionary 
+    and room list, ask for sign assignments per dictionary scope
+    
+    IF Claude call fails on any sheet:
+      Log: "[Step 8.5] Sheet {X} FAILED — {error}"
+      Continue with other sheets
+    
+    Merge all assignments into estimatorSignRows
+    Apply scope filter (if restroom_only, strip non-restroom signs)
+    Log: "[Step 8.5] Generated N sign assignments"
+    Log scope filter: "[Step 8.5] Scope filter: restroom_only → 
+      removed X non-restroom signs"
+
+STEP 9 — SIGN ASSIGNMENT ROUTING (EXPLICIT BRANCHING)
+  Log: "[Step 9] Routing sign assignment..."
+  Log: "[Step 9] estimatorSignRows.length = N"
+  Log: "[Step 9] estimatorModeEligible = {true/false}"
+  
+  IF estimatorSignRows.length > 0:
+    Log: "[Step 9] MODE: estimator — using N estimator rows"
+    signRows = estimatorSignRows
+    Apply training corrections on top (existing behavior)
+  
+  ELSE:
+    Log: "[Step 9] MODE: rules_engine — estimator produced no rows"
+    Run R1-R17 rules engine as before
+
+STEP 10 — Validation (existing)
+
+=== PIPELINE SUMMARY (emit at end of run) ===
+
+Log a final block:
+"[PIPELINE SUMMARY]"
+"  Mode executed: {estimator | rules_engine}"
+"  Reason: {dictionary_found_with_N_types | no_signage_sheet | 
+           dictionary_extraction_failed | estimator_returned_empty}"
+"  Total signs: N"
+"  Scope applied: {restroom_only | full_building | none}"
+"  Signage notes sheet: {A0.6 | NONE}"
+
+=== VERIFICATION REQUIREMENTS ===
+
+After making these changes, do ALL of these:
+
+1. Show me the new run() function — paste the full function body
+2. Confirm Step 4b, Step B, Step 8.5 are called in the run() 
+   function (not just defined elsewhere)
+3. Confirm each step's log lines use the same logging mechanism 
+   that surfaces to the pipeline log UI v

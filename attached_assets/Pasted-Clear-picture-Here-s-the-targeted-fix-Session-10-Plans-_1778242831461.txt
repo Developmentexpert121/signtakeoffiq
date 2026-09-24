@@ -1,0 +1,39 @@
+Clear picture. Here's the targeted fix:
+
+Session 10 — Plans Tab: Filter phantom sheets from dropdown
+One targeted change in artifacts/web/src/components/FloorPlanTab.tsx. Typecheck must pass, 1,727 tests must stay green. Do not rescan any job.
+
+The problem: relevantSheets includes all sheets where isRelevant && rasterizedPath — that's all 27 sheets including the phantom P2/P3 rows which have zero rooms and zero markers. The rasterized path back-fill from earlier made them all appear valid.
+The fix — update the relevantSheets filter at line ~998:
+Find:
+typescriptconst relevantSheets = sheets.filter((s) => s.isRelevant && s.rasterizedPath);
+Replace with:
+typescript// Build a set of sheetIds that have rooms or sign markers
+const sheetIdsWithData = new Set([
+  ...(rooms as { sheetId?: string | null }[])
+    .filter((r) => r.sheetId)
+    .map((r) => r.sheetId!),
+  ...(allSigns as Sign[])
+    .filter((s) => s.sheetId && !s.isDeleted)
+    .map((s) => s.sheetId!),
+]);
+
+const relevantSheets = sheets.filter(
+  (s) =>
+    s.isRelevant &&
+    s.rasterizedPath &&
+    (sheetIdsWithData.has(s.id) || sheetIdsWithData.has(s.sheetId ?? ""))
+);
+This reduces the 27 sheets to only the 9 that have actual rooms or markers — the P2/P3 phantom sheets disappear from the dropdown entirely.
+
+Also fix the default sheet selection — currently defaults to the sheet with the most markers which picks PLAN-0-P1 (garage, 98 rooms but mostly service rooms). Update the tiebreaker in the activeSheet memo to prefer sheets where sheetNumericOrder > 0 over sheets where it equals 0:
+In the sheetsWithMarkers sort, after the existing countDiff and aHasPlan checks, replace:
+typescriptreturn sheetNumericOrder(a) - sheetNumericOrder(b);
+With:
+typescript// Prefer non-zero wing index (skip garage/podium PLAN-0 sheets)
+const aIsZero = sheetNumericOrder(a) === 0 ? 1 : 0;
+const bIsZero = sheetNumericOrder(b) === 0 ? 1 : 0;
+if (aIsZero !== bIsZero) return aIsZero - bIsZero;
+return sheetNumericOrder(a) - sheetNumericOrder(b);
+
+After changes: Run typecheck, confirm 1,727 tests passing. Open Walking Court_2 Plans tab — verify dropdown shows exactly 9 sheets (one per uploaded PDF), defaulting to PLAN-1-P1 or higher wing. Verify Analyze Doors now runs against a sheet that has rooms. Do not rescan any job.

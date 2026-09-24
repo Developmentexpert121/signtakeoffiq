@@ -1,0 +1,73 @@
+Here's Prompt 1:
+
+---
+
+In the training module, add building type, jurisdiction, and accuracy score metadata to every training import. This enables pattern detection by building type in Phase 2.
+
+**Database changes — add 4 columns to `import_snapshots` table:**
+
+In `./lib/db/src/schema/` find the `importSnapshots` table definition and add:
+```ts
+buildingType: text("building_type"),
+jurisdiction: text("jurisdiction"),
+accuracyScore: text("accuracy_score"), // stored as decimal string e.g. "0.9315"
+totalHumanSigns: integer("total_human_signs"),
+```
+
+Generate and run the migration.
+
+**API changes — `training.ts`:**
+
+In the `POST /training/import/confirm` route, calculate and store accuracy score when saving the snapshot:
+
+```ts
+// Accuracy = matchedCount / (matchedCount + aiMissedCount + aiExtraCount)
+// Store as decimal string with 4 decimal places
+const total = resolvedMatchedCount + resolvedAiMissedCount + resolvedAiExtraCount;
+const accuracyScore = total > 0 
+  ? (resolvedMatchedCount / total).toFixed(4) 
+  : null;
+```
+
+Add `buildingType`, `jurisdiction`, `accuracyScore`, and `totalHumanSigns` to the `req.body` destructure and pass them into the `db.insert(importSnapshotsTable)` call.
+
+Also add `accuracyScore`, `buildingType`, `jurisdiction` to the snapshot response in `GET /training/snapshots` and `GET /training/override-impact`.
+
+**UI changes — `training.tsx`:**
+
+In the `ImportTab` upload form, add two new optional fields below the existing "Link to job" and "Takeoff source" selects:
+
+1. **Building Type** dropdown:
+```
+Options: Commercial | Residential | Education | Healthcare | Government | Industrial | Mixed Use | Other
+```
+
+2. **Jurisdiction** text input:
+```
+Placeholder: "e.g. Boston MA, Denver CO"
+Max length: 100
+```
+
+Store both in component state and pass them in the `POST /training/import/confirm` body.
+
+In the **Import Complete** screen, show the accuracy score prominently:
+```
+Accuracy Score: 93.2%
+(matched / total rooms)
+```
+
+Also add accuracy score and building type columns to the Import History table in `ConfidenceTrendChart` / `ImportHistoryTable`.
+
+**Type changes:**
+
+Update `TrainingSnapshot` interface in `./lib/api-zod/src/generated/types/trainingSnapshot.ts` to add:
+```ts
+buildingType?: string | null;
+jurisdiction?: string | null;
+accuracyScore?: number | null;
+totalHumanSigns?: number | null;
+```
+
+After making all changes, test by importing the Park Lane XLSX against the Park Lane job. Expected result: accuracy score shows ~100% (73/73 matched), building type = Education, jurisdiction = Aurora CO.
+
+---

@@ -1,0 +1,204 @@
+Session 1 of 4 — Structured Upload Redesign: UI Only
+What this session does: Replaces the current generic upload area with a three-slot structured upload UI. No pipeline changes. No new API endpoints. The existing auto-classification still runs on scan exactly as today. This is purely a frontend change.
+What won't be affected: pipeline.ts, rules-engine.ts, sidecar, all API routes, all existing jobs, all benchmark results, training module, XLSX export, FloorPlanTab, egress, specialty signs.
+Regression test job: Fox Hill — confirm 193 signs unchanged after UI changes.
+
+Files that change
+
+artifacts/web/src/components/DualZoneUploader.tsx — extend to support a slotMode prop
+artifacts/web/src/pages/job-detail.tsx — replace the overview card upload section (~line 2727) with the new three-slot UI
+artifacts/web/src/lib/buildingTypes.ts — add tooltip guidance content per building type
+New file: artifacts/web/src/components/StructuredUploader.tsx — the three-slot upload component
+
+
+Step 1 — Add tooltip guidance to buildingTypes.ts
+Add a new optional field uploadGuide to BuildingTypeOption:
+typescriptexport interface BuildingTypeOption {
+  value: string;
+  label: string;
+  icon: string;
+  subtitle: string;
+  uploadGuide?: {
+    lookFor: string[];
+    avoid: string[];
+    roomScheduleHint: string;
+    signScheduleHint: string;
+  };
+}
+Add uploadGuide to each building type:
+typescript{ value: "commercial", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx sheets (floor plans)", "Finish schedule if included", "Division 10 14 00 sign specs"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "RCP (reflected ceiling)", "Site plans"],
+    roomScheduleHint: "Look for a sheet labeled 'Finish Schedule' or 'Room Schedule' — usually A-7xx or FS-xxx.",
+    signScheduleHint: "Look for Division 10 14 00 in the spec book, or a sheet labeled 'Signage' or 'SIM'."
+  }
+},
+{ value: "residential", ...,
+  uploadGuide: {
+    lookFor: ["Unit floor plans A-1xx", "Building core and corridor plans", "Amenity floor plans"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "Site plans", "Landscape plans"],
+    roomScheduleHint: "Look for a unit schedule or finish plan listing unit numbers and room names.",
+    signScheduleHint: "Look for Division 10 14 00 in the spec book, or a tenant signage schedule."
+  }
+},
+{ value: "education", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx sheets (e.g. A-101, A-111 — first floor plans)", "A-2xx sheets (second floor)", "A-7xx finish/room schedule (e.g. A-710)"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "RCP (reflected ceiling)", "Site plans"],
+    roomScheduleHint: "Look for a sheet labeled 'Room Finish Schedule' or 'Finish Plan' — usually A-710 or A-711.",
+    signScheduleHint: "Look for Division 10 14 00 in the spec book, or a sheet labeled 'SIM', 'ID', or 'Signage Types'."
+  }
+},
+{ value: "healthcare", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx or FP-1xx floor plans", "Finish schedule A-7xx or FS-xxx", "Division 10 sign specs"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "Medical gas plans", "Equipment plans", "RCP sheets"],
+    roomScheduleHint: "Look for a sheet labeled 'Room Finish Schedule' or 'Interior Finish Plan' — often A-710 or FS-100.",
+    signScheduleHint: "Look for Division 10 14 00 in the spec book. Healthcare projects often have detailed sign type matrices."
+  }
+},
+{ value: "government", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx floor plans", "Finish schedule A-7xx", "Division 10 14 00 sign specs"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "Civil drawings", "Site plans", "RCP sheets"],
+    roomScheduleHint: "Look for a sheet labeled 'Room Finish Schedule' — usually in the A-7xx series.",
+    signScheduleHint: "Look for Division 10 14 00 in the spec book. Government projects often include detailed ADA sign specifications."
+  }
+},
+{ value: "hotel", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx guest floor plans", "Public space floor plans", "Finish schedule if included"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "Kitchen equipment plans", "RCP sheets"],
+    roomScheduleHint: "Look for a room schedule listing guest room numbers and suite types — often in the A-7xx series.",
+    signScheduleHint: "Look for Division 10 14 00 or a brand signage standards document included with the specs."
+  }
+},
+{ value: "assembly", ...,
+  uploadGuide: {
+    lookFor: ["A-1xx floor plans showing seating areas, lobbies, and back-of-house", "Finish schedule if included"],
+    avoid: ["M- (mechanical)", "P- (plumbing)", "E- (electrical)", "S- (structural)", "Acoustic plans", "Lighting plots", "RCP sheets"],
+    roomScheduleHint: "Look for a finish schedule listing room names — often A-7xx or included on the floor plan sheets.",
+    signScheduleHint: "Look for Division 10 14 00 or a wayfinding signage specification in the spec book."
+  }
+},
+{ value: "unknown", ...,
+  uploadGuide: {
+    lookFor: ["Floor plan pages showing rooms with labels", "Any finish or room schedule", "Any sign specification document"],
+    avoid: ["Mechanical, plumbing, electrical, or structural sheets", "Site plans", "Reflected ceiling plans"],
+    roomScheduleHint: "Look for a page with a table listing room numbers and room names.",
+    signScheduleHint: "Look for a page or document describing sign types, materials, or mounting requirements."
+  }
+},
+
+Step 2 — Create StructuredUploader.tsx
+Create artifacts/web/src/components/StructuredUploader.tsx. This component replaces the overview card upload section. It receives the same props as DualZoneUploader plus buildingType and jobId.
+The component renders three slot cards stacked vertically. Each slot card contains:
+
+Slot header with icon, title, and required/optional badge
+Plain English description
+The existing DualZoneUploader component scoped to that slot's fileCategory
+A floor label prompt box (Slot 1 only)
+A dismiss-able yellow warning banner if the slot classifier fires (placeholder for Session 2)
+
+Slot 1 — Floor Plans
+
+Title: "Floor Plans"
+Badge: "Required" (amber)
+Description: "The pages showing the layout of each floor with room names and door locations labeled. These are the bird's-eye view pages."
+fileCategory: "floor_plan"
+Floor label input: small text field below the uploader — label: "What floors does this contain?", placeholder: "e.g. First floor, or Floors 1–3"
+Store floor label in component state, pass to parent via onFloorLabelChange callback
+
+Slot 2 — Room or Finish Schedule
+
+Title: "Room or Finish Schedule"
+Badge: "Recommended" (blue)
+Description: "The page listing all rooms with finish information. Significantly improves room name accuracy. Often labeled A-7xx."
+fileCategory: "room_schedule" — add this as a new accepted value alongside existing categories
+Below the uploader, show the roomScheduleHint from the building type's uploadGuide
+
+Slot 3 — Sign Schedule or Specs
+
+Title: "Sign Schedule or Specs"
+Badge: "Optional" (gray)
+Description: "The sign specification document describing sign types, materials, and mounting requirements. Usually Division 10 14 00 in the spec book."
+fileCategory: "sign_schedule" — already exists in the codebase
+Below the uploader, show the signScheduleHint from the building type's uploadGuide
+
+Building type tooltip ("i" button)
+
+Render a small info icon button at the top of the component, next to a heading: "Upload Construction Documents"
+On click, open a popover (use the existing Popover component from @/components/ui/popover)
+Popover content shows two sections for the selected building type's uploadGuide:
+
+Look for: bulleted list of lookFor items
+Avoid uploading: bulleted list of avoid items
+
+
+If buildingType is not set or has no uploadGuide, show generic text
+
+Progress checklist
+
+Below the three slot cards, show a simple status list:
+
+✅ / ○ Floor plans — shows file count if uploaded, "Not uploaded" if empty
+✅ / ⚠️ Room schedule — shows "Uploaded" or "Not uploaded (recommended)"
+✅ / ○ Sign schedule — shows "Uploaded" or "Not uploaded (optional)"
+
+
+This is read-only display, derived from the files prop filtered by fileCategory
+
+File size warning
+
+When a file is added to any slot, check its size
+Floor plan slot: if over 50MB, show inline warning: "This file is larger than expected for floor plans. If you've uploaded a full permit package, consider uploading only the floor plan pages (typically A-1xx sheets)."
+Schedule slots: if over 20MB, show inline warning: "This file seems large for a schedule document."
+Warning is informational only — does not block upload
+
+
+Step 3 — Update job-detail.tsx
+In the overview card section (~line 2727):
+Replace the existing <DualZoneUploader ... /> call with <StructuredUploader ... />, passing:
+
+jobId={job.id}
+authFetch={authFetch}
+files={jobFiles ?? []}
+canAct={canAct}
+onRefresh={refetchFiles}
+buildingType={job.buildingType ?? ""}
+
+In the Files tab (~line 4326):
+Keep the existing <DualZoneUploader ... /> exactly as-is. The Files tab is the power-user view and stays unchanged. Add "room_schedule" to the existing <SelectItem> list around line 4383:
+tsx<SelectItem value="room_schedule">Room / Finish Schedule</SelectItem>
+Import the new component at the top of job-detail.tsx:
+tsximport { StructuredUploader } from "@/components/StructuredUploader";
+
+Step 4 — Typecheck and tests
+
+Run typecheck: must pass 0 errors
+Run full test suite: must show 1,585 passing
+No rescans needed — this is UI only
+
+
+What Replit should NOT do
+
+Do not change pipeline.ts
+Do not change any API routes
+Do not change the Files tab DualZoneUploader
+Do not add new API endpoints
+Do not change the scan/rescan logic
+Do not change any other component except the four files listed above
+
+
+Definition of done for Session 1
+
+Three-slot upload UI visible in the Overview card on any job detail page
+Building type "i" tooltip opens and shows look-for / avoid lists
+Floor label text input appears below the Floor Plans slot
+Progress checklist shows correct status based on uploaded files
+File size warning appears for oversized uploads
+Files tab unchanged
+Typecheck passes, 1,585 tests passing
+Fox Hill job opens normally, existing signs unaffected
+Sonnet 4.6Claude is AI and can make mistakes. Please double-check responses.

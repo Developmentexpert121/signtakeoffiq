@@ -1,0 +1,166 @@
+Completely rebuild artifacts/api-server/src/lib/rules-engine.ts 
+around the 2010 ADA Standards for Accessible Design 
+Sections 216 and 703. This is the authoritative reference 
+for what signs a sign company fabricates and installs.
+
+CANONICAL SIGN TYPES — replace all existing types with 
+exactly these, sourced directly from ADA §216:
+
+1. Room ID (§216.2)
+   Trigger: ANY permanent interior room with a fixed 
+   function — offices, classrooms, conference rooms, 
+   storage, mechanical, janitor, locker rooms, etc.
+   Standard size: 6" × 6" (tactile + Braille)
+   Mounting: Latch side of door, 60" AFF centerline
+   NOT required: temporary spaces, open areas without 
+   doors, building directories, occupant name signs
+
+2. Restroom (§216.8 + §703.5)
+   Trigger: Any toilet room, bathroom, unisex restroom, 
+   family restroom, shower room
+   Standard size: 6" × 8" (with ISA if accessible)
+   Subtypes: Men, Women, Unisex, Family, Accessible
+   Mounting: Latch side of door, 60" AFF centerline
+
+3. Exit — Tactile (§216.4.1)
+   Trigger: Doors at exit stairways, exit passageways, 
+   exit discharge (NOT illuminated exit lights — 
+   those are electrical work)
+   Standard size: 6" × 8"
+   Mounting: Latch side of door
+
+4. Stair ID — Corridor (§216.4.1 + §703.2)
+   Trigger: Door leading INTO a stairwell from a 
+   corridor — one sign per stair door per floor
+   Standard size: 6" × 8"
+   Content: Stair letter/number (STAIR A, STAIR 1)
+
+5. Stair ID — Landing (§216.4.1 + §703.2)
+   Trigger: Inside stairwell at each floor landing
+   Standard size: 6" × 8" or 6" × 12"
+   Content: Floor level + stair designation
+   Rule: One per floor level per stair
+
+6. Elevator — Hoistway (§216.4.4 + Chapter 4)
+   Trigger: Each elevator entrance on each floor
+   Standard size: 4" × 6" (floor designation)
+   Content: Floor number in tactile + Braille + star 
+   at main entry level
+   Rule: One sign per elevator per floor
+
+7. Elevator Machine Room (§216.2)
+   Trigger: Room labeled ELEVATOR MACHINE, ELEV MACH, 
+   MACHINE ROOM adjacent to elevator
+   Standard size: 6" × 6"
+
+8. Accessible Entrance (§216.6)
+   Trigger: Only when NOT all entrances are accessible
+   — identifies which entrance IS accessible
+   Standard size: 6" × 8" with ISA symbol
+   Rule: Only assign if plan shows accessibility 
+   limitations on other entrances
+
+9. Area of Refuge (§216.4.2)
+   Trigger: Rooms designated as Area of Refuge on plans
+   Standard size: 6" × 8"
+   Keywords: AREA OF REFUGE, REFUGE AREA
+
+10. Evacuation Map (§216.4.3)
+    Trigger: Required at exits and areas of refuge
+    Standard size: 8.5" × 11" minimum frame
+    Rule: One per floor at primary exit locations
+    NOT one per room — typically 1-3 per floor
+
+11. Accessible Parking (§216.5)
+    Trigger: Accessible parking spaces on site plans
+    Standard size: Per local code
+    Only on exterior/site plan sheets
+
+12. Office Directory (§216.3 visual only)
+    Trigger: Multi-tenant buildings, building lobbies
+    Standard size: Custom
+    Rule: One per building entry lobby
+    Only assign when building has multiple tenants 
+    or suites visible on plans
+
+13. Unit ID (Residential §216.2)
+    Trigger: ONLY residential/multifamily/hotel buildings
+    Building types: residential, multifamily, 
+    senior_living, hotel, dormitory
+    Standard size: 4" × 6" or 6" × 6"
+    Rule: One per unit entrance door
+
+EXPLICITLY REMOVED — never assign these:
+- Fire Extinguisher signs (hardware, not sign company)
+- Maximum Occupancy (owner-posted, not fabricated)
+- Fire Exit (illuminated — electrical work)
+- No Smoking (regulatory, not sign company)
+- In Case of Fire (informational poster, not ADA)
+- Equipment labels
+- Any OCR garbage types (Room S-1, B1b, Room w/no storage)
+- Any unrecognized type not in the list above
+
+ROOM CLASSIFICATION RULES (based on ADA §216.2):
+Map detected room names to sign types using these rules:
+
+RESTROOM keywords (→ Restroom sign):
+TOILET, RESTROOM, BATHROOM, LAVATORY, WC, 
+UNISEX, MENS, WOMENS, MEN, WOMEN, BOYS, GIRLS,
+SHOWER, LOCKER ROOM, CHANGING ROOM, FAMILY BATH,
+NURSING ROOM, MOTHERS ROOM
+
+STAIR keywords (→ Stair Corridor + Stair Landing):
+STAIR, STAIRS, STAIRWAY, STAIRWELL, EGRESS STAIR,
+EXIT STAIR, FIRE STAIR, ST-1, ST-2, STAIR A, STAIR B
+
+ELEVATOR keywords (→ Elevator):
+ELEVATOR, LIFT, ELEV, EL-1, EL-2
+
+ELEVATOR MACHINE keywords:
+ELEVATOR MACHINE, ELEV MACH, MACHINE ROOM, ELEV MR
+
+AREA OF REFUGE keywords:
+AREA OF REFUGE, REFUGE, AOR
+
+LOBBY/DIRECTORY candidates (→ Office Directory 
+only in multi-tenant buildings):
+LOBBY, MAIN LOBBY, BUILDING LOBBY, ENTRY LOBBY
+
+ALL OTHER ENCLOSED ROOMS (→ Room ID):
+Any room with a door that doesn't match above keywords
+INCLUDING: office, conference, storage, mechanical, 
+electrical, janitor, closet, classroom, lab, kitchen,
+break room, mail room, copy room, server room, etc.
+
+EXCLUDED from Room ID (no sign needed):
+Open areas without doors, corridors, hallways, 
+exterior spaces, parking areas, loading docks
+
+ADA STANDARD SIZES (show as default in UI):
+Room ID: 6" × 6"
+Restroom: 6" × 8"  
+Exit Tactile: 6" × 8"
+Stair Corridor: 6" × 8"
+Stair Landing: 6" × 12"
+Elevator: 4" × 6"
+Area of Refuge: 6" × 8"
+Evacuation Map: Frame only (8.5" × 11" insert)
+
+These sizes should appear as defaults in the 
+Dimensions column of the sign table and XLSX export.
+Show as italic/gray if inferred, bold if from schedule.
+
+CONFIDENCE SCORING:
+- Room name exactly matches keyword → 95% confidence
+- Room name contains keyword → 85% confidence  
+- Room type inferred from context → 70% confidence
+- AI vision only → 60% confidence
+
+Log at end of rules engine:
+"ADA §216 rules applied: 
+ Room ID: X rooms
+ Restroom: X rooms  
+ Exit: X doors
+ Stair Corridor: X / Stair Landing: X
+ Elevator: X
+ Total: X signs"

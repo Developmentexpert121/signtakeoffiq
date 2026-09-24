@@ -1,0 +1,87 @@
+Fix the Google Drive download in lib/googleDriveDownload.ts. The current implementation silently downloads Google's HTML confirmation page instead of the actual PDF for files over ~25MB.
+Replace the entire downloadFromGoogleDrive function body with this corrected version:
+tsexport async function downloadFromGoogleDrive(
+  shareUrl: string,
+): Promise<{ buffer: Buffer; filename: string; contentType: string; sizeBytes: number }> {
+  const fileId = extractDriveFileId(shareUrl);
+  if (!fileId) throw new Error("Invalid Google Drive URL — could not extract file ID");
+
+  const fetchWithHeaders = (url: string) => fetch(url, {
+    redirect: "follow",
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SignTakeoffIQ/1.0)" },
+  });
+
+  // Attempt 1: direct download
+  let response = await fetchWithHeaders(
+    `https://drive.google.com/uc?export=download&id=${fileId}`
+  );
+
+  // If Google returned HTML it needs confirmation
+  if ((response.headers.get("content-type") ?? "").includes("text/html")) {
+    const html = await response.text();
+
+    if (html.includes("accounts.google.com") || html.includes("Sign in")) {
+      throw new Error(
+        "File is not publicly accessible. In Google Drive click Share → change to 'Anyone with the link can view' → copy link."
+      );
+    }
+
+    // Try newer usercontent API first (works for most large files)
+    response = await fetchWithHeaders(
+      `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0&confirm=t`
+    );
+
+    // If still HTML, try extracting legacy confirm token
+    if ((response.headers.get("content-type") ?? "").includes("text/html")) {
+      const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/) 
+        ?? html.match(/name="confirm" value="([^"]+)"/);
+      if (confirmMatch) {
+        response = await fetchWithHeaders(
+          `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${confirmMatch[1]}`
+        );
+      }
+    }
+
+    // If still HTML after all attempts, give up
+    if ((response.headers.get("content-type") ?? "").includes("text/html")) {
+      throw new Error(
+        "Could not download from Google Drive. Ensure the file is shared as 'Anyone with the link can view' and try again."
+      );
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(`Google Drive download failed: ${response.status} ${response.statusText}`);
+  }
+
+  const finalContentType = response.headers.get("content-type") ?? "application/octet-stream";
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filenameMatch = disposition.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/i);
+  const filename = filenameMatch?.[1]?.trim() ?? `drive-file-${fileId}.pdf`;
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  // Reject suspiciously small files — real PDFs are never under 10KB
+  if (buffer.length < 10_000) {
+    throw new Error(
+      "Downloaded file is too small to be a valid PDF. Check that the link points to a PDF and sharing is set to public."
+    );
+  }
+
+  // Validate PDF magic bytes
+  if (!buffer.slice(0, 4).toString("ascii").startsWith("%PDF")) {
+    throw new Error(
+      "Downloaded file is not a valid PDF. Make sure the Google Drive link points directly to a PDF file."
+    );
+  }
+
+  console.log(`[googleDrive] Downloaded: ${filename} — ${(buffer.length / 1024 / 1024).toFixed(1)}MB`);
+
+  return { buffer, filename, contentType: finalContentType, sizeBytes: buffer.length };
+}
+Also update POST /training/import/drive in training.ts to include sizeBytes and sizeMB in the response.
+In training.tsx, update the Drive success state message to show the file size:
+✓ Downloaded successfully (12.4 MB)
+Store the size in component state and display it below the Drive link input when driveStatus === "success".
+After saving, test with a real PDF shared publicly on Google Drive and confirm the server log shows the correct file size.

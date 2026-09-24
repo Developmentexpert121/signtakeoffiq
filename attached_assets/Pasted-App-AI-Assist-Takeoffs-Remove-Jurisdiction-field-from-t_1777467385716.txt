@@ -1,0 +1,95 @@
+App: AI-Assist Takeoffs
+
+Remove Jurisdiction field from the new job 
+creation form and job details display.
+
+════════════════════════════════════════════════
+CHANGES NEEDED
+════════════════════════════════════════════════
+
+1. New job creation form:
+   Remove the Jurisdiction input field entirely.
+   It is causing user confusion and the rules
+   engine does not use it for any calculations.
+
+2. Job Details section (Overview tab):
+   Remove Jurisdiction from the 4-field grid:
+   Current:  Location | Jurisdiction | Building Type | Scope
+   Updated:  Location | Building Type | Scope
+   Or rearrange to fill the space cleanly.
+
+3. Database:
+   Keep the jurisdiction column — do NOT drop it.
+   It may be used in the future for state-specific
+   code variations (MA 521 CMR vs California, etc).
+   Just hide it from the UI for now.
+
+4. API:
+   Keep jurisdiction in the job schema.
+   Just don't expose it in the create/edit form.
+   Default value = null when not provided.
+
+════════════════════════════════════════════════
+ALSO FIX — Double scan on new job creation
+════════════════════════════════════════════════
+A new job is triggering the pipeline twice.
+Find and fix the double-trigger:
+
+Search for all places that call startPipeline,
+runPipeline, triggerScan, or equivalent:
+
+  grep -n "startPipeline\|runPipeline\|triggerScan\
+  \|autoScan\|auto_scan\|onMount.*scan\
+  \|useEffect.*rescan\|status.*pending.*scan\
+  \|createJob.*then.*scan\|job.*created.*scan" \
+    artifacts/web/src/pages/job-detail.tsx \
+    artifacts/api-server/src/routes/jobs.ts \
+    artifacts/api-server/src/routes/pipeline.ts \
+    2>/dev/null
+
+Fix: pipeline should only start when the user
+explicitly clicks Process or Rescan.
+It should NEVER auto-start from:
+  - Job creation callback
+  - Page load / useEffect
+  - Status polling detecting 'pending' state
+  - File upload completion
+
+The ONLY valid triggers for pipeline start:
+  1. User clicks "Process" button (new job)
+  2. User clicks "Rescan" button (existing job)
+  3. User clicks "Retry" button (failed job)
+
+Add a guard at the pipeline entry point:
+  if (!req.body.userInitiated) {
+    console.error('[PIPELINE] Blocked auto-start',
+      'for job', jobId);
+    return res.status(400).json({
+      error: 'Pipeline must be user-initiated'
+    });
+  }
+
+And in the frontend, ensure the Process/Rescan/
+Retry buttons all pass userInitiated: true
+in their API payload.
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Create new Fox Hill job:
+   - Jurisdiction field NOT visible in form
+   - Job Details shows: Location | Building Type | Scope
+   - No Jurisdiction shown
+
+2. Upload PDF — pipeline does NOT start automatically
+
+3. Click Process — pipeline starts ONCE
+   - Console shows ONE pipeline start log
+   - NOT two overlapping pipeline runs
+   - Step 2 runs once, completes, moves to Step 3
+
+4. Existing jobs (Gleason Lib, old Fox Hill):
+   - Jurisdiction field hidden in Overview
+   - All other fields unchanged
+
+All 1,461 tests pass.

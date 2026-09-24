@@ -1,0 +1,49 @@
+Send this to Replit:
+
+Two actions — in this exact order:
+Action 1 — Restart the sidecar immediately:
+The PDF sidecar on port 8008 is down. Restart it now. Confirm it returns {"status":"ok"} before proceeding.
+Action 2 — Fix Step 4d clearing scheduleSignRows incorrectly (pipeline.ts ~line 6947):
+The issue: TYPE_CODE_RE = /^[A-Z][0-9]?[A-Z]?[0-9]?$/i matches "R9", "R11", "R13", "R16" which are valid sign type codes in the Walking Court schedule — not type definitions. Step 4d incorrectly classifies these as type-definition entries, clears scheduleSignRows, and rebuilds it wrong.
+Fix — add a guard to skip Step 4d when a dedicated sign schedule file is present:
+typescript// Step 4d should only run when there is NO dedicated sign schedule file
+// and type definitions need to be inferred from a combined document.
+// When a dedicated sign schedule exists (like AA831), the schedule entries
+// are already correctly populated in scheduleSignRows — Step 4d must not clear them.
+if (dedicatedSignScheduleFiles.length > 0) {
+  logger.log(
+    `[Step 4d] SKIPPED — dedicated sign schedule file present ` +
+    `(${dedicatedSignScheduleFiles.length} file(s)). ` +
+    `scheduleSignRows preserved: ${scheduleSignRows.length} entries`
+  );
+} else if (typeDefEntries.length > 0 && roomRecords.length > 0) {
+  // existing Step 4d logic unchanged
+  if (expandedScheduleRows.length > 0) {
+    const step4bRealRows = scheduleSignRows.filter(r => {
+      const isTypeDef = TYPE_CODE_RE.test(r.signType) && !r.message?.match(/\b[A-Z]?\d{2,4}\b/);
+      return !isTypeDef;
+    });
+    scheduleSignRows.length = 0;
+    scheduleSignRows.push(...step4bRealRows, ...expandedScheduleRows);
+  }
+}
+This preserves scheduleSignRows intact when a dedicated sign schedule file (AA831) is present. Step 4d only runs when there's no dedicated file and type codes need to be inferred from a combined document — which is the Fox Hill scenario.
+Log the guard firing:
+typescriptlogger.log(
+  `[Step 4d] SKIPPED — scheduleSignRows preserved with ${scheduleSignRows.length} entries`
+);
+
+After fix:
+
+Typecheck 0 errors
+Tests 1,461 passing
+Confirm sidecar is healthy
+Rescan Walking Court_2 — watch for:
+
+[Step 4d] SKIPPED — dedicated sign schedule file present
+scheduleSignRows preserved: ~392 entries
+Schedule signs inserted: ~200+ in Step 9
+Total signs: ~240-260
+
+
+Fox Hill does NOT need rescan — this guard only fires when dedicatedSignScheduleFiles.length > 0, and Fox Hill uses a combined document not a dedicated file

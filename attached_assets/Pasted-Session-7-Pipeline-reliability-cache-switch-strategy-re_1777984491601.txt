@@ -1,0 +1,101 @@
+Session 7 — Pipeline reliability: cache switch, strategy resolver, scheduleFirstMode fix
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — 4 targeted changes
+artifacts/api-server/.env / Replit Secrets — 1 new variable
+
+Files that will NOT change:
+
+Schema, routes, UI, sidecar, exports — nothing else touches
+
+Regression jobs:
+
+Fox Hill job_a81ec18d15cec938 — must stay 185-215
+Walking Court_2 — must produce 320-380 with scheduleFirstMode active
+
+
+Change 1 — Dev/Prod cache switch
+At line ~1847, immediately after the ENABLE_TWO_PASS constant, add:
+typescript// PIPELINE_CACHE_ENABLED=false → always fresh (dev mode)
+// PIPELINE_CACHE_ENABLED=true  → reuse cached AI scans (prod mode, saves cost)
+const CACHE_ENABLED = process.env.PIPELINE_CACHE_ENABLED === "true";
+if (!CACHE_ENABLED) {
+  logger.log("[pipeline] Cache DISABLED (dev mode) — all sheets will run fresh AI scans");
+}
+At line ~4287, in the Step 3 cache check, change the condition that decides whether to reuse cached rooms:
+typescript// Before:
+const priorAiVisionRooms = options?.forceAiRescan
+  ? []
+  : (priorAiVisionBySheetKey.get(sheetKey) ?? []);
+
+// After:
+const priorAiVisionRooms = (options?.forceAiRescan || !CACHE_ENABLED)
+  ? []
+  : (priorAiVisionBySheetKey.get(sheetKey) ?? []);
+This single change makes every rescan behave like Force Full Re-process when PIPELINE_CACHE_ENABLED=false — no checkbox needed, no stale data ever.
+In Replit Secrets panel, add:
+PIPELINE_CACHE_ENABLED=false
+
+Change 2 — Strategy resolver
+After buildingType is read from the job record at line ~2016, add the strategy resolver immediately after:
+typescripttype PipelineStrategy =
+  | "schedule_primary"    // 100+ schedule entries — trust the schedule
+  | "floor_plan_primary"  // no schedule — full vision + rules engine
+  | "hybrid"              // schedule exists but < 100 entries — blend both
+  | "egress_only";        // no usable floor plan files
+
+function resolveStrategy(
+  btKey: string | null,
+  scheduleLength: number,
+  floorPlanFileCount: number
+): PipelineStrategy {
+  if (scheduleLength >= 100) return "schedule_primary";
+  if (floorPlanFileCount === 0) return "egress_only";
+  if (scheduleLength > 0) return "hybrid";
+  return "floor_plan_primary";
+}
+Call it right after files are loaded (after floorPlanFiles is built, before Step 2):
+typescript// Strategy is resolved once and never changes during the run
+const pipelineStrategy = resolveStrategy(
+  job.buildingType ?? null,
+  signSchedule.length,
+  floorPlanFiles.length
+);
+logger.log(
+  `[pipeline] Strategy: ${pipelineStrategy} — ` +
+  `buildingType=${job.buildingType}, ` +
+  `scheduleRows=${signSchedule.length}, ` +
+  `floorPlanFiles=${floorPlanFiles.length}`
+);
+Important: resolveStrategy is called after Step 3a (sign schedule extraction) which populates signSchedule. The call site must be after Step 3a completes but before Step 9. Check where signSchedule is first populated and place the resolver call immediately after that.
+
+Change 3 — scheduleFirstMode derives from strategy
+At line ~6854, replace the current scheduleFirstMode assignment:
+typescript// Before:
+const scheduleFirstMode =
+  hasScheduleImport &&
+  signSchedule.length >= SCHEDULE_FIRST_THRESHOLD;
+
+// After:
+const scheduleFirstMode = pipelineStrategy === "schedule_primary";
+Remove SCHEDULE_FIRST_THRESHOLD constant — it's no longer needed, the threshold lives in resolveStrategy() now.
+Also update skipRulesForSchedule which references scheduleFirstMode — confirm it still reads correctly with the new assignment. No logic change needed there, just confirm it compiles.
+
+Change 4 — Strategy-aware Step 3 logging
+In the Step 3 vision loop, add a one-time log before the batch loop starts:
+typescriptlogger.log(
+  `[pipeline] Step 3: strategy=${pipelineStrategy} — ` +
+  `${floorPlanSheets.length} sheets to process, ` +
+  `cache=${CACHE_ENABLED ? "enabled" : "disabled"}`
+);
+This gives a clear picture of what every scan is doing at the start of the most expensive step.
+
+After all 4 changes
+
+Typecheck — 0 errors
+Tests — 1,461 passing
+Confirm PIPELINE_CACHE_ENABLED=false is set in Replit Secrets
+Rescan Fox Hill job_a81ec18d15cec938 — confirm fresh scan (all sheets show "fresh AI scan" in Step 6), confirm 185-215 signs, confirm strategy logs floor_plan_primary
+Rescan Walking Court_2 — confirm strategy logs schedule_primary, confirm scheduleFirstMode=true fires, confirm sign count 320-380, confirm Levels 4-6 balanced
+
+Do not rescan any other jobs until both benchmarks pass.

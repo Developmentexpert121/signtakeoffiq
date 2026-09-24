@@ -1,0 +1,41 @@
+Fix two issues with training context and sign type assignment:
+Fix 1 — Rule overrides not being applied in Step 9:
+In pipeline.ts Step 9, after applyRules() runs, add a second pass that applies training corrections from training_corrections table. For each room in the results:
+ts// After rules engine runs, apply training corrections
+const corrections = await db.select()
+  .from(trainingCorrectionsTable)
+  .where(and(
+    eq(trainingCorrectionsTable.tenantId, tenantId),
+    eq(trainingCorrectionsTable.isActive, true),
+  ));
+
+// Build lookup map by room name pattern
+const correctionMap = new Map<string, string>();
+for (const c of corrections) {
+  if (c.roomNamePattern && c.signType) {
+    correctionMap.set(c.roomNamePattern.toLowerCase(), c.signType);
+  }
+}
+
+// Apply corrections to sign rows
+for (const signRow of signRows) {
+  const room = roomRecords.find(r => r.id === signRow.roomId);
+  if (!room) continue;
+  const correctedType = correctionMap.get(room.roomName.toLowerCase());
+  if (correctedType) {
+    signRow.signType = correctedType;
+    signRow.confidence = "0.95"; // high confidence for trained corrections
+    signRow.source = "training_correction";
+  }
+}
+Fix 2 — "Other" building type falls through rules engine:
+In rules-engine.ts, find the detectBuildingType function. When building type resolves to "Other" or null, default to "commercial" rules profile instead of returning empty results. Add:
+tsif (!resolvedType || resolvedType === "other") {
+  return "commercial"; // fallback to commercial rules
+}
+Fix 3 — Log training corrections applied:
+In pipeline.ts after applying corrections, add:
+tsconst correctionCount = signRows.filter(s => s.source === "training_correction").length;
+logger.log(`[pipeline] Applied ${correctionCount} training corrections to sign rows`);
+After saving, rescan Cambridge Moses with Force Fresh AI Scan and check Sign Table — rooms should now show sign types from training corrections (Type A for BOILER ROOM, Type A for KITCHEN etc.) and total signs should increase toward the ground truth of 63.
+Sonnet 4.6

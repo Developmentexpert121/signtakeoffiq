@@ -1,0 +1,100 @@
+In artifacts/api-server/src/lib/pipeline.ts, restructure the 
+sign takeoff pipeline to work the way a human estimator reads 
+plans. This is a significant refactor — implement it as a new 
+mode called "estimator_mode" that runs before the existing 
+rules engine, falling back to the current flow if any step fails.
+
+=== STEP A: Find the Signage Notes Sheet ===
+
+Before doing any room extraction, scan all PDF pages for sheets 
+with these title indicators (case insensitive):
+- "SIGNAGE" and "NOTES"
+- "SIGN SCHEDULE"  
+- "SIGN TYPES"
+- Sheet numbers starting with "A0." where title contains "SIGN"
+- "GENERAL NOTES" sheets if they contain sign type definitions
+
+If found, flag it as signageNotesSheet and prioritize reading it 
+first. If no signage notes sheet exists, skip to Step D (current 
+flow).
+
+=== STEP B: Extract Sign Type Dictionary ===
+
+Send the signage notes sheet to Claude with this prompt:
+
+"You are a sign estimator reading a signage notes sheet. Extract:
+
+1. All sign types defined (e.g., Sign Type A, Type B, Type 1, etc.)
+2. What each sign type is used for (toilet, room ID, exit, etc.)
+3. Any placement rules ('above door', 'latch side', '60 inches AFF')
+4. Any scope limitations ('contractor to provide signage for new 
+   work only', 'restroom renovations only', etc.)
+5. Sign dimensions if listed
+
+Return as structured JSON:
+{
+  signTypes: [
+    { code: 'A', name: 'Toilet Sign - Girls', placement: '...', 
+      dimensions: '...', category: 'restroom' },
+    ...
+  ],
+  scope: 'restroom_only' | 'full_building' | 'partial' | 'unknown',
+  scopeNotes: 'string describing limitations',
+  roomLabel: 'ROOM #' | 'ROOM NAME' | 'both'
+}"
+
+Store this as projectSignDictionary on the job.
+
+=== STEP C: Constrain Pipeline to Project Dictionary ===
+
+When projectSignDictionary exists:
+- ONLY assign sign types defined in the dictionary
+- Apply scope filter — if scope is "restroom_only", skip Room ID, 
+  Exit, Stair, Elevator, Evacuation Map assignments entirely
+- Use the dictionary's category mapping to match rooms to sign types
+  (e.g., any room named "GIRLS TOILET" → Type A from dictionary)
+- Log: "Using project dictionary: [N] sign types, scope: [scope]"
+
+=== STEP D: Estimator-Style Room Reading ===
+
+For each floor plan sheet, send to Claude with this prompt:
+
+"You are a sign estimator. You have this project sign dictionary:
+[inject projectSignDictionary]
+
+For this floor plan, identify every room that needs a sign per 
+the dictionary. Walk the plan systematically:
+- Read every labeled room/space
+- Match room function to the appropriate sign type from the dictionary
+- Note the room number and name exactly as shown
+- Skip rooms that don't need signs per the project scope
+- For each sign, return: room_number, room_name, sign_type_code, 
+  level, confidence (0-1), reasoning
+
+Return as JSON array of sign assignments."
+
+=== STEP E: Validation & Deduplication ===
+
+- Merge Claude's assignments with any existing rules_engine output
+- Training corrections still take priority (existing behavior)
+- Deduplicate by room_number + sign_type
+- Flag low-confidence assignments (<0.7) for review
+- If total signs assigned is wildly different from room count 
+  (e.g., 3x more or less), log a warning
+
+=== STEP F: Logging ===
+
+Add these log lines so we can debug:
+- "Signage notes sheet: [sheet_name or NONE]"
+- "Project dictionary extracted: [N] sign types, scope: [scope]"
+- "Estimator mode: [N] signs assigned, [N] low confidence"
+- "Fallback to rules engine: [reason]" if estimator mode fails
+
+=== IMPORTANT ===
+
+- Do NOT remove the existing rules engine. This is additive.
+- If Step A finds no notes sheet OR Step B returns empty dictionary 
+  OR Step D fails → fall back to existing pipeline
+- Cost control: cache projectSignDictionary on the job so re-scans 
+  don't re-read the notes sheet unless forced fresh
+- Use claude-sonnet-4-6 for Steps B and D (not Opus) for cost

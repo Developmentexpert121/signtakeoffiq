@@ -1,0 +1,295 @@
+App: AI-Assist Takeoffs
+CRITICAL: Applies to ALL building types, ALL firms,
+ALL plan sets. Never miss a relevant sheet again.
+
+════════════════════════════════════════════════
+THE PROBLEM
+════════════════════════════════════════════════
+Fox Hill: 6 pages, pipeline reads only 3.
+Missing: page 4 (floor plan), pages 5-6 (details).
+
+Root cause: sheet detection uses loose keyword
+matching that both MISSES relevant sheets AND
+INCLUDES irrelevant ones (plumbing, structural).
+
+Previous projects had same issue:
+- Novo Riverside Commons: drain/plumbing sheets 
+  classified as floor plans
+- Brighton Willow Bend: only 1 of 3 sheets read
+- Fox Hill: 3 of 6 sheets read
+
+════════════════════════════════════════════════
+FIX — Complete sheet detection rewrite
+       3-pass approach for 100% coverage
+════════════════════════════════════════════════
+Replace current sheet classifier with a 3-pass
+system that reads the DRAWING INDEX first, then
+validates every page, then classifies each one.
+
+In pipeline.ts sheet detection step:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS 1 — Read the drawing index / cover sheet
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Every professional plan set has a sheet index
+on the cover sheet or first page listing ALL
+sheets with their numbers and titles.
+
+Send page 1 to Gemini with this prompt:
+"""
+Read this architectural drawing cover sheet or
+sheet index. Extract every sheet listed.
+
+Return ONLY valid JSON:
+{
+  "sheets": [
+    {
+      "sheet_number": "3.9.51",
+      "title": "Signage Plan - First Floor Academic Wing",
+      "page": 1
+    }
+  ],
+  "total_sheets": 6
+}
+
+If this is not a sheet index page, return:
+{ "sheets": [], "is_index": false }
+"""
+
+If index found → use it as the master sheet list.
+If not found → fall back to Pass 2.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS 2 — Read title block of EVERY page
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each page in the PDF, extract the title block
+(bottom-right corner) to get sheet number + title.
+
+Use pdfplumber text extraction (fast, no AI cost):
+  for each page:
+    text = extract bottom 15% + right 20%
+    sheet_number = find pattern like "3.9.51" or
+                   "A-101" or "S-1" in text
+    title = find ALL-CAPS line near sheet number
+
+This runs on ALL pages without AI cost.
+Build complete sheet inventory: 
+  [(page_num, sheet_number, title), ...]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS 3 — Classify each sheet by type
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each sheet from Pass 1 or 2, classify into
+one of these types using BOTH sheet number prefix
+AND title keywords:
+
+SHEET_CLASSIFICATION = {
+
+  FLOOR_PLAN: {
+    number_prefixes: ['A-1', 'A1', 'FP', 'L1',
+      'G-1', 'GS-', 'WD-', 'SD-', 'S-'],
+    title_keywords: [
+      'floor plan', 'floorplan',
+      'signage plan',          # Fox Hill: 3.9.51
+      'sign plan',
+      'first floor', 'second floor', 'third floor',
+      'fourth floor', 'fifth floor',
+      'ground floor', 'basement', 'mezzanine',
+      'level 1', 'level 2', 'level 3', 'level 4',
+      'level 5', 'level b', 'level p',
+      'academic wing', 'community wing',  # multi-wing
+      'north wing', 'south wing', 
+      'east wing', 'west wing',
+      'tower', 'podium',      # hotel/commercial
+      'partial plan', 'enlarged plan',
+      'overall plan',
+    ],
+    title_exclusions: [        # NEVER a floor plan
+      'drain', 'slope', 'plumbing', 'piping',
+      'mechanical', 'hvac', 'electrical', 'lighting',
+      'structural', 'framing', 'foundation',
+      'roof plan', 'reflected ceiling',
+      'site plan', 'civil', 'landscape',
+      'detail', 'section', 'elevation',
+      'schedule', 'legend only',
+    ]
+  },
+
+  SIGN_DETAILS: {
+    number_prefixes: ['3.9.5', 'ID-', 'WD-7',
+      'A-8', 'A-9', 'INT-'],
+    title_keywords: [
+      'signage detail', 'sign detail',
+      'signing detail', 'sign schedule',
+      'plaque schedule', 'plaque detail',
+      'sign type', 'sign legend',
+      'mounting detail', 'mounting height',
+      'interior signage', 'wayfinding detail',
+      'door hardware', 'door schedule',  # has sign info
+    ]
+  },
+
+  SPECIALTY_SIGNAGE: {
+    number_prefixes: ['3.9.5', 'GS-', 'ID-9'],
+    title_keywords: [
+      'wallcovering', 'wall covering',
+      'wall graphic', 'mural', 'art',
+      'interpretive', 'leed sign',
+      'exterior sign', 'site sign',
+      'monument sign', 'dimensional letter',
+      'channel letter', 'blade sign',
+      'enlarged signage', 'signage enlarged',
+      'trailhead', 'kiosk',
+      'donor', 'recognition wall',
+    ]
+  },
+
+  EGRESS: {
+    number_prefixes: ['A-0', 'G-0', 'E-0'],
+    title_keywords: [
+      'egress', 'life safety', 'occupant load',
+      'fire protection', 'exit', 'means of egress',
+    ]
+  },
+
+  SKIP: {
+    // These are never relevant — skip entirely
+    title_keywords: [
+      'plumbing', 'drain', 'mechanical', 'hvac',
+      'electrical', 'lighting', 'power plan',
+      'structural', 'framing', 'foundation',
+      'civil', 'grading', 'utility',
+      'landscape', 'irrigation',
+      'reflected ceiling', 'rcp',
+      'roof', 'exterior elevation',
+      'building section', 'wall section',
+      'detail only', 'specifications',
+    ]
+  }
+}
+
+Classification logic:
+  1. Check title against SKIP keywords first
+     → if match: skip this sheet entirely
+  2. Check title against FLOOR_PLAN keywords
+     AND not in title_exclusions
+     → if match: FLOOR_PLAN
+  3. Check title against SIGN_DETAILS keywords
+     → if match: SIGN_DETAILS
+  4. Check title against SPECIALTY_SIGNAGE
+     → if match: SPECIALTY_SIGNAGE
+  5. Check title against EGRESS
+     → if match: EGRESS
+  6. No match → send to Gemini for classification
+     (fallback for unusual naming)
+
+════════════════════════════════════════════════
+PROCESSING per sheet type
+════════════════════════════════════════════════
+
+FLOOR_PLAN sheets:
+  → Room extraction (existing pipeline)
+  → Marker placement on floor plan image
+  → Assign to correct floor via title parsing
+
+SIGN_DETAILS sheets:
+  → Extract plaque types, sizes, mounting heights
+  → Store in sign_details table
+  → Show in Review tab "Detail Sheets" section
+  → Include in Specialty Signs XLSX tab (no pricing)
+
+SPECIALTY_SIGNAGE sheets:
+  → Extract specialty items with quantities
+  → Store in specialty_signs table
+  → Show in Review tab "Specialty Signs" section
+  → Include in Specialty Signs XLSX tab (no pricing)
+
+EGRESS sheets:
+  → Extract occupant loads table
+  → Use to set occupant_load per room
+  → Feed into isAssembly flag and Max Occupancy rule
+
+SKIP sheets:
+  → Log: "Skipped: [sheet] - [reason]"
+  → Do NOT process
+  → Do NOT show in Plans tab
+
+════════════════════════════════════════════════
+PIPELINE LOG — show full sheet inventory
+════════════════════════════════════════════════
+After sheet classification, log ALL sheets found:
+
+  "Sheet inventory (6 total):
+   ✅ p1: 3.9.51 — First Floor Academic Wing [FLOOR_PLAN]
+   ✅ p2: 3.9.52 — First Floor Community Wing [FLOOR_PLAN]
+   ✅ p3: 3.9.53 — Second Floor Academic Wing [FLOOR_PLAN]
+   ✅ p4: 3.9.54 — Second Floor Community Wing [FLOOR_PLAN]
+   ✅ p5: 3.9.55 — Signage Details [SIGN_DETAILS]
+   ✅ p6: 3.9.56 — Enlarged Wallcoverings [SPECIALTY]
+   
+   Processing: 4 floor plans, 1 detail, 1 specialty
+   Skipping: 0 sheets"
+
+Show this in the Overview pipeline log so users
+can verify all sheets were found and classified.
+
+════════════════════════════════════════════════
+REAL-WORLD SHEET NAMING — must handle all of these
+════════════════════════════════════════════════
+Firms we've processed and their conventions:
+
+DiNisco Design (Fox Hill, Gleason Lib):
+  Sheet numbers: 3.9.51, 3.9.52, 3.9.53, 3.9.54
+  Titles: "Signage Plan - First Floor Academic Wing"
+  Detail: 3.9.55 "Signage Details"
+  Specialty: 3.9.56 "Enlarged Wallcoverings & Signage"
+
+Hord Coplan Macht (Brighton Willow Bend):
+  Sheet: A-111 "First Floor Overall"
+  Non-standard sheet number for signage plan
+
+Park Lane Elementary:
+  Sheet: A1.1 "Signage Plan"
+
+Cohasset Public Safety:
+  Standard A-series with dedicated signage sheets
+
+Generic / unknown firms:
+  A-101, A-102: floor plans
+  A-801, A-802: interior elevations with signs
+  A-901: signage details
+  10-14-00: spec section sometimes has schedules
+
+The 3-pass system handles ALL of these because:
+  Pass 1: reads the index if present
+  Pass 2: reads every title block
+  Pass 3: classifies by BOTH number AND title
+  Fallback: Gemini classifies unknown sheets
+
+════════════════════════════════════════════════
+VERIFY — test on Fox Hill force rescan
+════════════════════════════════════════════════
+Pipeline log must show:
+  "Sheet inventory (6 total)"
+  All 6 sheets listed with correct classification
+  4 FLOOR_PLAN, 1 SIGN_DETAILS, 1 SPECIALTY
+  0 sheets skipped
+
+Overview:
+  AI Cost > $0.00 (4 floor plans re-extracted)
+  Total Signs: 210-230
+  
+XLSX:
+  Takeoff tab: rooms from all 4 floor plan sheets
+  Specialty tab: ~25-30 items from pages 5-6
+
+Plans tab:
+  LEVEL 1 tab: markers from sheets 3.9.51+3.9.52
+  LEVEL 2 tab: markers from sheets 3.9.53+3.9.54
+  NO LEVEL 3 tab
+
+Test on Gleason Lib after Fox Hill:
+  Its sheet set should also be fully classified
+  No regression in existing sign counts
+
+All 1,461 tests pass.

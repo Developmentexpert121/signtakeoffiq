@@ -1,0 +1,223 @@
+App: AI-Assist Takeoffs
+Surgical fix — lines 3636-3648 in pipeline.ts.
+Applies to ALL building types, ALL plan sets.
+
+════════════════════════════════════════════════
+THE EXACT BUG — lines 3636-3648 pipeline.ts
+════════════════════════════════════════════════
+Current code bulk-overwrites ALL rooms on a sheet
+with Claude's detected floorLevel, destroying the
+correct room-number inference from Pass 0.
+
+Fox Hill example:
+  Pass 0: W206 → inferLevelFromRoomNumber → 
+    "Level 2" ✓ CORRECT
+  Lines 3636-3648: Claude reads "LEVEL 1" from
+    sign legend on sheet 3.9.53 → overwrites
+    ALL rooms including W206 → "LEVEL 1" ✗ WRONG
+
+The sign legend on sheet 3.9.53 contains text
+"LEVEL 1" (from the legend callouts) which
+Gemini misreads as the sheet's floor level.
+This happens on DiNisco plans and will happen
+on ANY plan where legends contain floor references.
+
+════════════════════════════════════════════════
+FIX — Lines 3636-3648: respect Pass 0 inference
+       Never overwrite room-number-inferred level
+════════════════════════════════════════════════
+Find lines 3636-3648 in pipeline.ts.
+
+CURRENT CODE (do not keep this):
+  if (extractedFloorLevel) {
+    for (const room of extractedRooms) {
+      if (room.sheetDbId === sheet.id) {
+        room.level = extractedFloorLevel; // ← kills Pass 0
+      }
+    }
+  } else {
+    const fallbackLevel = parseLevelFromContext(
+      sheet.level ?? null, 
+      sheet.sheetTitle ?? null
+      // ← no roomNumber, can't do Pass 0
+    );
+    if (fallbackLevel) {
+      for (const room of extractedRooms) {
+        if (room.sheetDbId === sheet.id) {
+          room.level = fallbackLevel; // ← also kills Pass 0
+        }
+      }
+    }
+  }
+
+REPLACEMENT CODE:
+  // Determine sheet-level fallback
+  // (used ONLY when room-number inference fails)
+  const sheetLevelFallback = extractedFloorLevel
+    || parseLevelFromContext(
+         sheet.level ?? null,
+         sheet.sheetTitle ?? null
+         // no roomNumber — sheet-level only
+       )
+    || null;
+
+  for (const room of extractedRooms) {
+    if (room.sheetDbId !== sheet.id) continue;
+    
+    // Check if Pass 0 already set a confident level
+    // via room number inference
+    const passZeroLevel = inferLevelFromRoomNumber(
+      room.roomNumber ?? ''
+    );
+    
+    if (passZeroLevel) {
+      // Pass 0 has a definitive answer from the
+      // room number — NEVER overwrite this
+      // W2xx → Level 2, E2xx → Level 2 etc.
+      room.level = passZeroLevel;
+      console.log('[LEVEL-FIX] Room', 
+        room.roomNumber,
+        'kept Pass 0 level:', passZeroLevel,
+        '(ignored sheet level:', 
+        sheetLevelFallback, ')');
+    } else {
+      // No room-number inference available
+      // Use sheet-level fallback
+      if (sheetLevelFallback) {
+        room.level = sheetLevelFallback;
+      }
+      // If still no level, leave as-is from Pass 0
+    }
+  }
+
+════════════════════════════════════════════════
+ALSO FIX — sheet_cache floor_label not set
+           on fresh scans (new jobs)
+════════════════════════════════════════════════
+Query 3 shows: new job sheets 3.9.51 and 3.9.52
+have floor_label = null. Only sheets 3.9.53-54
+have floor_label (wrongly set to LEVEL 1).
+
+The sheet_cache floor_label must be set when
+sheets are classified, not just for some sheets.
+
+Find where sheet_cache rows are created/updated
+and ensure floor_label is always written:
+
+  // When saving sheet to cache:
+  const floorLabel = 
+    inferFloorFromSheetTitle(sheet.sheetTitle) ||
+    inferFloorFromSheetNumber(sheet.sheetNumber) ||
+    null;
+    
+  await db.query(\`
+    UPDATE sheet_cache SET
+      floor_label = $1,
+      sheet_type = $2,
+      sheet_title = $3
+    WHERE id = $4
+  \`, [floorLabel, sheet.sheetType, 
+      sheet.sheetTitle, sheet.id]);
+
+  console.log('[SHEET-CACHE] Sheet', 
+    sheet.sheetNumber,
+    'floor_label set to:', floorLabel);
+
+For DiNisco sheets specifically:
+  3.9.51 title "TOILET ROOM SIGN..." — garbled OCR
+  3.9.52 title "TOILET ROOM SIGN..." — garbled OCR
+  These titles are wrong — OCR is reading from the
+  legend area not the title block.
+  
+  Use sheet NUMBER to infer floor as fallback:
+  
+  function inferFloorFromSheetNumber(num) {
+    if (!num) return null;
+    // DiNisco: 3.9.51, 3.9.52 = L1
+    //          3.9.53, 3.9.54 = L2
+    // Pattern: last digit pair indicates floor
+    // This is firm-specific — use as last resort
+    
+    // Generic: look for floor digit in sheet number
+    // A-101, A-102 = Floor 1
+    // A-201, A-202 = Floor 2
+    const floorMatch = num.match(
+      /[A-Z]-?([1-9])\d{2}/
+    );
+    if (floorMatch) {
+      return \`LEVEL \${floorMatch[1]}\`;
+    }
+    return null;
+  }
+
+════════════════════════════════════════════════
+ALSO FIX — sheet title OCR reading wrong area
+════════════════════════════════════════════════
+sheet_title shows "TOILET ROOM SIGN..." for
+sheets 3.9.51 and 3.9.52 — this is OCR reading
+from the sign legend area, not the title block.
+
+The title block is bottom-RIGHT corner.
+The sign legend is bottom-LEFT corner.
+
+In the title block extraction, restrict the
+region to ONLY the bottom-right:
+  x: 65%-100% of page width  (right 35%)
+  y: 80%-100% of page height (bottom 20%)
+
+This avoids reading the legend area entirely
+on DiNisco and similar plan formats.
+
+════════════════════════════════════════════════
+VERIFY — ALL building types, ALL plan formats
+════════════════════════════════════════════════
+After fix, fresh scan ANY plan:
+
+CONSOLE must show for Fox Hill:
+  [LEVEL-FIX] Room W206 kept Pass 0 level: 
+    Level 2 (ignored sheet level: LEVEL 1)
+  [LEVEL-FIX] Room W207 kept Pass 0 level: 
+    Level 2 (ignored sheet level: LEVEL 1)
+  [LEVEL-FIX] Room E200 kept Pass 0 level: 
+    Level 2 (ignored sheet level: LEVEL 1)
+  (for all W2xx and E2xx rooms)
+
+  [LEVEL-FIX] Room W100 kept Pass 0 level:
+    Level 1 (sheet level also LEVEL 1 — agrees)
+
+DB query after fix:
+  SELECT floor_label, COUNT(*) FROM signs
+  WHERE job_id = <fox_hill_id>
+  GROUP BY floor_label;
+  
+  Expected:
+    LEVEL 1 | ~55  (W1xx + E1xx rooms)
+    LEVEL 2 | ~45  (W2xx + E2xx rooms)
+    (blank) | ~45  (egress generator rules rows)
+
+Fox Hill sign totals:
+  Room ID + w/Insert: 95-120 (up from 56)
+  Stair Corridor: 8  (4 stairs × 2 floors)
+  Stair Landing:  8  (4 stairs × 2 floors)
+  Exit: 12+
+  Evac Maps: 4  (2 per floor × 2 floors)
+  Max Occupancy: 6+
+  Total: 185-215
+
+UNIVERSAL — plans where Pass 0 has no inference:
+  If room number has no floor indicator
+  (e.g. plain "101", "202", "303"):
+  → inferLevelFromRoomNumber returns null
+  → sheet-level fallback applies correctly
+  → no regression on non-education plans
+
+UNIVERSAL — plans where sheet title is correct:
+  If title block reads correctly (non-DiNisco)
+  → sheetLevelFallback is correct
+  → Pass 0 override still applies for room numbers
+    that explicitly indicate a floor
+  → no regression
+
+All 1,461 tests pass.
+Gleason Lib rescan: floor fields populated,
+sign count unchanged.

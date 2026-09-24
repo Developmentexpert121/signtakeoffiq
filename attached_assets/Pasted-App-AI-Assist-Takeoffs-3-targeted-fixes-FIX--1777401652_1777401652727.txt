@@ -1,0 +1,139 @@
+App: AI-Assist Takeoffs — 3 targeted fixes
+
+════════════════════════════════════════════════
+FIX 1 — Stair generator: fix stairCount=1 default
+════════════════════════════════════════════════
+In egress-sign-generator.ts, the detectStairCores
+function returns 0 results so falls back to 
+default — but the default is firing as 1 instead
+of the profile value.
+
+Find this logic and fix:
+
+  const stairCount = extractedStairs.length > 0
+    ? detectedCount
+    : profile.stair_count_default;  // must be 4 for education
+
+Also fix floorsServed — it's resolving to 1:
+
+  const floorsServed = job.floor_count 
+    || detectFloorCount(job)  // count distinct floor values in signs table
+    || profile.floors_default 
+    || 2;                     // absolute fallback
+
+Add detectFloorCount helper:
+  SELECT COUNT(DISTINCT floor) FROM signs
+  WHERE job_id = $1
+  AND floor IS NOT NULL
+  AND floor != ''
+
+For Fox Hill this should return 2 (LEVEL 1, LEVEL 2).
+
+Also fix: stair signs being inserted with blank
+room_number and floor. The insert must use the
+computed stairLabel and floorKey values:
+
+  room_number: \`STAIR-\${stairLabel}\`,   // 'STAIR-A'
+  floor: \`LEVEL \${f}\`,                  // 'LEVEL 1'
+
+Verify these are not being overwritten with
+empty strings before insert.
+
+Expected after fix:
+  Stair (Corridor): 8  (4 stairs × 2 floors)
+  Stair (Landing):  8  (4 stairs × 2 floors)
+
+════════════════════════════════════════════════
+FIX 2 — Count dropped 177→127: cache mismatch
+════════════════════════════════════════════════
+50 rooms disappeared because 2 sheets are cached
+from before the new pipeline and 2 are fresh.
+The cached sheets have different room data than
+what the new extraction produces — they're
+incompatible.
+
+Fix: when ANY pipeline change affects room
+extraction logic (semantic mapper, egress
+generator, validation filters), invalidate
+ALL sheet caches for ALL jobs on next rescan.
+
+Add a pipeline_version field to the jobs table
+and sheet_cache table:
+  ALTER TABLE sheet_cache ADD COLUMN IF NOT EXISTS
+    pipeline_version VARCHAR DEFAULT '1.0';
+
+Set current version to '2.0' in config.
+On rescan: if sheet_cache.pipeline_version != 
+current version → treat as cache miss, re-extract.
+
+For Fox Hill immediately: manually delete all
+cached sheets for this job so next rescan
+re-extracts all 4 sheets fresh:
+
+  DELETE FROM sheet_cache 
+  WHERE job_id = (
+    SELECT id FROM jobs WHERE name ILIKE '%fox hill%'
+  );
+
+Then force rescan with Force full re-process checked.
+
+════════════════════════════════════════════════
+FIX 3 — Wrong sign types: MECHANICAL→Exit,
+         WORKSHOP LAUNDRY→Elevator
+════════════════════════════════════════════════
+The egress generator cleanup (removing Exit from
+non-stair rooms) is running but room-name-based
+assignments are happening AFTER the cleanup.
+
+Fix the order of operations in pipeline.ts:
+
+  1. Room extraction + semantic mapping
+  2. Room ID sign assignment (R1-R10)  ← rules engine
+  3. Egress sign generator             ← generates stair/exit/evac
+  4. Cleanup: remove Exit from rooms   ← must run LAST
+     where source != 'rules'
+
+The cleanup query must run as the FINAL step:
+  DELETE FROM signs
+  WHERE job_id = $1
+  AND sign_type = 'Exit'
+  AND room_number NOT LIKE 'EXIT-%'
+  AND room_number NOT LIKE 'STAIR-%';
+
+  DELETE FROM signs  
+  WHERE job_id = $1
+  AND sign_type = 'Elevator'
+  AND room_name NOT ILIKE '%ELEV%'
+  AND room_name NOT ILIKE '%ELEVATOR%'
+  AND room_number NOT LIKE 'EV%';
+
+Also fix MECHANICAL getting Exit:
+In the rules engine, isMepUnoccupied rooms
+must NEVER get Exit, Elevator, or Evac Map.
+Add explicit guard:
+
+  if (flags.isMepUnoccupied) {
+    // Only assign Room ID, nothing else
+    return [{ signType: 'Room ID', rule: 'R6' }];
+  }
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+After all 3 fixes, force rescan Fox Hill with
+Force full re-process checked:
+
+  Room ID:           ~55-65
+  Room ID w/Insert:  ~45-55
+  Restroom:          ~15-20
+  Stair (Corridor):   8  ← must be 8 not 1
+  Stair (Landing):    8  ← must be 8 not 1
+  Exit:              12  (stair doors + exterior)
+  Max Occupancy:      6+ (keep current 9)
+  Evacuation Map:     4  (keep current 3, add 1)
+  Office Directory:   9  (unchanged)
+  Elevator:           2  (unchanged)
+  Total:           ~175-195
+
+No rooms with blank floor or room_number.
+All 1,461 tests pass.

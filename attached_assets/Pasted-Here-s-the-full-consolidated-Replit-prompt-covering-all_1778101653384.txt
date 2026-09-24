@@ -1,0 +1,37 @@
+Here's the full consolidated Replit prompt covering all four changes:
+
+Session 9 — P2b: Plans Tab Visual Layer
+All changes are in artifacts/web/src/components/FloorPlanTab.tsx only. No schema, no pipeline, no exports touched. Typecheck must pass, 1,501 API + 124 web tests must stay green. Do not rescan any job.
+
+Change 1 — Filter signs by selected floor level
+Find where filteredSheetSigns is constructed. Add a filter: when selectedLevel is not null and not ALL_SHEETS, only include signs where sign.floorLabel === selectedLevel. Signs with null floorLabel always show regardless of selected level.
+
+Change 2 — Convert hover tooltip to click popover
+The existing hover tooltip on each marker uses group-hover:flex. Convert it to a persistent popover that opens on click using the existing selectedSignId / selectedSignData state and existing handleMarkerClick handler.
+Popover content:
+
+Room number + room name as bold header
+Sign type
+Quantity
+Dimensions (if present)
+Confidence % — green if ≥80%, amber if 60–79%, gray if <60%
+Floor label
+Source badge: schedule | rules_engine | ai_vision
+"Analyze Doors" button — amber outline style, disabled, tooltip text: "Coming in next update" — placeholder only, no handler
+
+Check if Popover / PopoverContent / PopoverTrigger are already imported in FloorPlanTab.tsx — add the import if not present.
+
+Change 3 — Wire the unlocated signs sidebar
+The sidebar shell exists at line 1951. Wire it to show signs where getSignEffectivePos(sign, rooms) === null, filtered to the current selectedLevel. Each entry shows: MapPin icon with ? badge, room number, room name, sign type. Show count in the sidebar header as Unlocated (n). If zero unlocated signs, show a green checkmark and the text "All signs placed.".
+
+Change 4 — Floor selector persistence
+When the user switches tabs away from Plans and back, selectedLevel should restore to the last selected value. Use localStorage keyed to floor-plan-level-${jobId}. Initialize selectedLevel from localStorage on mount, persist to localStorage on every change. Follow the exact same pattern as the existing confidenceSortDir localStorage implementation in job-detail.tsx.
+
+After all changes: Run typecheck, confirm 1,501 API + 124 web tests passing. Open Walking Court_2 on the Plans tab and verify:
+
+Level filter reduces visible marker count correctly per floor
+Clicking a marker opens the popover with Analyze Doors button visible
+Unlocated sidebar shows count or green all-placed state
+Switching tabs and returning restores the previously selected floor level
+
+Do not rescan any job.

@@ -1,0 +1,83 @@
+Fix — Door proximity offset for marker placement. pipeline.ts only. Typecheck + full test suite after.
+What's broken: Room markers sit at room label center. Should be offset 20% toward nearest corridor so they appear near the door.
+What will change: One new function + one DB query + one apply block in pipeline.ts. Nothing else touched.
+Will NOT affect: Fox Hill sign counts, any other job data, rules engine.
+Add this function near the coordinate utility functions:
+typescriptfunction applyDoorProximityOffset(
+  roomCoordX: number,
+  roomCoordY: number,
+  corridorRooms: Array<{ coordX: number | null; coordY: number | null }>,
+  offsetFraction = 0.20
+): { x: number; y: number } {
+  if (corridorRooms.length === 0) {
+    return { x: roomCoordX, y: roomCoordY };
+  }
+  let nearestCorridor: { coordX: number; coordY: number } | null = null;
+  let minDistance = Infinity;
+  for (const corridor of corridorRooms) {
+    if (!corridor.coordX || !corridor.coordY) continue;
+    const dx = corridor.coordX - roomCoordX;
+    const dy = corridor.coordY - roomCoordY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < minDistance && distance < 30_000) {
+      minDistance = distance;
+      nearestCorridor = { 
+        coordX: corridor.coordX, 
+        coordY: corridor.coordY 
+      };
+    }
+  }
+  if (!nearestCorridor) {
+    return { x: roomCoordX, y: roomCoordY };
+  }
+  const offsetX = Math.round(
+    roomCoordX + 
+    (nearestCorridor.coordX - roomCoordX) * offsetFraction
+  );
+  const offsetY = Math.round(
+    roomCoordY + 
+    (nearestCorridor.coordY - roomCoordY) * offsetFraction
+  );
+  return {
+    x: Math.max(1_000, Math.min(99_000, offsetX)),
+    y: Math.max(1_000, Math.min(99_000, offsetY)),
+  };
+}
+Find the sign push loop (around line 5932 where signRows.push(...) happens). Before the loop, add a query to get corridor rooms:
+typescript// Query corridor rooms for door proximity offset
+const allRoomsForJob = await db.select({
+  id: roomsTable.id,
+  sheetId: roomsTable.sheetId,
+  coordX: roomsTable.coordX,
+  coordY: roomsTable.coordY,
+  isCorridorOrHall: roomsTable.isCorridorOrHall,
+}).from(roomsTable)
+  .where(eq(roomsTable.jobId, jobId));
+Inside the sign push loop, after markerX/markerY are assigned, add:
+typescript// Apply door proximity offset for room-linked signs
+if (
+  signRow.markerX != null &&
+  signRow.markerY != null &&
+  signRow.roomId != null
+) {
+  const corridorRoomsForSheet = allRoomsForJob.filter(r =>
+    r.sheetId === signRow.sheetId &&
+    r.isCorridorOrHall === true &&
+    r.coordX != null &&
+    r.coordY != null
+  );
+  const offset = applyDoorProximityOffset(
+    signRow.markerX,
+    signRow.markerY,
+    corridorRoomsForSheet
+  );
+  signRow.markerX = offset.x;
+  signRow.markerY = offset.y;
+}
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm 1,585 tests passing
+If any tests fail — fix them before finishing
+Do NOT rescan — report clean tests and stop

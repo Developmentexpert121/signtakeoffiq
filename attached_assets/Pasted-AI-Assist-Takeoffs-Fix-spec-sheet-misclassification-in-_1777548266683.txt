@@ -1,0 +1,36 @@
+AI-Assist Takeoffs — Fix spec sheet misclassification in pipeline.ts. No rescans. Typecheck after.
+Context: The A-series fallback at priority 8 in classifySheetStep2 catches any sheet whose ID matches /^A[-.]?\d/ and classifies it as interior. This is too broad — it catches finish schedules, detail sheets, and spec sheets that happen to have A-series IDs.
+Fix 1 — Add finish/spec sheet titles to SKIP_TITLE_KW
+Add these strings to the existing SKIP_TITLE_KW array:
+typescript"FINISH SCHEDULE",
+"MATERIAL SCHEDULE", 
+"FURNITURE SCHEDULE",
+"EQUIPMENT SCHEDULE",
+"FIXTURE SCHEDULE",
+"LIGHTING SCHEDULE",
+"HARDWARE SCHEDULE",
+"INTERIOR FINISH",
+"FINISH LEGEND",
+"MATERIAL LEGEND",
+"KEYNOTE LEGEND",
+"KEYNOTE SCHEDULE",
+These title patterns appear on spec sheets across all building types and should never be treated as floor plans.
+Fix 2 — Tighten the A-series fallback (priority 8)
+The current catch-all:
+typescript// Priority 8 — too broad
+if (/^A[-.]?\d/.test(sheetId)) return "interior";
+Change to only match sheets whose ID follows standard architectural floor plan numbering — A1.x, A2.x, A3.x (floor plans), not A-200, A-400 (which are detail/spec sheet conventions in many firms):
+typescript// Priority 8 — tightened: only A1.x, A2.x, A3.x series
+if (/^A[123][-.]/.test(sheetId)) return "interior";
+This keeps Fox Hill (no A-series), Tower District (A1.1-A1.4 ✅), and Gibson Lib working while stopping BA's A-200/A-400 detail sheets from being misclassified as floor plans.
+Fix 3 — Add "DETAIL" sheet ID suffix to skip logic
+Many firms suffix detail sheets with -D or DT. Add to SKIP_PREFIXES:
+typescript// Already: /^(E|M|P|S|C|FP|MP|SP|LS)[-.\s\d]/i
+// Add interior detail sheet patterns:
+/^A[-.]?[4-9]\d{2}/i   // A-400, A-500, A-600 series = detail sheets in most firms
+Rules:
+
+pipeline.ts only — the 5 classification constants only
+No changes to extraction logic, rules engine, or egress generator
+Typecheck must pass clean
+Test mentally against: Fox Hill (3.9.51 series) ✅, Tower District (A1.1-A1.4) ✅, Gibson Lib ✅, British Airways (A-200/A-400 filtered) ✅

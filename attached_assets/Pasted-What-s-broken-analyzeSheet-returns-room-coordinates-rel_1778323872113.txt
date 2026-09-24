@@ -1,0 +1,70 @@
+What's broken: analyzeSheet() returns room coordinates relative to the full rasterized image including title block, construction notes, and sidebar. The floor plan drawing occupies only a portion of the image — so markers land in the title block area instead of on the actual rooms.
+What changes: pipeline.ts only — analyzeSheet() Gemini prompt and coordinate conversion. No other files touched.
+The fix — two-pass Gemini prompt:
+Replace the current single prompt with a two-pass approach in one Gemini call using a structured prompt:
+You are analyzing a floor plan image. Complete two tasks:
+
+TASK 1 — Find the drawing boundary:
+Identify the bounding box of the actual floor plan drawing area, 
+excluding title blocks, construction notes, legend boxes, north arrows, 
+and any text-heavy sidebar panels.
+Return as:
+{
+  "drawingBounds": {
+    "x1_pct": 0.05,
+    "y1_pct": 0.12,
+    "x2_pct": 0.78,
+    "y2_pct": 0.88
+  }
+}
+Where x1/y1 is top-left corner and x2/y2 is bottom-right corner 
+of the drawing area, as fractions of the full image dimensions.
+
+TASK 2 — Find room door positions:
+Within the drawing area identified above, locate each visible room 
+label and return the position of its door opening.
+Return coordinates as fractions of the FULL IMAGE (not the drawing 
+area) so they can be directly converted to the 0–100,000 grid.
+
+Return a single JSON object only — no markdown, no explanation:
+{
+  "drawingBounds": {
+    "x1_pct": 0.05,
+    "y1_pct": 0.12, 
+    "x2_pct": 0.78,
+    "y2_pct": 0.88
+  },
+  "rooms": [
+    {
+      "roomNumber": "A215",
+      "door_x_pct": 0.312,
+      "door_y_pct": 0.461,
+      "door_side": "left",
+      "door_type": "hinged",
+      "confidence": 0.95
+    }
+  ]
+}
+
+Rules:
+- roomNumber exactly as printed (A215, B209, CORRIDOR, 60.1.128)
+- door_x_pct / door_y_pct relative to FULL IMAGE dimensions
+- door position = the door opening on the wall, not room center
+- Only include rooms with clearly readable labels inside the drawing bounds
+- Omit rooms with confidence below 0.7
+Coordinate conversion — unchanged:
+typescriptconst coordX = Math.round(result.door_x_pct * 100000)
+const coordY = Math.round(result.door_y_pct * 100000)
+JSON parsing update:
+typescript// Parse new response shape
+const parsed = JSON.parse(cleaned)
+const rooms = Array.isArray(parsed) ? parsed : parsed.rooms ?? []
+const drawingBounds = parsed.drawingBounds ?? null
+
+// Log drawing bounds for debugging
+console.log('[analyzeSheet] drawingBounds:', JSON.stringify(drawingBounds))
+console.log('[analyzeSheet] Gemini returned', rooms.length, 'rooms')
+The drawingBounds is extracted and logged but not used in coordinate math — coordinates are still full-image fractions, so no conversion needed. The bounds are purely for Gemini's own spatial reasoning to exclude the title block when searching for rooms.
+What won't change: Pass 1 match/reroute logic, Pass 2 create logic, Pass 3 door metadata write, Fox Hill early exit, all other files.
+Regression test: Fox Hill — click Analyze Sheet, early exit fires, 0 signs placed, no Gemini call. Walking Court PLAN-3-P1 — click Analyze Sheet — markers should appear on the unit doors inside the drawing area, not in the title block. Log should show drawingBounds with x2_pct around 0.75–0.80 confirming Gemini identified the title block boundary.
+1,570 API + 156 web tests must pass. Typecheck 0 errors. Do NOT rescan any job.

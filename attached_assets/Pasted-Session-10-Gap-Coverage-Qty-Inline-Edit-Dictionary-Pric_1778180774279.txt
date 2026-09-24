@@ -1,0 +1,42 @@
+Session 10 — Gap Coverage: Qty Inline Edit, Dictionary Pricing, Plans Tab Fixes
+Add tests across two files. Do not modify any existing test files. Typecheck must pass. Target: 1,704 → ~1,740+ tests. Do not rescan any job.
+
+New tests in artifacts/api-server/src/routes/rooms.test.ts
+Add a new describe block: "PATCH /rooms/:roomId — qtyOverride". Cover:
+
+Valid qtyOverride: 3 updates all non-deleted signs for the room to qty = 3
+qtyOverride: 0 is valid — sets qty to zero
+qtyOverride: -1 returns 400
+qtyOverride: 1.5 (non-integer) returns 400
+qtyOverride without any other field satisfies the hasUpdate gate — does not return 400
+Deleted signs (isDeleted = true) are not affected by qtyOverride
+Does not trigger regenSignsForRoom — sign types unchanged after qty override
+
+
+New tests in artifacts/api-server/src/__tests__/exports-pricing.test.ts
+Add a new describe block: "Dictionary pricing — P3". Cover:
+
+When projectSignDictionary has a matching typeCode, material from dictionary overrides DEFAULT_SIGN_PRICING
+When dictionary has a size string "6x6", parsed width/height used for unit price calculation
+Size string "6 x 6" (spaces) parses correctly
+Size string "6X6" (uppercase X) parses correctly
+Malformed size string (no dimensions) falls back to DEFAULT_SIGN_PRICING dimensions
+Job with no projectSignDictionary in metadata falls through to default pricing unchanged
+description column populated from dictEntry.description when present
+description column is empty string when no dictionary entry matches
+
+
+New tests in artifacts/web/src/components/FloorPlanTab.test.tsx
+Add a new describe block: "Plans tab fixes (Session 10)". Cover:
+
+When filteredSheetSigns is empty, room list falls back to filteredAllPlacedSigns for the selected level — Level 2 shows rooms even with no placed markers
+Wing tab label uses sheetId when sheetTitle values are identical across sheets
+"Analyze Doors" button is present in the toolbar when a specific sheet is active
+"Analyze Doors" button is not present when showing all sheets (showingAllSheets = true)
+Clicking "Analyze Doors" calls POST /api/jobs/:jobId/sheets/:sheetId/detect-doors
+Loading spinner shown on button while request is in flight
+Success toast fires after door analysis completes
+Error toast fires on failed request
+
+
+After all tests: Run full test suite — paste complete count breakdown by file. Typecheck must pass. Do not rescan any job.

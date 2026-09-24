@@ -1,0 +1,230 @@
+Fix: Floor Plan Viewer — Better readability and layout
+Goals
+Make the floor plan viewer fill the screen properly, auto-fit at a higher zoom, show larger markers with room labels, and display a proper legend like the marked-up PDF export.
+
+
+Change 1 — Remove the 1.5x cap on auto-fit zoom
+In artifacts/web/src/components/UnifiedPlanViewer.tsx, find this line (appears twice — in the image onLoad handler and in the FIT button handler):
+
+const fit = Math.min(1.5, Math.max(0.3, Math.min(fitW, fitH)));
+
+Change BOTH occurrences to remove the 1.5 cap:
+
+const fit = Math.min(4.0, Math.max(0.3, Math.min(fitW, fitH)));
+
+This allows the plan to fill the available space at whatever scale is needed rather than being locked to a maximum 150% zoom.
+
+
+Change 2 — Make the viewer container fill the full available height
+In artifacts/web/src/pages/JobDetails.tsx, find where the Floor Plans tab renders:
+
+) : activeTab === "floorplans" ? (
+
+  <div className="flex-1 min-h-0">
+
+    <UnifiedPlanViewer
+
+Make sure the container uses the full height with no padding eating into it:
+
+) : activeTab === "floorplans" ? (
+
+  <div className="flex-1 min-h-0 overflow-hidden">
+
+    <UnifiedPlanViewer
+
+
+Change 3 — Larger markers with room label text
+In artifacts/web/src/components/UnifiedPlanViewer.tsx, find where the marker dot radius is set. Look for:
+
+const dotR = ...
+
+or look for the circle radius assignment near where cx and cy are used. Find the marker size calculation and increase it:
+
+// Find something like:
+
+const dotR = m.isCurrent ? 8 : 6;
+
+// Or a fixed radius like r={6} or r={dotR}
+
+// Change to make markers larger and more visible:
+
+const dotR = m.isCurrent ? 10 : 8;
+
+Also find where the room label text is rendered (the <text> element near each marker). It will look something like:
+
+<text x={cx} y={cy - dotR - 7} textAnchor="middle" fill={...} fontSize={9} ...>
+
+  {m.label}
+
+</text>
+
+Increase the font size from 9 to 11 and make labels always visible (not just on hover):
+
+<text x={cx} y={cy - dotR - 5} textAnchor="middle" fill={m.color} fontSize={11} 
+
+  fontWeight="bold" fontFamily="monospace" style={{ userSelect: "none" }}
+
+  stroke="#000" strokeWidth={2} paintOrder="stroke">
+
+  {m.label}
+
+</text>
+
+The stroke="#000" strokeWidth={2} paintOrder="stroke" gives the text a dark outline so it's readable against both light and dark plan backgrounds.
+
+
+Change 4 — Improve the legend panel
+In artifacts/web/src/components/UnifiedPlanViewer.tsx, find the legend component. Look for where sign type counts and colors are displayed in a list on the right side.
+
+The legend should show a table with columns: Description | Qty | colored dot, matching the style in the marked-up PDF export.
+
+Find the legend rendering code and update it to show a proper table:
+
+{/* Legend — sign type counts */}
+
+<div className="absolute top-3 left-3 z-20 bg-background/90 backdrop-blur-sm 
+
+  border border-border/60 rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
+
+  <div className="text-[10px] font-display font-bold uppercase tracking-wider 
+
+    text-muted-foreground mb-2">
+
+    Legend
+
+  </div>
+
+  <table className="w-full border-collapse">
+
+    <thead>
+
+      <tr className="border-b border-border/40">
+
+        <th className="text-left text-[9px] font-display uppercase tracking-wider 
+
+          text-muted-foreground/60 pb-1 pr-2">Description</th>
+
+        <th className="text-right text-[9px] font-display uppercase tracking-wider 
+
+          text-muted-foreground/60 pb-1 pr-1">Qty</th>
+
+        <th className="text-right text-[9px] font-display uppercase tracking-wider 
+
+          text-muted-foreground/60 pb-1">Unit</th>
+
+      </tr>
+
+    </thead>
+
+    <tbody>
+
+      {signTypeCounts.map(({ type, count, color }) => (
+
+        <tr key={type} className="border-b border-border/20 last:border-0">
+
+          <td className="py-0.5 pr-2 flex items-center gap-1.5">
+
+            <span className="w-2.5 h-2.5 rounded-full shrink-0 inline-block" 
+
+              style={{ backgroundColor: color }} />
+
+            <span className="text-[10px] font-mono text-foreground/80">{type}</span>
+
+          </td>
+
+          <td className="py-0.5 pr-1 text-right text-[10px] font-mono 
+
+            font-bold text-foreground">{count}</td>
+
+          <td className="py-0.5 text-right text-[9px] font-mono 
+
+            text-muted-foreground/60">Count</td>
+
+        </tr>
+
+      ))}
+
+    </tbody>
+
+  </table>
+
+</div>
+
+To compute signTypeCounts, add this derived variable before the return statement in the viewer component:
+
+// Build sign type → count + color map for legend
+
+const signTypeCounts = useMemo(() => {
+
+  const map = new Map<string, { count: number; color: string }>();
+
+  for (const m of textMarkers.filter((m) => !m.isGhost)) {
+
+    const sign = signsOnCurrentPage.find((s) => s.id === m.signId);
+
+    const type = (sign?.signType as string) || "Room ID";
+
+    const existing = map.get(type);
+
+    if (existing) {
+
+      existing.count++;
+
+    } else {
+
+      map.set(type, { count: 1, color: m.color });
+
+    }
+
+  }
+
+  return Array.from(map.entries())
+
+    .map(([type, { count, color }]) => ({ type, count, color }))
+
+    .sort((a, b) => b.count - a.count);
+
+}, [textMarkers, signsOnCurrentPage]);
+
+Add useMemo to the imports if not already present:
+
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
+
+Change 5 — Page selector shows floor plan page names, not PDF page numbers
+Currently the page dropdown shows "pg 2", "pg 3" etc. which is confusing. Update it to show the sheet title when available.
+
+In UnifiedPlanViewer.tsx, find where the page dropdown options are built. Look for where navigablePages maps to option labels. Update to prefer the sheet title from the manifest:
+
+// When building the page label for the dropdown, prefer sheet title
+
+const getPageLabel = (pageNum: number): string => {
+
+  // Try to find a sheet title from file pageStats manifest
+
+  const manifestRow = (file as any)?.pageStats?.manifest?.find(
+
+    (r: any) => r.pdfPage === pageNum
+
+  );
+
+  if (manifestRow?.sheetTitle) return `${manifestRow.sheetTitle} (pg ${pageNum})`;
+
+  const pageLabel = (file as any)?.pageStats?.pageLabels?.[pageNum - 1];
+
+  if (pageLabel) return `${pageLabel} (pg ${pageNum})`;
+
+  return `Floor plan page ${pageNum}`;
+
+};
+
+
+After changes
+cd artifacts/web && pnpm run build
+
+The Floor Plans tab should now:
+
+Auto-fit the plan to fill the full viewer area (not 38% zoom)
+Show larger, labeled markers that are easy to read
+Display a proper legend table in the top-left (Description | Qty | Unit)
+Show meaningful page names in the sheet selector dropdown

@@ -1,0 +1,88 @@
+EXAMPLE 8 — PIPELINE DIAGNOSTIC REPORT
+Generated: 2026-05-01
+========================================
+
+SHEETS IN DATABASE (job_6a00d0e264e3c7ff)
+------------------------------------------
+A-111          | SIM 2              | floor_plan | page 1
+PLAN-c1c7aa-P2 | Floor Plan Level 2 | floor_plan | page 2
+
+
+WHAT THIS SHOWS
+---------------
+- 2 sheets total in the DB for Example 8
+- Page 1: A-111 / SIM 2 / floor_plan
+- Page 2: PLAN-c1c7aa-P2 / Floor Plan Level 2 / floor_plan
+
+There is no A-710 row. There is no "FIRST FLOOR FINISH PLAN & SCHEDULES" title.
+The sheet expected on page 2 has never been inserted into the DB under those values.
+
+
+ROOT CAUSE
+----------
+The PLAN-c1c7aa-P2 / Floor Plan Level 2 record is a SYNTHETIC sheet — generated
+by the garbled-title rescue path (~line 2499 in pipeline.ts) which strips bad
+sidecar output from a single-page PDF and replaces it with a filename-derived record.
+
+The sidecar logs confirm the most recent parse returned:
+  sheet_id='C-1'  title='C STAFF RESTROOM'  type=other  (page 2)
+...instead of:
+  sheet_id='A-710'  title='FIRST FLOOR FINISH PLAN & SCHEDULES'  type=other  (page 2)
+
+The pipeline classification code never receives A-710 or its title, so:
+- The ROOM_SCHEDULE_KW title check ("SCHEDULES" keyword) never fires
+- The A-7xx sheet ID pattern (/^A-?7\d{2}$/i) never fires
+- Step 4b-rs (room extraction from room_schedule sheets) never runs
+
+
+CLASSIFICATION CODE STATUS (pipeline.ts)
+-----------------------------------------
+SKIP_TITLE_KW (lines 2560-2571) — does NOT contain "FINISH SCHEDULE":
+  "ELECTRICAL", "MECHANICAL", "PLUMBING", "STRUCTURAL",
+  "REFLECTED CEILING", "LIGHTING PLAN", "POWER PLAN",
+  "DATA PLAN", "FIRE PROTECTION", "SPRINKLER", "CIVIL",
+  "MATERIAL SCHEDULE", "FURNITURE SCHEDULE",
+  "EQUIPMENT SCHEDULE", "FIXTURE SCHEDULE", "LIGHTING SCHEDULE",
+  "HARDWARE SCHEDULE", "INTERIOR FINISH", "FINISH LEGEND",
+  "MATERIAL LEGEND", "KEYNOTE LEGEND", "KEYNOTE SCHEDULE",
+  "DESIGN DEVELOPMENT", "PERMIT DRAWING", "CODE ANALYSIS",
+  "ACCESSIBILITY ANALYSIS", "LIFE SAFETY PLAN", "AREA CALCULATION",
+  "ZONING ANALYSIS"
+
+ROOM_SCHEDULE_KW (lines 2629-2636) — "FINISH SCHEDULE" is HERE (correct):
+  "FINISH SCHEDULE"       ← routes to room_schedule (not skip)
+  "ROOM SCHEDULE"
+  "ROOM FINISH SCHEDULE"
+  "ROOM FINISH PLAN"
+  "FINISH & SCHEDULE"
+  "SCHEDULES"
+
+A-7xx sheet ID pattern (line 2642):
+  /^A-?7\d{2}$/i  — matches A-700 through A-799 and A700–A799
+
+isRelevant logic (lines 3002-3005):
+  shouldRunVisionScan(sheetId, sheetTitle)
+  || sheet_type === 'signage_schedule'
+  || sheet_type === 'floor_plan'
+  || sheet_type === 'room_schedule'   ← room_schedule sheets are always relevant
+
+Step 4b-rs extractTable trigger (line 4966):
+  Fires when: sheetDbRows.filter(s => s.sheetType === "room_schedule").length > 0
+  Required classification: room_schedule
+
+
+TITLE MATCH WALKTHROUGH — "FIRST FLOOR FINISH PLAN & SCHEDULES"
+----------------------------------------------------------------
+If the sidecar returned the correct title, classifySheetStep2 would evaluate:
+  1. SKIP_PREFIXES on "A-710"       → no match (not MEP prefix)
+  2. ROOM_SCHEDULE_KW "FINISH SCHEDULE" → false ("FINISH PLAN & SCHEDULES" ≠ "FINISH SCHEDULE")
+  3. ROOM_SCHEDULE_KW "SCHEDULES"   → TRUE → returns { category: "room_schedule" }
+  Never reaches SKIP_TITLE_KW.
+
+
+NEXT DIAGNOSTIC STEP
+--------------------
+Confirm which PDF file is actually stored for Example 8 — the sidecar is consistently
+reading page 2 as "C-1 / C STAFF RESTROOM", suggesting either:
+  (a) The uploaded PDF is not the file containing A-710, or
+  (b) The sidecar's title-block extractor is misreading the title block on page 2

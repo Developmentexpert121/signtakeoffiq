@@ -1,0 +1,679 @@
+App: AI-Assist Takeoffs
+THIS FIX MUST WORK FOR ALL 8 BUILDING TYPES
+AND ALL ARCHITECTURAL FIRMS' NAMING CONVENTIONS.
+Never hardcode project-specific values.
+
+════════════════════════════════════════════════
+UNIVERSAL SHEET DETECTION — 3-pass rewrite
+Handles every real-world plan set we will ever
+receive regardless of firm, building type,
+or sheet naming convention.
+════════════════════════════════════════════════
+
+REAL-WORLD SHEET NAMING WE HAVE SEEN:
+  DiNisco Design (Education):
+    3.9.51, 3.9.52 → "Signage Plan - First Floor"
+    3.9.55 → "Signage Details"
+    3.9.56 → "Enlarged Wallcoverings & Signage"
+  
+  Generic Architecture firms:
+    A-101, A-102 → "First Floor Plan"
+    A-103, A-104 → "Second Floor Plan"
+    A-801 → "Interior Signage Details"
+    A-901 → "Signage Schedule"
+  
+  Park Lane Elementary:
+    A1.1 → "Signage Plan" (non-standard number)
+  
+  Brighton Willow Bend:
+    A-111 → "First Floor Overall"
+  
+  Healthcare firms:
+    A2.1, A2.2 → "Second Floor - North Wing"
+    A2.3, A2.4 → "Second Floor - South Wing"
+    A8.01 → "Signage & Wayfinding Details"
+  
+  Commercial/Office firms:
+    A1.01 → "Level 1 Floor Plan"
+    A1.02 → "Level 1 Partial - Suite 100"
+    A9.01 → "Interior Signage"
+    A9.02 → "Exterior Signage"
+  
+  Government/Courthouse firms:
+    A-100 → "Ground Floor Plan"
+    A-101 → "Ground Floor - Secure Zone"
+    A-700 → "Signage & Graphics"
+  
+  Hotel firms:
+    A-201 through A-215 → "Level 2 Guest Floor"
+    A-501 → "Signage Standards"
+  
+  Residential/Multifamily:
+    A2.1 → "Second Floor - Building A"
+    A2.2 → "Second Floor - Building B"
+    A9.1 → "Unit Signage Details"
+  
+  Assembly/Church/Theater:
+    A1.1 → "Main Level Plan"
+    A1.2 → "Main Level - Balcony"
+    A8.1 → "Wayfinding & Signage"
+
+════════════════════════════════════════════════
+PART 1 — Never drop a page before classification
+════════════════════════════════════════════════
+Replace current sheet detection with this logic:
+
+  async function detectAndClassifyAllSheets(pdf) {
+    const totalPages = pdf.pageCount;
+    console.log('[SHEETS] PDF has', totalPages, 
+      'pages — processing ALL');
+    
+    const sheets = [];
+    
+    for (let i = 0; i < totalPages; i++) {
+      sheets.push({
+        pageIndex:   i,
+        pageNumber:  i + 1,
+        title:       null,  // populated below
+        sheetNumber: null,  // populated below
+        floor:       null,  // populated below
+        wing:        null,  // populated below
+        type:        null,  // classified below
+        skipReason:  null
+      });
+    }
+    
+    // Pass 1: drawing index (fast, no AI cost)
+    await tryExtractDrawingIndex(pdf, sheets);
+    
+    // Pass 2: title block extraction (no AI cost)
+    await extractAllTitleBlocks(pdf, sheets);
+    
+    // Pass 3: visual classification for unknowns
+    await classifyUnknownSheets(pdf, sheets);
+    
+    // Log complete inventory — ALWAYS show all pages
+    logSheetInventory(sheets);
+    
+    return sheets;
+  }
+
+════════════════════════════════════════════════
+PART 2 — Pass 1: Drawing index extraction
+         Max 10 seconds, no AI for text PDFs
+════════════════════════════════════════════════
+
+  async function tryExtractDrawingIndex(
+    pdf, sheets) {
+    
+    // Try first 2 pages for index
+    for (let i = 0; i < Math.min(2, sheets.length);
+         i++) {
+      
+      // Try text extraction first (fast, free)
+      const text = await extractPageText(pdf, i);
+      
+      if (text.length > 500) {
+        // Text PDF — look for sheet list patterns
+        const entries = parseSheetList(text);
+        if (entries.length > 2) {
+          console.log('[INDEX] Found drawing index 
+            on page', i+1, 'with', entries.length,
+            'sheets');
+          // Apply to sheets array
+          for (const entry of entries) {
+            const match = sheets.find(
+              s => s.pageNumber === entry.page
+            );
+            if (match) {
+              match.sheetNumber = entry.number;
+              match.title = entry.title;
+            }
+          }
+          return; // index found, done
+        }
+      }
+      
+      // Text failed — try visual with timeout
+      const thumb = await rasterizePage(
+        pdf, i, { dpi: 72 }
+      );
+      const result = await Promise.race([
+        parseIndexFromImage(thumb),
+        timeout(8000)  // 8 second max
+      ]).catch(() => null);
+      
+      if (result?.sheets?.length > 2) {
+        console.log('[INDEX] Visual index found 
+          on page', i+1);
+        applyIndexToSheets(result.sheets, sheets);
+        return;
+      }
+    }
+    
+    console.log('[INDEX] No drawing index found',
+      '— proceeding to title block extraction');
+  }
+
+  function parseSheetList(text) {
+    // Match patterns like:
+    // "A-101  First Floor Plan"
+    // "3.9.51  Signage Plan - First Floor"
+    // "A1.1   Floor Plan Level 1"
+    const pattern = /([A-Z0-9][A-Z0-9\.\-]+)\s{2,}(.+)/gm;
+    const entries = [];
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      entries.push({
+        number: match[1].trim(),
+        title:  match[2].trim(),
+        page:   null  // page num not always in index
+      });
+    }
+    return entries;
+  }
+
+════════════════════════════════════════════════
+PART 3 — Pass 2: Title block extraction
+         Every page, no AI cost
+════════════════════════════════════════════════
+
+  async function extractAllTitleBlocks(pdf, sheets) {
+    for (const sheet of sheets) {
+      // Skip if already populated from index
+      if (sheet.title && sheet.sheetNumber) continue;
+      
+      // Extract text from title block area
+      // (bottom 15% + right 20% of page)
+      const tbText = await extractRegion(pdf, 
+        sheet.pageIndex, {
+          xMin: 0.70,  // right 30% of page
+          yMin: 0.82,  // bottom 18% of page
+          xMax: 1.00,
+          yMax: 1.00
+        }
+      );
+      
+      // Extract sheet number — handles ALL formats:
+      // 3.9.51, A-101, A1.1, A2.01, S-1, FP-1
+      const numPatterns = [
+        /\b(\d+\.\d+\.\d+)\b/,     // 3.9.51
+        /\b([A-Z]-\d{3}[A-Z]?)\b/, // A-101, A-101A
+        /\b([A-Z]\d+\.\d+)\b/,     // A1.1, A2.01
+        /\b([A-Z]-\d{1,2})\b/,     // S-1, G-2
+        /\b([A-Z]{2}-\d+)\b/,      // FP-1, SD-2
+      ];
+      for (const p of numPatterns) {
+        const m = tbText.match(p);
+        if (m) { sheet.sheetNumber = m[1]; break; }
+      }
+      
+      // Extract title — ALL CAPS line in title block
+      // Remove firm names, addresses, phone numbers
+      const lines = tbText.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 5);
+      
+      for (const line of lines) {
+        // Skip lines that look like addresses/phones
+        if (/\d{3}[-\.]\d{4}/.test(line)) continue;
+        if (/\b(MA|NY|CA|TX|FL)\b/.test(line) &&
+            /\d{5}/.test(line)) continue;
+        // Title is ALL CAPS with mostly letters
+        const alphaRatio = (line.match(/[A-Z]/g) 
+          || []).length / line.length;
+        if (alphaRatio > 0.6 && line.length > 8) {
+          sheet.title = line;
+          break;
+        }
+      }
+      
+      // Extract floor from title
+      if (sheet.title) {
+        sheet.floor = extractFloorFromTitle(
+          sheet.title
+        );
+        sheet.wing = extractWingFromTitle(
+          sheet.title
+        );
+      }
+      
+      console.log('[TITLE-BLOCK] Page', 
+        sheet.pageNumber,
+        '→ num:', sheet.sheetNumber,
+        'title:', sheet.title,
+        'floor:', sheet.floor);
+    }
+  }
+
+  function extractFloorFromTitle(title) {
+    const t = title.toLowerCase();
+    // Ordinal floors
+    if (t.match(/first|1st|floor.?1|level.?1/))
+      return 'LEVEL 1';
+    if (t.match(/second|2nd|floor.?2|level.?2/))
+      return 'LEVEL 2';
+    if (t.match(/third|3rd|floor.?3|level.?3/))
+      return 'LEVEL 3';
+    if (t.match(/fourth|4th|floor.?4|level.?4/))
+      return 'LEVEL 4';
+    if (t.match(/fifth|5th|floor.?5|level.?5/))
+      return 'LEVEL 5';
+    if (t.match(/ground|grade|lobby level/))
+      return 'LEVEL 1';
+    if (t.match(/basement|lower level|sub/))
+      return 'LEVEL B1';
+    if (t.match(/mezzanine|mezz/))
+      return 'LEVEL M';
+    if (t.match(/roof/))
+      return 'ROOF';
+    // Extract number directly: "Level 3 Plan"
+    const numMatch = t.match(/level\s+(\d+)/);
+    if (numMatch) return \`LEVEL \${numMatch[1]}\`;
+    return null;
+  }
+
+  function extractWingFromTitle(title) {
+    const t = title.toLowerCase();
+    // Named wings
+    if (t.includes('academic')) return 'Academic';
+    if (t.includes('community')) return 'Community';
+    if (t.includes('north')) return 'North';
+    if (t.includes('south')) return 'South';
+    if (t.includes('east')) return 'East';
+    if (t.includes('west')) return 'West';
+    if (t.includes('tower')) return 'Tower';
+    if (t.includes('podium')) return 'Podium';
+    if (t.includes('building a')) return 'Building A';
+    if (t.includes('building b')) return 'Building B';
+    if (t.includes('secure')) return 'Secure Zone';
+    if (t.includes('public')) return 'Public Zone';
+    if (t.includes('partial')) return 'Partial';
+    if (t.includes('overall')) return 'Overall';
+    // Suite number
+    const suiteMatch = t.match(/suite\s+(\w+)/);
+    if (suiteMatch) return \`Suite \${suiteMatch[1]}\`;
+    return null;
+  }
+
+════════════════════════════════════════════════
+PART 4 — Pass 3: Visual classification
+         Only for pages with no title extracted
+         Uses Gemini Flash (cheap + fast)
+════════════════════════════════════════════════
+
+  async function classifyUnknownSheets(pdf, sheets) {
+    const unknown = sheets.filter(
+      s => !s.title && !s.type
+    );
+    
+    if (unknown.length === 0) return;
+    
+    console.log('[VISUAL-CLASSIFY] Classifying',
+      unknown.length, 'pages with no title');
+    
+    for (const sheet of unknown) {
+      const thumb = await rasterizePage(
+        pdf, sheet.pageIndex, { dpi: 72 }
+      );
+      
+      const prompt = \`
+        This is one page from an architectural
+        drawing set for a \${buildingType} building.
+        
+        Classify it as ONE of:
+        floor_plan     - rooms with labels/walls
+        sign_details   - sign types/mounting details
+        specialty_signage - exterior/dimensional/
+                           graphic/decorative signs
+        egress         - exit paths/occupant loads
+        skip           - plumbing/structural/mech/
+                        electrical/civil/landscape
+        unknown        - cannot determine
+        
+        Also extract if visible:
+        - sheet_number (e.g. "A-101", "3.9.54")
+        - sheet_title (e.g. "Second Floor Plan")
+        - floor_level (e.g. "LEVEL 2")
+        - wing_name (e.g. "Community Wing")
+        
+        Return ONLY valid JSON:
+        {
+          "type": "floor_plan",
+          "sheet_number": "3.9.54",
+          "sheet_title": "Signage Plan Second Floor 
+                          Community Wing",
+          "floor_level": "LEVEL 2",
+          "wing_name": "Community Wing",
+          "confidence": 0.9
+        }
+      \`;
+      
+      try {
+        const result = await gemini.flash(
+          prompt, thumb
+        );
+        const data = JSON.parse(result.text);
+        
+        sheet.type = data.type;
+        sheet.sheetNumber = sheet.sheetNumber 
+          || data.sheet_number;
+        sheet.title = sheet.title 
+          || data.sheet_title;
+        sheet.floor = sheet.floor 
+          || data.floor_level;
+        sheet.wing = sheet.wing 
+          || data.wing_name;
+        
+        console.log('[VISUAL-CLASSIFY] Page',
+          sheet.pageNumber, '→', sheet.type,
+          'confidence:', data.confidence);
+          
+      } catch (e) {
+        sheet.type = 'unknown';
+        console.log('[VISUAL-CLASSIFY] Page',
+          sheet.pageNumber, '→ failed:', e.message);
+      }
+    }
+  }
+
+════════════════════════════════════════════════
+PART 5 — Classification by title
+         Handles ALL naming conventions
+════════════════════════════════════════════════
+
+  function classifyByTitle(title, sheetNumber) {
+    const t = (title || '').toLowerCase();
+    const n = (sheetNumber || '').toLowerCase();
+    
+    // SKIP these always — check first
+    const SKIP_KEYWORDS = [
+      'plumbing','drain','slope','sanitary',
+      'mechanical','hvac','ductwork','piping',
+      'electrical','lighting','power','low voltage',
+      'structural','framing','foundation','beam',
+      'civil','grading','utility','storm',
+      'landscape','irrigation','planting',
+      'reflected ceiling','rcp','ceiling plan',
+      'roof plan','roofing',
+      'exterior elevation','building elevation',
+      'wall section','building section',
+      'site plan',  // not floor plan
+      'detail only','keynote','legend only',
+      'specifications','general notes',
+      'door schedule','window schedule',  
+      // exception: door schedule has sign info
+      // but handle separately
+    ];
+    if (SKIP_KEYWORDS.some(k => t.includes(k)))
+      return 'skip';
+    
+    // FLOOR PLAN — room extraction needed
+    const FLOOR_PLAN_KEYWORDS = [
+      'floor plan','floorplan',
+      'signage plan','sign plan',
+      'first floor','second floor',
+      'third floor','fourth floor','fifth floor',
+      'ground floor','basement floor',
+      'level 1','level 2','level 3',
+      'level 4','level 5','level b',
+      'mezzanine plan','overall plan',
+      'partial plan','enlarged plan',
+      'academic wing','community wing',
+      'north wing','south wing',
+      'east wing','west wing',
+      'tower floor','podium floor',
+      'building a','building b',
+      'secure zone','public zone',
+      'construction plan',
+      'architectural plan',
+    ];
+    if (FLOOR_PLAN_KEYWORDS.some(k => t.includes(k)))
+      return 'floor_plan';
+    
+    // Sheet number patterns for floor plans
+    // A-1XX, A1.X, FP-X all indicate floor plans
+    const FLOOR_PLAN_NUMBER_PATTERNS = [
+      /^a-?1\d{2}/i,   // A-101, A-102, A101
+      /^a[1-6]\.\d/i,  // A1.1, A2.01, A3.1
+      /^fp-?\d/i,      // FP-1, FP-2
+      /^l[1-6]-/i,     // L1-100
+      /^\d+\.\d+\.\d+/, // 3.9.51 (DiNisco)
+    ];
+    if (FLOOR_PLAN_NUMBER_PATTERNS.some(
+        p => p.test(n))) return 'floor_plan';
+    
+    // SIGN DETAILS — plaque types/mounting
+    const SIGN_DETAIL_KEYWORDS = [
+      'signage detail','sign detail',
+      'signing detail','plaque detail',
+      'sign schedule','plaque schedule',
+      'sign type','sign legend',
+      'mounting detail','mounting height',
+      'interior signage','wayfinding detail',
+      'enlarged signage','sign enlarged',
+      'sign specifications','sign spec',
+      'hardware schedule',  // has sign door info
+    ];
+    if (SIGN_DETAIL_KEYWORDS.some(k => t.includes(k)))
+      return 'sign_details';
+    
+    // Sheet numbers for details
+    const DETAIL_NUMBER_PATTERNS = [
+      /^a-?[89]\d{2}/i,  // A-801, A-901
+      /^a[89]\.\d/i,     // A8.1, A9.01
+      /^id-/i,           // ID-series
+      /^gs-/i,           // GS-series
+      /^\d+\.\d+\.5\d/,  // 3.9.55 (DiNisco details)
+    ];
+    if (DETAIL_NUMBER_PATTERNS.some(
+        p => p.test(n))) return 'sign_details';
+    
+    // SPECIALTY SIGNAGE — branded/decorative/exterior
+    const SPECIALTY_KEYWORDS = [
+      'wallcovering','wall covering',
+      'wall graphic','mural','graphic',
+      'interpretive','leed sign',
+      'exterior sign','site sign',
+      'monument sign','dimensional letter',
+      'channel letter','blade sign',
+      'enlarged signage','signage enlarged',
+      'trailhead','kiosk','wayfinding',
+      'donor','recognition wall','memorial',
+      'branding','identity',
+    ];
+    if (SPECIALTY_KEYWORDS.some(k => t.includes(k)))
+      return 'specialty_signage';
+    
+    // Sheet numbers for specialty
+    const SPECIALTY_NUMBER_PATTERNS = [
+      /^\d+\.\d+\.56/,   // 3.9.56 (DiNisco)
+      /^gs-9/i,          // GS-9XX
+    ];
+    if (SPECIALTY_NUMBER_PATTERNS.some(
+        p => p.test(n))) return 'specialty_signage';
+    
+    // EGRESS
+    const EGRESS_KEYWORDS = [
+      'egress','life safety','occupant load',
+      'fire protection','exit plan',
+      'means of egress','evacuation plan',
+    ];
+    if (EGRESS_KEYWORDS.some(k => t.includes(k)))
+      return 'egress';
+    
+    // Cannot classify from title alone
+    return null; // → triggers visual classification
+  }
+
+════════════════════════════════════════════════
+PART 6 — Floor deduplication
+         Multiple sheets per floor → one floor tab
+════════════════════════════════════════════════
+After classification, deduplicate floors:
+
+  function buildFloorMap(sheets) {
+    const floorMap = new Map();
+    // key: floor label, value: array of sheets
+    
+    for (const sheet of sheets) {
+      if (sheet.type !== 'floor_plan') continue;
+      
+      const floor = sheet.floor || detectFloor(
+        sheet.pageNumber, sheets
+      );
+      
+      if (!floorMap.has(floor)) {
+        floorMap.set(floor, []);
+      }
+      floorMap.get(floor).push(sheet);
+    }
+    
+    // Log floor map
+    for (const [floor, shts] of floorMap) {
+      console.log('[FLOOR-MAP]', floor, '→',
+        shts.map(s => 
+          s.sheetNumber || \`p\${s.pageNumber}\`
+        ).join(', ')
+      );
+    }
+    
+    return floorMap;
+  }
+
+  // Fallback floor detection when title has no floor
+  // Assumes pages are ordered by floor
+  function detectFloor(pageNum, allSheets) {
+    const floorPlans = allSheets
+      .filter(s => s.type === 'floor_plan')
+      .sort((a, b) => a.pageNumber - b.pageNumber);
+    
+    const index = floorPlans.findIndex(
+      s => s.pageNumber === pageNum
+    );
+    
+    // Group consecutive pages as same floor
+    // if they likely share a floor (wing sheets)
+    // This is a heuristic — visual classify is better
+    return \`LEVEL \${Math.floor(index / 2) + 1}\`;
+  }
+
+════════════════════════════════════════════════
+PART 7 — Pipeline log: show complete inventory
+         for ALL building types
+════════════════════════════════════════════════
+
+  function logSheetInventory(sheets, floorMap) {
+    const icons = {
+      floor_plan: '📐',
+      sign_details: '📋',
+      specialty_signage: '🎨',
+      egress: '🚪',
+      skip: '⏭',
+      unknown: '❓'
+    };
+    
+    const lines = sheets.map(s => {
+      const icon = icons[s.type] || '❓';
+      const id = s.sheetNumber 
+        || \`p\${s.pageNumber}\`;
+      const title = s.title 
+        ? \`"\${s.title.substring(0, 40)}"\` 
+        : '(no title)';
+      const floor = s.floor 
+        ? \` [\${s.floor}\${s.wing 
+          ? ' - ' + s.wing : ''}]\` 
+        : '';
+      return \`\${icon} p\${s.pageNumber}: \${id} \`+
+             \`\${title}\${floor} → \${s.type}\`;
+    });
+    
+    const counts = {
+      floor_plan: sheets.filter(
+        s => s.type === 'floor_plan').length,
+      sign_details: sheets.filter(
+        s => s.type === 'sign_details').length,
+      specialty_signage: sheets.filter(
+        s => s.type === 'specialty_signage').length,
+      egress: sheets.filter(
+        s => s.type === 'egress').length,
+      skip: sheets.filter(
+        s => s.type === 'skip').length,
+      unknown: sheets.filter(
+        s => s.type === 'unknown').length,
+    };
+    
+    const summary = 
+      \`\${sheets.length} total pages: \` +
+      \`\${counts.floor_plan} floor plans, \` +
+      \`\${counts.sign_details} detail sheets, \` +
+      \`\${counts.specialty_signage} specialty, \` +
+      \`\${counts.skip} skipped\` +
+      (counts.unknown > 0 
+        ? \`, \${counts.unknown} unknown\` : '');
+    
+    addPipelineLog(
+      \`Sheet inventory — \${summary}\n\` +
+      lines.join('\n')
+    );
+    
+    // Also show floor map
+    if (floorMap) {
+      for (const [floor, floorSheets] of floorMap) {
+        addPipelineLog(
+          \`\${floor}: \${floorSheets.length} sheet(s) — \` +
+          floorSheets.map(s => 
+            s.wing || s.sheetNumber || 
+            \`p\${s.pageNumber}\`
+          ).join(' + ')
+        );
+      }
+    }
+  }
+
+════════════════════════════════════════════════
+VERIFY — test cases covering all building types
+════════════════════════════════════════════════
+
+TEST 1 — Fox Hill (Education, DiNisco Design):
+  6 pages, sheet numbers 3.9.51-3.9.56
+  Expected inventory:
+    📐 p1: 3.9.51 "Signage Plan First Floor 
+       Academic Wing" [LEVEL 1 - Academic]
+    📐 p2: 3.9.52 "Signage Plan First Floor 
+       Community Wing" [LEVEL 1 - Community]
+    📐 p3: 3.9.53 "Signage Plan Second Floor 
+       Academic Wing" [LEVEL 2 - Academic]
+    📐 p4: 3.9.54 "Signage Plan Second Floor 
+       Community Wing" [LEVEL 2 - Community]
+    📋 p5: 3.9.55 "Signage Details"
+    🎨 p6: 3.9.56 "Enlarged Wallcoverings"
+  Floor map: LEVEL 1 → p1+p2, LEVEL 2 → p3+p4
+  Plans tab: 2 floor tabs, 2 wing pills each
+
+TEST 2 — Gleason Library (Education):
+  Verify existing sheets still classified correctly
+  No regression in sign count
+
+TEST 3 — Any Healthcare plan (if available):
+  Multi-wing floors classified correctly
+  Smoke compartment sheets not dropped
+
+TEST 4 — Any Commercial plan (if available):
+  Partial floor plans (Suite 100, Suite 200)
+  classified as floor_plan for same floor
+
+TEST 5 — Plan with plumbing/structural sheets:
+  These must be classified as 'skip'
+  Must NOT appear in Plans tab
+  Must NOT have rooms extracted from them
+
+UNIVERSAL REQUIREMENTS:
+  ✓ Every page in every PDF is processed
+  ✓ No page dropped before classification
+  ✓ Title blocks read without AI when possible
+  ✓ Visual classification only as fallback
+  ✓ Floor deduplication works for all wing layouts
+  ✓ Pipeline log shows complete page inventory
+  ✓ Step 2 completes in < 15s (not 60s)
+  ✓ All 1,461 tests pass

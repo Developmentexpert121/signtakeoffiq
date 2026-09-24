@@ -1,0 +1,115 @@
+Perfect — everything I need. The data is already there:
+
+isCorridorOrHall is set on every room at hydration time ✅
+coordX/coordY are on every room record ✅
+Corridors are already identified by CORRIDOR_KEYWORDS ✅
+
+What's broken: Markers sit at room label center (middle of room). Should be offset toward nearest corridor (near the door).
+What will change: One new function + one call in pipeline.ts after PDF coordinates are written. Zero changes to rules engine, sign counts, XLSX, or room extraction.
+Will NOT affect: Fox Hill signs count, any other job's data, rules engine behavior.
+Regression test: Fox Hill rescan after — expect ~209 signs, markers now near doors instead of room centers.
+
+Send this to Replit:
+
+Fix — Door proximity offset for marker placement. pipeline.ts only. Typecheck + full test suite after.
+What's broken: Room markers are placed at the room label center (middle of the room). For estimators to visually verify sign placement, markers should appear near the door — offset toward the nearest corridor.
+Add this function near the coordinate utility functions in pipeline.ts:
+typescript/**
+ * Offsets a room's marker coordinates toward the nearest corridor.
+ * This moves markers from room center to near the door for visual clarity.
+ * Falls back to original coordinates if no corridor found nearby.
+ */
+function applyDoorProximityOffset(
+  roomCoordX: number,
+  roomCoordY: number,
+  corridorRooms: Array<{ coordX: number | null; coordY: number | null }>,
+  offsetFraction = 0.20  // move 20% toward nearest corridor
+): { x: number; y: number } {
+  
+  if (corridorRooms.length === 0) {
+    return { x: roomCoordX, y: roomCoordY };
+  }
+  
+  // Find nearest corridor by Euclidean distance
+  let nearestCorridor: { coordX: number; coordY: number } | null = null;
+  let minDistance = Infinity;
+  
+  for (const corridor of corridorRooms) {
+    if (!corridor.coordX || !corridor.coordY) continue;
+    const dx = corridor.coordX - roomCoordX;
+    const dy = corridor.coordY - roomCoordY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Only consider corridors within 30% of sheet width (30,000 units)
+    // Prevents matching corridors on completely different parts of the plan
+    if (distance < minDistance && distance < 30_000) {
+      minDistance = distance;
+      nearestCorridor = { coordX: corridor.coordX, coordY: corridor.coordY };
+    }
+  }
+  
+  if (!nearestCorridor) {
+    return { x: roomCoordX, y: roomCoordY };
+  }
+  
+  // Offset toward nearest corridor by offsetFraction
+  const offsetX = Math.round(
+    roomCoordX + (nearestCorridor.coordX - roomCoordX) * offsetFraction
+  );
+  const offsetY = Math.round(
+    roomCoordY + (nearestCorridor.coordY - roomCoordY) * offsetFraction
+  );
+  
+  // Clamp to valid range
+  return {
+    x: Math.max(1_000, Math.min(99_000, offsetX)),
+    y: Math.max(1_000, Math.min(99_000, offsetY)),
+  };
+}
+Apply the offset in Step 9 sign generation, after markerX/markerY are assigned from PDF coordinates. Find where signs are pushed to signRows (around line 5932) and add:
+typescript// After PDF coordinates are assigned to signRows,
+// apply door proximity offset for room-linked signs
+// Build corridor list once per sheet for efficiency
+const corridorRoomsForSheet = allRoomsForJob.filter(r =>
+  r.sheetId === resolvedSheetId &&
+  r.isCorridorOrHall === true &&
+  r.coordX != null &&
+  r.coordY != null
+);
+
+// Apply offset only for room-linked signs with valid PDF coordinates
+if (
+  signRow.markerX != null &&
+  signRow.markerY != null &&
+  signRow.roomId != null &&  // room-linked, not egress
+  corridorRoomsForSheet.length > 0
+) {
+  const offset = applyDoorProximityOffset(
+    signRow.markerX,
+    signRow.markerY,
+    corridorRoomsForSheet
+  );
+  signRow.markerX = offset.x;
+  signRow.markerY = offset.y;
+}
+Also need allRoomsForJob — query rooms for this job before the sign push loop:
+typescript// Query all rooms for this job with their coordinates and corridor flag
+// Used for door proximity offset calculation
+const allRoomsForJob = await db.select({
+  id: roomsTable.id,
+  sheetId: roomsTable.sheetId,
+  coordX: roomsTable.coordX,
+  coordY: roomsTable.coordY,
+  isCorridorOrHall: roomsTable.isCorridorOrHall,
+}).from(roomsTable)
+  .where(eq(roomsTable.jobId, jobId));
+Show the sign push loop context first before implementing:
+sed -n '5920,5960p' artifacts/api-server/src/lib/pipeline.ts
+Then implement after confirming the structure.
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing
+Do NOT rescan — report clean tests and stop

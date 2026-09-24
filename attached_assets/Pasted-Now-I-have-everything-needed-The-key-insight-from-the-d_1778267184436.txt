@@ -1,0 +1,61 @@
+Now I have everything needed. The key insight from the data: sign_type IS the room identifier for this job — A401, B400 etc. So when analyzeSheet() finds "A315" on the floor plan image, it should look for a sign with sign_type = 'A315' anywhere in the job, then either update it if found (reroute to this sheet + write door coordinates) or create it if not found.
+Here's the prompt:
+
+What's broken: analyzeSheet() only updates existing sentinel signs on the current sheet. On Walking Court_2, all signs are piled on PLAN-0-P1 with sentinel coordinates — so when Gemini reads PLAN-6-P1 and correctly identifies A315, A317 etc., there's no matching sign on that sheet to update and 0 signs get placed.
+What changes: pipeline.ts only — analyzeSheet() function. No other files touched.
+The fix — three-pass write-back instead of one:
+After Gemini returns the room array and JSON is parsed, replace the current match-and-update loop with this logic:
+Pass 1 — Cross-job match and reroute:
+For each Gemini result with confidence ≥ 0.7:
+typescript// Find matching sign anywhere in this job by sign_type
+const match = await db.query.signsTable.findFirst({
+  where: and(
+    eq(signsTable.jobId, jobId),
+    eq(signsTable.tenantId, tenantId),
+    eq(signsTable.signType, result.roomNumber)
+  )
+})
+If found:
+
+Update markerX, markerY to door coordinates
+Update sheetId to current sheet's DB id (reroute from PLAN-0-P1 to this sheet)
+Increment analyzed
+
+Pass 2 — Create if not found:
+If no match found AND result.roomNumber matches pattern ^[A-Za-z][0-9]{3,4}$:
+typescriptawait db.insert(signsTable).values({
+  id: crypto.randomUUID(),
+  jobId,
+  tenantId,
+  sheetId: sheet.id,
+  signType: result.roomNumber,
+  roomNumber: result.roomNumber,
+  markerX: Math.round(result.door_x_pct * 100000),
+  markerY: Math.round(result.door_y_pct * 100000),
+  floorLabel: sheet.level ?? '',
+  isDeleted: false,
+  source: 'analyze_sheet',
+  createdAt: new Date()
+})
+analyzed++
+Pass 3 — Door metadata:
+For each result, also write doorSide + doorType to rooms table where roomNumber matches — same as existing behavior, unchanged.
+Remove the early-exit sentinel check. The current guard if (sentinelSigns.length === 0) return { analyzed: 0 } prevents analyzeSheet() from running on sheets that have no pre-existing signs. Remove it. Replace with: fetch the sheet record and rasterized image — if no rasterized image exists, return early. Otherwise always call Gemini.
+New early exit:
+typescriptif (!sheet.rasterizedPath) {
+  return { analyzed: 0, cost: 0 }
+}
+// Always proceed — no sign count gate
+Fox Hill safety: Fox Hill signs have real non-sentinel coordinates. Pass 1 will find them by sign_type match, see that markerX is already non-sentinel, and... actually it will overwrite good coordinates with Gemini's new coordinates. Add a guard:
+typescript// Only reroute/update if currently sentinel OR on wrong sheet
+if (match.markerX === 50000 || match.sheetId !== sheet.id) {
+  // update coordinates and sheet_id
+}
+This means Fox Hill signs that are already correctly placed are never touched. Walking Court signs at 50000 get updated.
+What won't change: sheets.ts, FloorPlanTab.tsx, any other file, any DB schema, pipeline extraction, test count should stay at 1,567.
+Regression test:
+
+Fox Hill — click "Analyze Sheet" on sheet 3.9.51 — existing marker positions must not change. Sign count stays 185–215.
+Walking Court PLAN-6-P1 — click "Analyze Sheet" — expect 15+ signs placed at door positions, markers visible on the residential unit layout.
+
+1,567 API + 156 web tests must pass. Typecheck 0 errors. Do NOT rescan any job.

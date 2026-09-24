@@ -1,0 +1,66 @@
+App: AI-Assist Takeoffs
+Applies to ALL building types.
+
+FIX 1 — floorsServed detecting 3 instead of 2
+In egress-sign-generator.ts, detectFloorCount
+is counting 3 floors for Fox Hill (2-floor building).
+
+The 3rd floor is 'UNSPECIFIED FLOOR' or a blank
+entry from the egress generator's own previous run.
+
+Fix detectFloorCount to only count floors that
+match a real floor pattern:
+
+  SELECT COUNT(DISTINCT floor) as floor_count
+  FROM signs
+  WHERE job_id = $1
+  AND floor IS NOT NULL
+  AND floor != ''
+  AND floor ~ '^(LEVEL|FLOOR|FL|STORY)\s+\d+$'
+  OR floor ~ '^\d+$'
+  -- Only floors matching 'LEVEL 1', 'Floor 2', '3' etc
+  -- Excludes 'UNSPECIFIED FLOOR', 'EVAC-L1', blanks
+
+Also exclude signs the egress generator itself
+inserted in previous runs — they may have wrong
+floor values that corrupt the count:
+
+  AND source != 'rules'
+  -- Only count floors from extracted room signs
+
+FIX 2 — Stair floor field still blank
+The floor column is not being written on INSERT.
+
+In egress-sign-generator.ts find the stair INSERT.
+Log the actual values being inserted BEFORE insert:
+
+  console.log('[STAIR INSERT]', {
+    jobId: job.id,
+    roomNumber: roomNumber,
+    roomName: roomName, 
+    floor: floorLabel,      // ← log this
+    signType: signType,
+    floorRaw: f,            // ← and the raw loop var
+    floorPrefix: floorPrefix // ← and the prefix
+  });
+
+Then check Replit console to see what floorLabel
+actually contains. It may be undefined, null,
+or an empty string due to the floorPrefix
+detection failing.
+
+Add a hard fallback:
+  const floorLabel = \`\${floorPrefix || 'LEVEL '}\${f}\`;
+  
+  // Verify it's not empty before insert
+  if (!floorLabel || floorLabel.trim() === '') {
+    console.error('[STAIR] floorLabel is empty!', 
+      { f, floorPrefix });
+  }
+
+EXPECTED after fix:
+  Fox Hill: 4 stairs × 2 floors = 8 corridor + 8 landing
+  Each row has floor = 'LEVEL 1' or 'LEVEL 2'
+  Not 'LEVEL 3' or blank
+  All building types: floorsServed matches actual floors
+  All 1,461 tests pass

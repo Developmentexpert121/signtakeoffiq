@@ -1,0 +1,172 @@
+Create a Pricing Setup page in 
+artifacts/web/src/pages/settings/pricing.tsx
+Add it to the Settings sidebar navigation.
+
+The page has 4 sections. All prices show MSRP only 
+(no discount column). Each price field is editable — 
+tenant sets their own bid price. Label all price 
+fields as "Your Bid Price / sq in".
+
+═══════════════════════════════
+SECTION 1 — BASE MATERIALS
+═══════════════════════════════
+Show as a selectable list. One item = default for 
+all ADA signs. Grouped as follows:
+
+GROUP: Rowmark
+  Rowmark Basic 1/16"              MSRP $0.37
+  Rowmark Basic 1/8"               MSRP $0.53
+  Rowmark Premium 1/8"             MSRP $0.66
+
+GROUP: P95 / P99 Acrylic  
+  P95 White or Brushed Silver 1/8" MSRP $0.50
+  P95 Black Acrylic 1/8"           MSRP $0.47
+  P95 White or Black 1/4"          MSRP $0.90
+  P99 Clear Non-Glare 1/8"         MSRP $0.50
+
+GROUP: Clear Acrylic
+  Acrylic Non-Glare 1/16"          MSRP $0.41
+  Acrylic Non-Glare 1/8"           MSRP $0.50
+  Acrylic Non-Glare 1/4"           MSRP $0.90
+  Clear Acrylic 3/8"               MSRP $1.30
+  Clear Acrylic 1/2" P99           MSRP $1.69
+
+GROUP: Other Materials
+  PVC / Polystyrene 1/8"           MSRP $0.36
+  Wilsonart w/tape .05"            MSRP $0.53
+  ACM Brushed Silver Dibond 1/8"   MSRP $0.50
+  1/8" Backers                     MSRP $0.42
+  Brushed Aluminum Rowmark 1/32"   MSRP $0.37
+  Chemetal w/ Black Acrylic Backer MSRP $3.00
+
+═══════════════════════════════
+SECTION 2 — FINISHINGS
+(Added per sq in on top of base material)
+═══════════════════════════════
+  Raised Copy w/ or w/o Braille    MSRP $0.73/sq in
+  CMYK Flat Print                  MSRP $0.39/sq in
+  CMYK Plus White Print            MSRP $0.61/sq in
+  Laser Cut Applique 1/32" + Braille MSRP $0.84/sq in
+  Painted Applique + Braille       MSRP $0.94/sq in
+  Back Paint (incl. vinyl layer)   MSRP $0.52/sq in
+  Back Paint 1st Window + mask     MSRP $0.72/sq in
+  Back Paint each add'l window     MSRP $5.50 each
+  Accent Bar (material only)       MSRP $5.50 each
+  Assembly Per Layer (per touch)   MSRP $5.00 each
+  Magnetic                         MSRP $0.53/sq in
+  Beveled Edge Setup Fee           MSRP $0.75/sq in
+  Beveled Edge Setup (per sign)    MSRP $10.00 each
+  Small Studs                      MSRP $8.00 each
+  Dinoc Vinyl                      MSRP $0.75/sq in
+  Frosted Vinyl                    MSRP $0.35/sq in
+  Wilson Art                       MSRP $0.53/sq in
+  Rowmark Wood                     MSRP $0.66/sq in
+  0.080 Aluminum                   MSRP $0.66/sq in
+
+Each row: checkbox (include by default) | Name | 
+MSRP reference | Bid Price (editable)
+
+═══════════════════════════════
+SECTION 3 — LASER ENGRAVING
+(Per sq in — replaces standard finishings)
+═══════════════════════════════
+  Rowmark 1/16" Laser Engraved     MSRP $2.00/sq in
+  Rowmark 1/8" Laser Engraved      MSRP $2.50/sq in
+  Minimum laser charge             MSRP $5.00 per sign
+
+═══════════════════════════════
+SECTION 4 — ADDITIONAL CHARGES
+(Fixed fees — not per sq in)
+═══════════════════════════════
+  Minimum Sign Price               default $20.00
+  Color Match / Color              MSRP $50.00 each
+  Custom CMYK Image (woodgrain)    MSRP $100.00 each
+  Takeoff & Design Services        TBD (text field)
+  VHB Tape                         MSRP $5.00/sign
+  Photoluminescent 12×18           MSRP $375.00 each
+  NFPA 12×18 Rowmark/P95           MSRP $250.00 each
+  NFPA 12×18 Premium Rowmark       MSRP $300.00 each
+  NFPA 12×18 Styrene               MSRP $215.00 each
+  NFPA 16×20                       MSRP $215.00 each
+
+RUSH FEE TOGGLES:
+  1-2 Business Days: +100% toggle
+  3-4 Business Days: +50% toggle
+
+SHIPPING:
+  Order $500 or less: $50.00
+  Order over $1,000: $100.00
+
+═══════════════════════════════
+SECTION 5 — CUSTOM PRODUCTS
+═══════════════════════════════
+  "+ Add Product" button
+  Fields: Name | Price/sq in or flat | Notes
+  Up to 15 custom entries
+  Drag to reorder
+
+═══════════════════════════════
+SECTION 6 — DEFAULT SIGN CONFIGURATION
+═══════════════════════════════
+For each sign type, tenant sets default material 
++ finishings. Pre-populated from MSRP defaults:
+
+Room ID 6×6:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.26 | Unit price: $45.36
+
+Restroom 6×8:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.26 | Unit price: $60.48
+
+Exit Tactile 6×8:
+  Material: P95 White 1/8" ($0.50)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.23 | Unit price: $59.04
+
+Stair Corridor 6×8:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.26 | Unit price: $60.48
+
+Stair Landing 6×12:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.26 | Unit price: $90.72
+
+Elevator 4×6:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Total/sq in: $1.26 | Unit price: $30.24
+
+Elevator Mach Rm 6×6:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Unit price: $45.36
+
+Unit ID 4×6:
+  Material: Rowmark Basic 1/8" ($0.53)
+  Finishing: Raised Copy + Braille ($0.73)
+  Unit price: $30.24
+
+Max Occupancy 6×8:
+  Material: P95 White 1/8" ($0.50)
+  Finishing: CMYK Flat Print ($0.39)
+  Total/sq in: $0.89 | Unit price: $42.72
+
+Evacuation Map:
+  Flat price: $45.00 each (frame only)
+
+Accessible Entrance 6×8:
+  Material: P95 White 1/8" ($0.50)
+  Finishing: Raised Copy + Braille ($0.73)
+  Unit price: $59.04
+
+Save to DB: tenant_pricing_settings table
+Fields: tenant_id, materials(JSON), 
+finishings(JSON), laser(JSON), 
+additional_charges(JSON), sign_defaults(JSON),
+custom_products(JSON), rush_fee(JSON),
+shipping(JSON), updated_at

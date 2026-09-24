@@ -1,0 +1,59 @@
+What's broken in one sentence:
+Step 3a populates signSchedule[] with 392 entries from Gemini but never pushes them into scheduleSignRows[], so Step 9 only sees the 17 pdfplumber text rows instead of the full schedule.
+File that changes:
+
+artifacts/api-server/src/lib/pipeline.ts — one addition after Step 3a completes
+
+
+Find the end of the Step 3a block — the line that logs:
+[Step 3a] Sign schedule: extracted N entries from N sheet(s)
+Immediately after that log line, add:
+typescript// Bridge Step 3a Gemini entries into scheduleSignRows for dedicated sign schedule files.
+// Step 3a populates signSchedule[] but scheduleSignRows[] is what Step 9 reads.
+// For dedicated files, the Gemini-extracted room entries ARE the schedule —
+// push them into scheduleSignRows so Step 9 uses them as the authoritative source.
+if (dedicatedSignScheduleFiles.length > 0 && signSchedule.length > 0) {
+  const beforeCount = scheduleSignRows.length;
+  
+  for (const entry of signSchedule) {
+    scheduleSignRows.push({
+      id: newId("sign"),
+      jobId,
+      tenantId,
+      roomId: null,
+      sheetId: String(_3aAnchorSheetId ?? ""),
+      signType: entry.signType,
+      qty: entry.quantity ?? 1,
+      ruleRef: "schedule",
+      color: null,
+      confidence: "1.000",
+      status: "extracted",
+      source: "schedule",
+      message: [entry.roomNumber, entry.roomName, entry.signType, entry.message]
+        .filter(Boolean).join(" | ") || undefined,
+    });
+  }
+  
+  // Set hasScheduleImport so Step 9 routing uses schedule path
+  hasScheduleImport = true;
+  
+  logger.log(
+    `[Step 3a] Bridged ${signSchedule.length} Gemini schedule entries into scheduleSignRows ` +
+    `(${beforeCount} existing + ${signSchedule.length} new = ${scheduleSignRows.length} total)`
+  );
+}
+This is the missing bridge. signSchedule[] has the 392 Gemini entries. scheduleSignRows[] is what Step 9 reads. They were never connected for the dedicated file path.
+
+After fix:
+
+Typecheck 0 errors, tests 1,461 passing
+Rescan Walking Court_2 — watch for:
+
+[Step 3a] Bridged 392 Gemini schedule entries into scheduleSignRows
+scheduleSignRows total ~392+ at Step 9
+Schedule signs inserted: ~392 in Step 9
+Egress signs: ~40-50 (R9/R11/R13/R16)
+Total: ~430-440 signs
+
+
+Fox Hill does NOT need rescan — dedicatedSignScheduleFiles.length === 0 for Fox Hill so this bridge never fires

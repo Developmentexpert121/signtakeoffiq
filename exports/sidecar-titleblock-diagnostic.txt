@@ -1,0 +1,276 @@
+SIDECAR TITLE-BLOCK EXTRACTION — FULL DIAGNOSTIC REPORT
+Generated: 2026-05-01
+File: artifacts/pdf-sidecar/main.py
+========================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ENTRY POINT — /parse-index route (lines 857–903)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.post("/parse-index")
+async def parse_index(file: UploadFile):
+    raw = await file.read()
+    with pdfplumber.open(raw) as pdf:
+
+        # --- Pass 1: look for a drawing-index page ---
+        for i, pg in enumerate(pdf.pages):
+            text = (pg.extract_text() or "").lower()
+            if any(k in text for k in DRAWING_INDEX_KEYWORDS):
+                index_page_num = i + 1
+                break
+
+        if index_page_num:
+            sheets = _parse_index_text(text, index_page_num, ...)
+
+        # --- If no index found (or empty), scan every page ---
+        if not sheets:
+            sheets = _scan_all_pages(pdf)
+
+DRAWING_INDEX_KEYWORDS = [
+    "drawing index", "sheet index", "index of drawings",
+    "list of drawings", "drawing list", "sheet list"
+]
+
+For Example 8's 2-page PDF:
+  - No drawing index page found → falls through to _scan_all_pages()
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. PER-PAGE SCAN — _scan_all_pages() (lines 1009–1067)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _scan_all_pages(pdf) -> list[SheetEntry]:
+    """
+    Primary strategy: bottom-right quadrant via _find_sheet_in_title_block.
+    Fallback: full page text scan for rotated/compressed title blocks.
+    """
+    for i, pg in enumerate(pdf.pages):
+        page_num = i + 1
+
+        # PRIMARY: title block (bottom-right quadrant)
+        sheet_id, title_part = _find_sheet_in_title_block(pg)
+
+        if sheet_id:
+            source = "title_block"
+        else:
+            # FALLBACK: full page text — first SHEET_ID_PATTERN match anywhere
+            full = pg.extract_text() or ""
+            m = SHEET_ID_PATTERN.search(full)
+            if not m:
+                print(f"[parse-index] Page {page_num}: no sheet ID found")
+                continue
+            sheet_id = m.group(1).upper()
+            title_part = full[m.end():m.end() + 120].strip()
+            title_part = re.split(r"[|\n\r]", title_part)[0].strip(" -.")
+            source = "full_text_fallback"
+
+        sheet_type = detect_sheet_type(sheet_id, title_part)
+        ...
+
+SIDECAR LOG (last 3 runs of Example 8, all identical):
+  [parse-index] Page 1: sheet_id='A-111'  title='SIM 2'            type=floor_plan  source=title_block
+  [parse-index] Page 2: sheet_id='C-1'    title='C STAFF RESTROOM'  type=other       source=title_block
+
+source=title_block on page 2 means _find_sheet_in_title_block() DID return
+a result — it found 'C-1' in the bottom-right quadrant, NOT via the fallback.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. TITLE-BLOCK EXTRACTION — _title_block_words() (lines 179–193)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _title_block_words(pg):
+    """
+    Return words in the bottom-right quadrant:
+      x0  >= 70% of page width   (right 30%)
+      top >= 75% of page height  (bottom 25%)
+    This is where architectural title blocks live.
+    """
+    pw = pg.width  or 1.0
+    ph = pg.height or 1.0
+    x_thresh = pw * 0.70
+    y_thresh = ph * 0.75
+    words = pg.extract_words(x_tolerance=3, y_tolerance=3) or []
+    return [w for w in words
+            if w.get("x0", 0) >= x_thresh
+            and w.get("top", w.get("y0", 0)) >= y_thresh]
+
+SCAN REGION: x >= 70% width AND y >= 75% height
+  = bottom-right 30% × 25% corner of the page only.
+  No other part of the page is examined in this step.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. SHEET ID EXTRACTION — _find_sheet_in_title_block() (lines 199–310)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SHEET_ID_PATTERN = re.compile(
+    r"\b([A-Z]{1,3}[-]?\d{1,4}(?:\.\d{1,3})?[A-Z]?|\d{1,2}\.\d{1,2}\.\d{1,4})\b"
+)
+# Matches AIA-style IDs like: A-101, IN116, C-1, A-710, S3.4A
+# Also matches numeric-dotted: 3.9.51, 10.2.3
+
+def _find_sheet_in_title_block(pg):
+    pw, ph = pg.width or 1.0, pg.height or 1.0
+
+    # Step 1: find sheet ID in bottom-right corner (right 30%, bottom 25%)
+    br_words = _title_block_words(pg)
+    if not br_words:
+        return None, None
+
+    br_sorted = sorted(br_words, key=lambda w: (top, x0))
+    br_text = " ".join(w["text"] for w in br_sorted)   # all words joined into one string
+
+    all_matches = list(SHEET_ID_PATTERN.finditer(br_text))
+    if not all_matches:
+        return None, None
+
+    # For numeric-dotted IDs: prefer the LAST match (sheet stamp at bottom of block).
+    # For AIA-style IDs:      take the FIRST match.
+    numeric_matches = [m for m in all_matches if _NUMERIC_DOTTED_RE.match(m.group(1))]
+    m = numeric_matches[-1] if numeric_matches else all_matches[0]   # ← FIRST AIA match
+
+    sheet_id = m.group(1).upper()
+
+    # Step 2: expand to bottom 50% height, right 50% width to find drawing title
+    y_band = ph * 0.50
+    x_title_thresh = pw * 0.50
+    band_words = [w for w in all_words
+                  if top >= y_band and x0 >= x_title_thresh]
+
+    # Group into lines (words within 6pt of each other)
+    # Find line containing sheet_id, then prefer the line BEFORE it as the title.
+    # Fall back to line AFTER it.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. ROOT CAUSE — WHY 'C-1' IS RETURNED INSTEAD OF 'A-710'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The sidecar scans the bottom-right quadrant (x >= 70%, y >= 75%) and joins
+ALL words found there into a single string, then runs SHEET_ID_PATTERN on it
+and takes the FIRST AIA-style match.
+
+A-710's page 2 is a finish plan with a Room Finish Schedule table. The bottom-
+right quadrant of this page likely contains:
+  - Room labels / corridor IDs from the schedule (e.g. "C-1", "C-2", "B-3")
+  - The actual title block text ("A-710", "FIRST FLOOR FINISH PLAN & SCHEDULES")
+
+SHEET_ID_PATTERN matches both "C-1" and "A-710" — both are valid AIA-style IDs.
+The function takes all_matches[0] = the FIRST match in the joined br_text string.
+If room/corridor labels "C-1" appear earlier (higher on the page, or further left)
+in the sorted word list than "A-710", then "C-1" wins.
+
+br_sorted uses key=(top, x0) — words are sorted top-to-bottom, left-to-right.
+If "C-1" appears anywhere above "A-710" in the bottom-right quadrant, it is
+returned as the sheet ID and "A-710" is never seen.
+
+source=title_block confirms the function returned a result — it did not fall
+back to full-page scan. The sidecar is confident it found a sheet ID; it found
+the wrong one.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. SHEET_TYPE DETECTION — detect_sheet_type() (lines 313–411)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For sheet_id="C-1", title="C STAFF RESTROOM":
+
+  Tier 1 keywords: no match (not sign_details, signage, or egress)
+  Tier 2 AIA rules:
+    - re.match(r'^a-?003$', 'c-1')       → no
+    - re.match(r'^a-?7\d{2}', 'c-1')    → no
+    - re.match(r'^a-?[123]\d{2}', 'c-1')→ no
+    - re.match(r'^a-?4\d{2}', 'c-1')    → no
+    - sid.startswith("a-") or ...        → no
+  Tier 2.5: _NUMERIC_DOTTED_RE.match('c-1') → no
+  Tier 3+: I-series, IN-series, etc. → no
+  Tier 5 fallback:
+    in_title(HARD_TITLE_EXCLUSIONS) or in_title(FLOOR_PLAN_EXCLUSION_KEYWORDS)?
+    "C STAFF RESTROOM" → no match → returns "floor_plan"? No wait...
+
+Actually FLOOR_PLAN_EXCLUSION_KEYWORDS contains "finish schedule" (line 112).
+Let's check "C STAFF RESTROOM":
+  - No keywords match → falls through to final default → "other"
+
+Result: sheet_type="other" ✓ (matches sidecar log)
+
+IF "A-710" were correctly extracted with title "FIRST FLOOR FINISH PLAN & SCHEDULES":
+  Tier 2: re.match(r'^a-?7\d{2}', 'a-710') → YES → returns "signage_schedule"
+  (The A-7xx rule in detect_sheet_type fires BEFORE FLOOR_PLAN_EXCLUSION_KEYWORDS)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. FLOOR_PLAN_EXCLUSION_KEYWORDS — RELEVANT ENTRY (line 112)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FLOOR_PLAN_EXCLUSION_KEYWORDS = [
+    "plumbing", "mechanical", "electrical", "hvac",
+    "structural", "civil", "landscape", "demolition",
+    "reflected ceiling", "foundation", "framing",
+    "site plan", "roof plan",
+    "legends", "plan notes", "finish schedule",   # ← "finish schedule" is here
+    "parking", "garage", "drain", "basement podium",
+]
+
+"finish schedule" appears here. This would cause detect_sheet_type() to return
+"other" for any sheet whose title contains "finish schedule" IF it gets past
+the Tier 2 AIA rules. For A-710, it does NOT get past Tier 2 because
+re.match(r'^a-?7\d{2}', 'a-710') fires first and returns "signage_schedule".
+
+However, a sheet titled "FINISH SCHEDULE" with a non-A-7xx sheet ID would be
+classified as "other" by the sidecar — meaning pipeline.ts would receive
+sheetType="other", not "signage_schedule" or "floor_plan". The ROOM_SCHEDULE_KW
+title check in classifySheetStep2 would still catch it (title includes
+"FINISH SCHEDULE" → room_schedule), so this is not currently a blocking bug.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. SUMMARY — SEARCH ORDER AND REGION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1 — Drawing index page scan (full PDF, text only):
+  Looks for DRAWING_INDEX_KEYWORDS in any page's text.
+  If found, parses that page as a table of sheet IDs.
+
+Step 2 — If no index: _scan_all_pages() processes every page:
+  For each page:
+    PRIMARY:  _find_sheet_in_title_block()
+      Region: x >= 70% width AND y >= 75% height (bottom-right 30% × 25%)
+      Finds:  FIRST AIA-style SHEET_ID_PATTERN match in that region
+              (sorted top→bottom, left→right, joined, first match wins)
+      Then:   expands to x >= 50%, y >= 50% to find the drawing title
+    FALLBACK: full page text, first SHEET_ID_PATTERN match anywhere
+
+No priority is given to the very bottom-right corner specifically — ALL
+words in the bottom 25% / right 30% are pooled together, sorted, and the
+FIRST SHEET_ID_PATTERN match in the pooled text is used.
+
+This is the failure mode for A-710: room/corridor labels in the bottom-right
+area of the finish schedule (e.g., "C-1 STAFF RESTROOM") match SHEET_ID_PATTERN
+and appear before "A-710" in the sorted word list.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. PROPOSED FIX DIRECTION (not implemented — diagnostic only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Option A — Prefer the LAST AIA match (not just last numeric-dotted match):
+  The actual sheet ID (A-710) sits at the very bottom of the title block —
+  it is typically the LAST valid ID in the bottom-right area.
+  Change: use all_matches[-1] instead of all_matches[0] for AIA-style IDs too.
+  Risk: could break PDFs where the first match is correct.
+
+Option B — Narrow the scan region further:
+  Increase x_thresh from 70% → 80%, or y_thresh from 75% → 85%.
+  This may exclude the room table rows and leave only the true title block area.
+  Risk: misses title blocks that are positioned lower-left in the bottom band.
+
+Option C — Filter single-character-prefix IDs (e.g. C-1, B-3) from title-block
+  candidates unless the prefix is A, IN, S, or another known AIA discipline code.
+  Single-letter + hyphen + single-digit is more likely to be a room label.
+
+Option D — Prefer the LOWEST (highest y-value) match in the bottom-right quadrant:
+  The sheet ID is typically the lowest item in the title block stamp.
+  Sort br_words by top DESCENDING and take the first match found.

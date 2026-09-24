@@ -1,0 +1,72 @@
+Here's the precise prompt:
+
+What we're building: Add analyzeSheet() alongside analyzeDoors() — same structure, different prompt and write-back. No pipeline changes, no schema migrations, no table drops. analyzeDoors() stays untouched.
+What changes:
+
+artifacts/api-server/src/lib/pipeline.ts — add analyzeSheet() after analyzeDoors()
+artifacts/api-server/src/routes/sheets.ts — add POST analyze-sheet route after detect-doors
+artifacts/web/src/components/FloorPlanTab.tsx — add "Analyze Sheet" button next to existing "Analyze Doors" button
+
+Step 1 — analyzeSheet(jobId, sheetId, tenantId) in pipeline.ts:
+Copy analyzeDoors() structure exactly. Change these parts only:
+Fetch step — instead of rooms, fetch signs where:
+typescriptjob_id = jobId AND tenant_id = tenantId
+AND sheet_id = (SELECT id FROM job_sheets WHERE sheet_id = sheetId AND job_id = jobId)
+AND (marker_x = 50000 OR marker_x IS NULL)
+Early exit if zero sentinel signs: return { analyzed: 0, cost: 0 }
+Gemini system prompt — replace door detection prompt with:
+You are analyzing a floor plan image. For each visible room label or unit number on this plan, return its position as a percentage of the image dimensions.
+
+Return a JSON array only — no markdown, no explanation:
+[
+  {
+    "roomNumber": "A413",
+    "x_pct": 0.623,
+    "y_pct": 0.441,
+    "confidence": 0.92
+  }
+]
+
+Rules:
+- roomNumber must be exactly as printed on the plan (e.g. "A413", "B200", "CORRIDOR", "60.1.128")
+- x_pct and y_pct are 0.0–1.0 fractions of image width and height
+- Only include rooms you can clearly read — omit uncertain labels
+- confidence is 0.0–1.0
+Response handling — same markdown strip + JSON.parse() + array validation as analyzeDoors().
+Coordinate conversion:
+typescriptconst coordX = Math.round(result.x_pct * 100000)
+const coordY = Math.round(result.y_pct * 100000)
+Match and write-back — for each result, find matching sign:
+typescriptconst match = signs.find(s => 
+  s.signType === result.roomNumber ||
+  s.roomNumber === result.roomNumber
+)
+if (match && result.confidence > 0.7) {
+  await db.update(signsTable)
+    .set({ markerX: coordX, markerY: coordY })
+    .where(eq(signsTable.id, match.id))
+  analyzed++
+}
+No X-offset calculation — coordinates go in as-is. No clamping needed beyond the 0–100,000 scale which is already guaranteed by the x_pct * 100000 conversion.
+Return { analyzed, cost } same as analyzeDoors().
+Step 2 — route in sheets.ts:
+Copy detect-doors route exactly:
+POST /jobs/:jobId/sheets/:sheetId/analyze-sheet
+Same auth pattern, same 403/404 guards, call analyzeSheet() instead of analyzeDoors(), return { success: true, analyzed, cost }.
+Export analyzeSheet from pipeline.ts same as analyzeDoors.
+Step 3 — UI in FloorPlanTab.tsx:
+Add "Analyze Sheet" button immediately to the left of the existing "Analyze Doors" button. Same loading spinner pattern, same useListRooms query invalidation on success. Toast on success: "${analyzed} signs placed on this sheet". Toast on error: same error pattern as Analyze Doors.
+Keep "Analyze Doors" button exactly as-is — do not remove or modify it.
+What won't be affected:
+
+analyzeDoors() — untouched
+detect-doors route — untouched
+Pipeline extraction — zero changes
+signs table schema — only marker_x/marker_y values updated, same columns Step 9.5 already writes
+Fox Hill, Tower District, Gibson Library — their signs already have non-sentinel coordinates, early exit fires immediately, nothing written
+All existing tests
+
+Regression test: Fox Hill Plans tab loads cleanly, markers at correct positions, sign count 185–215. Click "Analyze Sheet" on Fox Hill — toast should show "0 signs placed" because Fox Hill has no sentinel coordinates. Walking Court PLAN-3-P1 — click "Analyze Sheet" — expect N > 0 signs placed with real coordinates replacing 50000 sentinels.
+Full test suite must pass — 1,571 API + 156 web. Typecheck 0 errors. Do NOT rescan any job.
+
+That prompt adds roughly 130 lines of code total, touches 3 files, reuses the exact pattern Replit already knows, and has zero regression surface on working jobs. Send it?

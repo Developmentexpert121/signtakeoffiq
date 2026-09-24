@@ -1,0 +1,52 @@
+Good data. The diagnostic reveals the exact problem — all sheets share identical sheetTitle values ("FLOOR PLAN LEVEL 1" repeated 7 times), making them indistinguishable. The sheetId (PLAN-0-P1, PLAN-1-P1 etc.) is the only unique identifier. Two sheets are also mislabelled at the level field level — so the dropdown label needs to combine sheetId + level not sheetTitle.
+Here's the Option B prompt:
+
+Session 10 — Plans Tab: Replace Level Pills + Wing Tabs with Single Sheet Dropdown
+All changes in artifacts/web/src/components/FloorPlanTab.tsx only. Typecheck must pass, 1,727 tests must stay green. Do not rescan any job.
+
+Change 1 — Remove the level pills, All button, and wing tab row
+Remove these three toolbar blocks entirely:
+
+The level filter pills block ({hasRasterizedSheets && levels.length > 1 && ...})
+The All-sheets single-level toggle ({hasRasterizedSheets && levels.length === 1 && ...})
+The wing sub-selector pill row ({hasRasterizedSheets && !showingAllSheets && levelSheets.length > 1 && ...})
+
+Also remove the ALL_SHEETS sentinel and showingAllSheets / handleLevelChange logic — these are no longer needed. The selected sheet IS the navigation state.
+
+Change 2 — Replace with a single sheet dropdown
+Replace the removed blocks with one dropdown in the toolbar. The dropdown lists all relevantSheets ordered by level then sheetNumericOrder. Each option is labeled:
+PLAN-1-P1 — LEVEL 1        (sheetId — level)
+PLAN-2-P1 — LEVEL 1
+...
+PLAN-1-P2 — LEVEL 2
+...
+PLAN-1-P3 — LEVEL 3
+Use sheetId ?? sheetTitle ?? Pg ${pdfPage} for the left side of the label. Use sheet.level (not sheetTitle) for the right side — avoids the mislabelled PLAN-3-P1 / PLAN-5-P1 issue.
+Group the dropdown options visually by level using <optgroup> labels if using a native <select>, or dividers if using the existing custom picker pattern.
+The selected value drives selectedSheetId directly — same state as before, just set from the dropdown instead of the level → wing two-step.
+Default selection on mount: first sheet in relevantSheets ordered by level then sheetNumericOrder that has rasterizedPath.
+
+Change 3 — Update prev/next arrows
+The existing goToPrevSheet / goToNextSheet buttons currently navigate within levelSheets (same level only). Update them to navigate across ALL relevantSheets in order — so prev/next steps through PLAN-8-P1 → PLAN-0-P2 → PLAN-1-P2 etc. without needing to change the level first.
+Update the sheet counter label from sheetIdx + 1 / levelSheets.length to globalIdx + 1 / relevantSheets.length where globalIdx is the position of activeSheet in the full ordered relevantSheets array.
+
+Change 4 — Update marker filtering
+Currently filteredSheetSigns and filteredAllPlacedSigns both use level-based filtering via applyFloorFilter. With Option B there is no level filter — the sheet dropdown IS the filter. Update:
+
+filteredSheetSigns = signs where sheetId === activeSheet.sheetId
+Remove applyFloorFilter level logic — it's no longer needed
+Room list sidebar shows rooms for the active sheet only
+"Unlocated" sidebar shows signs with no coordinates across all sheets (unchanged)
+
+
+Change 5 — Clean up dead state
+Remove or stub out:
+
+selectedLevel state and localStorage persistence (replaced by selectedSheetId)
+activeLevel, levelSheets, levels, showingAllSheets, handleLevelChange
+ALL_SHEETS constant
+sheetNumericOrder tiebreaker in levelSheets sort — keep it in relevantSheets sort instead
+
+Update localStorage key from floor-plan-level-${jobId} to floor-plan-sheet-${jobId} storing selectedSheetId directly.
+
+After changes: Run typecheck, confirm 1,727 tests passing. Open Walking Court_2 Plans tab — verify single dropdown shows all 27 sheets labeled PLAN-N-PN — LEVEL N, grouped by level, defaulting to PLAN-1-P1. Verify prev/next arrows step across all sheets globally. Verify room list sidebar shows correct rooms per sheet. Do not rescan any job.

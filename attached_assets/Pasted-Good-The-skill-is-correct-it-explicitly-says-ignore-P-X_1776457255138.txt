@@ -1,0 +1,119 @@
+Good. The skill is correct — it explicitly says ignore P-XXX (plumbing) sheets and only process A-1XX floor plans. The pipeline is misclassifying the drain detail sheet as a floor plan. Here's the complete fix prompt:
+
+Paste this into Replit Agent:
+
+Fix two floor plan viewer bugs:
+
+Bug 1 — Wrong pages shown (drain/plumbing sheets treated as floor plans)
+The Floor Plans tab is showing pages like "DRAIN, SLOPED TO DRAIN" which are plumbing detail sheets (P-series), not architectural floor plans (A-1XX series).
+
+Fix the sheet classification in the Python sidecar (artifacts/pdf-sidecar/main.py), in the detect_sheet_type() function:
+
+python
+# Current FLOOR_PLAN_KEYWORDS is too loose — "plan" matches everything
+FLOOR_PLAN_KEYWORDS = [
+    "floor plan", "floorplan", "first floor", "second floor", "third floor",
+    "level 1", "level 2", "level 3", "basement", "ground floor", "plan"
+]
+Replace with a stricter version AND add an exclusion list:
+
+python
+FLOOR_PLAN_KEYWORDS = [
+    "floor plan", "floorplan", "construction plan",
+    "first floor plan", "second floor plan", "third floor plan",
+    "level 1 plan", "level 2 plan", "level 3 plan",
+    "basement plan", "ground floor plan",
+    "partial plan", "overall plan", "signage plan",
+    "partial signage plan", "overall signage plan",
+]
+
+# Sheets whose titles contain these words are NEVER floor plans
+FLOOR_PLAN_EXCLUSION_KEYWORDS = [
+    "drain", "plumbing", "mechanical", "electrical", "hvac",
+    "structural", "civil", "landscape", "demolition", "demo",
+    "detail", "section", "elevation", "reflected ceiling",
+    "roof", "site plan", "foundation", "framing",
+    "schedule", "notes", "legend", "index",
+]
+
+def detect_sheet_type(sheet_id: str, title: str) -> str:
+    title_lower = title.lower()
+    sheet_id_lower = sheet_id.lower()
+
+    # Check signage first (highest priority)
+    if any(k in title_lower for k in SIGNAGE_KEYWORDS):
+        return "signage_schedule"
+    if any(k in title_lower for k in EGRESS_KEYWORDS):
+        return "egress"
+    if any(k in title_lower for k in CODE_KEYWORDS):
+        return "code_review"
+
+    # Reject non-floor-plan disciplines by sheet ID prefix
+    # P=plumbing, M=mechanical, E=electrical, S=structural, C=civil, L=landscape
+    non_arch_prefixes = ("p-", "p0", "p1", "p2", "m-", "m0", "m1",
+                         "e-", "e0", "e1", "s-", "s0", "s1",
+                         "c-", "c0", "l-", "fp-", "fd-")
+    if sheet_id_lower.startswith(non_arch_prefixes):
+        return "other"
+
+    # Reject if title contains exclusion keywords
+    if any(k in title_lower for k in FLOOR_PLAN_EXCLUSION_KEYWORDS):
+        return "other"
+
+    # Only call it a floor plan if the title explicitly says so
+    # OR if it's an A-1XX series sheet (architectural floor plans)
+    is_arch_floor_plan_series = (
+        sheet_id_lower.startswith("a-1") or
+        sheet_id_lower.startswith("a1") or
+        re.match(r"in1\d\d", sheet_id_lower)  # IN115, IN116, IN117, IN118 = signage plans
+    )
+    if any(k in title_lower for k in FLOOR_PLAN_KEYWORDS):
+        return "floor_plan"
+    if is_arch_floor_plan_series:
+        return "floor_plan"
+
+    return "other"
+Note: IN1XX series (like IN115, IN116, IN117) are signage plan sheets and should be classified as floor_plan since they show room layouts with sign markers — this is correct for the SOF 7087 project.
+
+Bug 2 — Markers positioned outside the plan image
+The pipeline saves coordinates as 0–1000 values but the viewer multiplies them by renderedW/renderedH expecting 0–1 values, placing markers far off-screen.
+
+Fix in artifacts/web/src/components/UnifiedPlanViewer.tsx:
+
+Find where stored xPos/yPos are pushed into the markers array (around line 720):
+
+typescript
+markers.push({
+  x: s.xPos, y: s.yPos,
+Change to:
+
+typescript
+markers.push({
+  x: (s.xPos ?? 0) / 1000,
+  y: (s.yPos ?? 0) / 1000,
+Find where drag-repositioned markers are saved back (look for JSON.stringify({ xPos: m.x, yPos: m.y):
+
+typescript
+body: JSON.stringify({ xPos: m.x, yPos: m.y, placementSource: ... })
+Change to:
+
+typescript
+body: JSON.stringify({ xPos: m.x * 1000, yPos: m.y * 1000, placementSource: ... })
+Find where click-to-add saves a new marker position (look for xPos: clickX / renderedW or similar):
+
+typescript
+body: JSON.stringify({ xPos: nx, yPos: ny, ... })
+// where nx = clickX / renderedW (a 0-1 fraction)
+Change to:
+
+typescript
+body: JSON.stringify({ xPos: nx * 1000, yPos: ny * 1000, ... })
+After fixing both bugs
+Restart the Python sidecar: the "PDF Sidecar" workflow in Replit needs to restart to pick up main.py changes
+Rebuild the frontend: cd artifacts/web && pnpm run build
+Re-run both jobs using Rescan — the sheet classification runs during pipeline step 2
+The Floor Plans tab should now show only architectural floor plan pages, and markers should appear on top of room labels inside the plan
+
+
+
+

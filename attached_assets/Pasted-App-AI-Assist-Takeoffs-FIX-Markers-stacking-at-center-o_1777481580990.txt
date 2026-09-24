@@ -1,0 +1,244 @@
+App: AI-Assist Takeoffs
+FIX: Markers stacking at center of floor plan.
+Applies to ALL building types, ALL plans.
+
+════════════════════════════════════════════════
+ROOT CAUSE — confirmed from DB diagnostic
+════════════════════════════════════════════════
+Signs with coord_source='vision_estimated_gemini'
+are ALL getting coord_x=50000, coord_y=50000.
+
+This is a centroid fallback that fires when
+Gemini's vision estimation fails or returns
+no coordinates. Instead of omitting the marker,
+the code defaults to page center (50%, 50% of
+100,000 grid = 50,000, 50,000).
+
+Result: every unlocated room stacks on top of
+each other at the exact center of the plan image.
+
+════════════════════════════════════════════════
+FIX 1 — Remove the (50000, 50000) fallback
+════════════════════════════════════════════════
+Find in pipeline.ts where coord_x and coord_y
+are set for vision_estimated_gemini rooms.
+
+Search for: 50000 near coord_x or coord_y
+
+Current code likely looks like:
+  coord_x: geminiResult?.x ?? 50000,
+  coord_y: geminiResult?.y ?? 50000,
+
+Or:
+  if (!coords) {
+    coord_x = 50000;  // center fallback
+    coord_y = 50000;
+  }
+
+Replace with NULL — never place a marker if
+coordinates are unknown:
+
+  coord_x: geminiResult?.x ?? null,
+  coord_y: geminiResult?.y ?? null,
+  coord_source: geminiResult?.x 
+    ? 'vision_estimated_gemini' 
+    : 'unlocated',
+
+In the Plans tab renderer:
+  // Only render markers with valid coordinates
+  const markersToRender = signs.filter(s =>
+    s.coord_x !== null &&
+    s.coord_y !== null &&
+    s.coord_x !== 50000 &&  // legacy cleanup
+    s.coord_y !== 50000 &&
+    !(s.coord_x === 50000 && 
+      s.coord_y === 50000)
+  );
+
+Also update existing DB rows for all jobs:
+  UPDATE signs
+  SET 
+    coord_x = NULL,
+    coord_y = NULL,
+    coord_source = 'unlocated'
+  WHERE coord_x = 50000
+  AND coord_y = 50000
+  AND coord_source = 'vision_estimated_gemini';
+
+Log: how many markers were cleared:
+  console.log('[MARKER-FIX] Cleared', 
+    result.rowCount,
+    'centroid-fallback markers across all jobs');
+
+════════════════════════════════════════════════
+FIX 2 — Improve Gemini vision coordinate prompt
+         so fewer rooms fall back to unlocated
+════════════════════════════════════════════════
+The reason so many rooms get (50000,50000) is
+the vision prompt isn't getting usable coords
+back from Gemini. Improve the prompt:
+
+Current prompt likely asks for x/y percentage.
+Replace with a more structured approach:
+
+  """
+  You are locating rooms on a floor plan image.
+  The image is divided into a 20×20 grid where:
+    Column 1 = leftmost, Column 20 = rightmost
+    Row 1 = topmost, Row 20 = bottommost
+
+  For each room label listed, find it on the
+  floor plan and report its grid position.
+  
+  Be as precise as possible to 0.5 grid units.
+  If you genuinely cannot find a room label,
+  return null for that room — do NOT guess.
+  
+  Rooms to locate: {roomList}
+  
+  Return ONLY valid JSON array:
+  [
+    {
+      "room_number": "W119",
+      "grid_col": 14.5,
+      "grid_row": 8.0,
+      "confidence": 0.85
+    },
+    {
+      "room_number": "W120",
+      "grid_col": null,
+      "grid_row": null,
+      "confidence": 0.0,
+      "not_found": true
+    }
+  ]
+  
+  CRITICAL: Return null coordinates if you
+  cannot locate the room. Never guess a
+  position if you are not confident.
+  """
+
+Convert grid to 0-100,000 coordinates:
+  coord_x = (grid_col / 20) * 100000
+  coord_y = (grid_row / 20) * 100000
+
+Rooms where not_found=true:
+  coord_x = null
+  coord_y = null
+  coord_source = 'unlocated'
+
+════════════════════════════════════════════════
+FIX 3 — Show unlocated rooms in Review tab
+         with "Add Marker" option
+════════════════════════════════════════════════
+Rooms with coord_source='unlocated' should be
+visible in the Review tab with a visual indicator
+so the estimator knows to place them manually.
+
+In the Review tab Sign Table:
+  - Show a 📍? icon in the Dimensions/Location
+    column for unlocated rooms
+  - Tooltip: "No marker placed — click pin icon
+    to place manually on the plan"
+  - The existing pin/location icon in Actions
+    column should open the Plans tab with that
+    room highlighted for manual placement
+
+In the Plans tab:
+  - Show an "Unlocated Rooms" count badge:
+    "3 rooms need manual placement"
+  - Click badge → highlight those rooms in
+    Review tab
+
+════════════════════════════════════════════════
+FIX 4 — Normalize floor label casing
+         All plans, all building types
+════════════════════════════════════════════════
+DB has both "Level 1" and "LEVEL 1" for same
+floor. This causes duplicate floor tabs and
+incorrect floor counting.
+
+Normalize on INSERT and on read:
+
+  // Normalize floor label to consistent format
+  function normalizeFloorLabel(label: string) {
+    if (!label) return null;
+    const t = label.trim();
+    
+    // Normalize to "LEVEL N" format
+    const match = t.match(
+      /^(level|floor|fl|story)\s*[-–]?\s*(\w+)$/i
+    );
+    if (match) {
+      const num = match[2].toUpperCase();
+      return \`LEVEL \${num}\`;
+    }
+    
+    // Already normalized
+    if (/^LEVEL \w+$/.test(t)) return t;
+    
+    // Numeric only: "1", "2" → "LEVEL 1"
+    if (/^\d+$/.test(t)) return \`LEVEL \${t}\`;
+    
+    return t.toUpperCase();
+  }
+
+Apply on:
+  1. INSERT: normalize before saving
+  2. On read in XLSX export
+  3. On read in Plans tab floor selector
+
+Fix existing data:
+  UPDATE signs SET floor_label = 
+    CASE
+      WHEN floor_label ILIKE 'level %' 
+        THEN 'LEVEL ' || 
+          SUBSTRING(floor_label FROM 7)
+      WHEN floor_label ILIKE 'floor %'
+        THEN 'LEVEL ' || 
+          SUBSTRING(floor_label FROM 7)
+      ELSE UPPER(floor_label)
+    END
+  WHERE floor_label IS NOT NULL;
+
+  UPDATE sheet_cache SET floor_label =
+    CASE
+      WHEN floor_label ILIKE 'level %'
+        THEN 'LEVEL ' || 
+          SUBSTRING(floor_label FROM 7)
+      ELSE UPPER(floor_label)
+    END
+  WHERE floor_label IS NOT NULL;
+
+════════════════════════════════════════════════
+VERIFY — all building types
+════════════════════════════════════════════════
+After all fixes, Fox Hill Plans tab:
+
+1. NO markers stacked at center of plan
+   Every visible marker is in a unique position
+
+2. Unlocated rooms shown with 📍? indicator
+   in Review tab — count badge in Plans tab
+
+3. pdf_native markers (16 rooms) appear in
+   correct positions on the plan
+
+4. Floor selector shows LEVEL 1 and LEVEL 2
+   only — no duplicates from case mismatch
+
+5. DB check:
+   SELECT coord_x, coord_y, COUNT(*)
+   FROM signs
+   WHERE job_id = <latest_fox_hill>
+   GROUP BY coord_x, coord_y
+   HAVING COUNT(*) > 3;
+   → Should return 0 rows
+   (no more than 3 signs at same coordinate)
+
+Works for ALL building types:
+   Any plan where Gemini can't locate a room
+   → null coords, not (50000, 50000)
+   → no stacking on any plan
+
+All 1,461 tests pass.

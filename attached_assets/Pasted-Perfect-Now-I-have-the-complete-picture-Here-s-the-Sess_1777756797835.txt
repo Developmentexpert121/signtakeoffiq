@@ -1,0 +1,126 @@
+Perfect. Now I have the complete picture. Here's the Session 2 Replit prompt:
+
+Session 2 of 4 — Wire Structured Upload Slots to Pipeline
+What's broken / what this adds: When a user uploads a file tagged fileCategory = "room_schedule" or fileCategory = "floor_plan" via the new structured upload slots, the pipeline ignores those tags and still runs the full drawing index parser and sidecar title-block extraction. This means Example 8's A-710 still gets misread even with the new UI. Session 2 makes the pipeline respect the user's slot choice and bypass the classifier for explicitly tagged files.
+Files that change:
+
+artifacts/api-server/src/db/schema.ts — add floorLabel text column to job_files table
+artifacts/api-server/src/routes/files.ts — accept floorLabel in POST and PATCH routes
+artifacts/api-server/src/lib/pipeline.ts — slot-aware bypass logic at the sheet classification step
+artifacts/web/src/components/StructuredUploader.tsx — save floor label to DB on change
+
+What won't be affected: Rules engine R1-R17, egress generator, specialty signs, XLSX export, training module, marker placement, Files tab, all existing jobs that don't use the new slots. Any file without an explicit fileCategory tag continues through the existing auto-classification path unchanged.
+Regression test job: Fox Hill — rescan after tests pass, confirm 193 signs.
+
+Step 1 — Add floorLabel column to job_files schema
+In artifacts/api-server/src/db/schema.ts, add one column to jobFilesTable:
+typescriptfloorLabel: text("floor_label"),
+Add it after the fileCategory column. Then run the Drizzle migration to apply it to the DB.
+
+Step 2 — Accept floorLabel in file routes
+In artifacts/api-server/src/routes/files.ts:
+POST /files (line ~31):
+typescriptconst { filename, storagePath, fileSizeBytes, fileCategory, floorLabel } = req.body;
+// add to insert:
+floorLabel: floorLabel || null,
+POST /files/drive (line ~83):
+typescriptconst { driveUrl, fileCategory, floorLabel } = req.body;
+// add to insert:
+floorLabel: floorLabel || null,
+PATCH /files/:id (line ~151):
+typescriptconst { fileCategory, floorLabel } = req.body;
+// add to set:
+floorLabel: floorLabel ?? null,
+
+Step 3 — Save floor label from StructuredUploader UI
+In artifacts/web/src/components/StructuredUploader.tsx, the floor label text input currently stores state locally. Wire it to persist:
+When the user finishes typing in the floor label input (onBlur), call:
+PATCH /api/jobs/:jobId/files/:fileId
+{ floorLabel: <value> }
+Use authFetch which is already available as a prop. Only fire the PATCH when a file is actually uploaded in that slot (i.e. the slot has at least one file). If the slot has multiple files, apply the same floor label to all files in that slot.
+
+Step 4 — Pipeline slot-aware bypass
+This is the core change. In artifacts/api-server/src/lib/pipeline.ts, find the section where sheets are built from uploaded files and classified (around lines 2022–2031 where fileCategory is currently read, and the classification flow that leads to classifySheetStep2).
+Add a bypass function before the classification step:
+typescriptfunction getSlotOverrideSheetType(fileCategory: string | null): string | null {
+  if (fileCategory === "floor_plan") return "floor_plan";
+  if (fileCategory === "room_schedule") return "room_schedule";
+  if (fileCategory === "sign_schedule") return "sign_schedule";
+  return null; // no override — use existing classifier
+}
+Apply the bypass in the sheet building loop:
+When iterating over uploaded files to build sheet records, check for a slot override before running the sidecar title-block extraction and classifySheetStep2:
+typescriptconst slotOverride = getSlotOverrideSheetType(file.fileCategory);
+
+if (slotOverride) {
+  // User explicitly tagged this file — trust the slot, skip classifier
+  // Assign sheet_type directly for every page in this file
+  sheet.sheet_type = slotOverride;
+  sheet.classificationSource = "slot_override";
+  // For floor_plan: skip drawing index lookup, go straight to vision extraction
+  // For room_schedule: skip drawing index lookup, go straight to extractTable
+  // For sign_schedule: existing sign_schedule handling applies
+} else {
+  // No slot tag — run existing auto-classification as today
+  // classifySheetStep2, isRelevant, drawing index, title-block extraction all unchanged
+}
+For room_schedule slot override specifically:
+When slotOverride === "room_schedule", ensure extractTable is triggered for this file. The existing trigger at line ~4966 fires when sheetDbRows.filter(s => s.sheetType === "room_schedule").length > 0 — the bypass just needs to ensure those rows exist with sheetType = "room_schedule" before that filter runs. No change to extractTable itself.
+For floor_plan slot override specifically:
+When slotOverride === "floor_plan", skip the drawing index parser timeout logic entirely for pages in this file. Go directly to the rasterization and vision extraction step. The floorLabel from the file record should be used to set the level metadata on all rooms extracted from this file, overriding the filename-based level detection.
+Add this level injection after room extraction:
+typescriptif (file.floorLabel && file.floorLabel.trim() !== "") {
+  // Parse floorLabel into level — LLM call or simple heuristic
+  // "First floor" → "1", "Floors 1-3" → inject as level hint into room records
+  // Use existing normalizeLevel() function where possible
+  // If floorLabel contains a range ("1-3"), apply the sheet ID to determine
+  // which level each page maps to within that range
+  extractedRooms.forEach(room => {
+    if (!room.level) room.level = parseLevelFromLabel(file.floorLabel);
+  });
+}
+Add a simple parseLevelFromLabel helper that handles common patterns:
+
+"First floor" / "1st floor" → "1"
+"Second floor" / "2nd floor" → "2"
+"Basement" / "B1" → "B"
+"Floors 1-3" → "1" (first page), use sheet ID suffix for disambiguation
+Falls back to existing filename-based detection if pattern not recognized
+
+
+Step 5 — Typecheck and tests
+
+Run Drizzle migration for the new floor_label column
+Run typecheck: must pass 0 errors
+Run full test suite: must show 1,585 passing (no new tests required for this session but existing must all pass)
+Do NOT rescan any job until tests pass
+
+
+Step 6 — Regression rescans
+After tests pass:
+
+Rescan Fox Hill — confirm 193 signs
+Rescan NOVO — confirm 201 signs
+Rescan Tower District — confirm 329 signs
+Rescan Gibson — confirm 16 egress signs
+
+Then as the new-slot test:
+5. On Example 8 — upload A-710 to the Room Schedule slot, rescan, report total sign count and whether Overview shows more than 16 signs
+
+What Replit should NOT do
+
+Do not change the Files tab DualZoneUploader
+Do not change classifySheetStep2 logic — it runs unchanged for non-slot files
+Do not change the rules engine, egress generator, or XLSX export
+Do not remove or modify any existing fileCategory handling at lines 2022–2031
+Do not add new API endpoints beyond the PATCH floorLabel extension
+Do not change any other component or route not listed above
+
+
+Definition of done for Session 2
+
+Fox Hill, NOVO, Tower District, Gibson all rescan to their benchmark counts
+Example 8 with A-710 in Room Schedule slot produces more than 16 signs
+Floor label typed in the UI persists after page refresh
+floor_label column exists in job_files table
+Typecheck 0 errors, 1,585 tests passing

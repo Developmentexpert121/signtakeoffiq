@@ -1,0 +1,172 @@
+Fix: Room extraction returns 0 rooms — regex too narrow + missing title block exclusion
+Context
+Two jobs have been tested and both fail room extraction:
+
+NOVO Riverside (residential) — found 5 fake "rooms" that are title block text
+SOF 7087 (government/military) — found 0 rooms at all
+
+Both fail because of the same two bugs in artifacts/api-server/src/lib/pipeline.ts.
+Bug 1: ROOM_NUMBER_RE is wrong (line ~305)
+Current regex:
+
+export const ROOM_NUMBER_RE = /^(\d{3,4}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+
+Problems:
+
+Matches "2026" (year), "292", "294" (building street addresses) — too loose for residential
+Does NOT match "BP1-101", "A1-103", "SP1-201" (residential service rooms with hyphens)
+Does NOT reliably match "1101.1", "1123.1" (government rooms with decimal suffixes)
+
+The two projects use different room numbering schemes:
+
+Residential (NOVO): 3-digit units like 103, 204A + service codes like BP1-101, A1-103
+Government (SOF 7087): 4-digit with floor prefix like 1100, 1119, 2102, 1113.1
+
+Replace the ROOM_NUMBER_RE line with this version that handles both:
+
+export const ROOM_NUMBER_RE = /^(\d{3}[A-Z]?|1[0-4]\d{2}[A-Z]?\.?\d?|2[0-4]\d{2}[A-Z]?\.?\d?|[A-Z]{1,2}P?\d?-\d{3}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+
+// Reject years explicitly even if they technically match digit patterns
+
+const YEAR_RE = /^(19|20)\d{2}$/;
+
+This matches:
+
+103, 204, 315A — residential 3-digit units
+1100, 1101, 1119, 2102, 2113 — government 4-digit rooms (1000-1499, 2000-2499)
+1101.1, 1113.1, 1123.1 — government rooms with decimal sub-suffixes
+BP1-101, A1-103, SP1-201, EP1-102 — residential service rooms
+
+It does NOT match:
+
+2026, 2024 — years (also blocked by YEAR_RE)
+7087 — building number (starts with 7, outside 1xxx/2xxx range)
+292, 294 — street addresses (only 3 digits and no alpha prefix)
+Bug 2: No title block exclusion inside extractRoomsFromWords
+Replace the entire extractRoomsFromWords function with this corrected version:
+
+export function extractRoomsFromWords(
+
+  words: SidecarWord[],
+
+  pageWidth: number,
+
+  pageHeight: number
+
+): ExtractedRoom[] {
+
+  const rooms: ExtractedRoom[] = [];
+
+  const usedIndices = new Set<number>();
+
+  // Title block exclusion: rightmost 22% and bottom 12% of the page
+
+  // contain the title block (address, copyright, sheet number) — exclude entirely.
+
+  const titleBlockXThreshold = pageWidth * 0.78;
+
+  const titleBlockYThreshold = pageHeight * 0.88;
+
+  for (let i = 0; i < words.length; i++) {
+
+    const word = words[i];
+
+    if (!ROOM_NUMBER_RE.test(word.text)) continue;
+
+    if (YEAR_RE.test(word.text)) continue;
+
+    if (usedIndices.has(i)) continue;
+
+    const rx = word.x0;
+
+    const ry = word.y0;
+
+    // Skip anything in the title block region
+
+    if (rx > titleBlockXThreshold || ry > titleBlockYThreshold) continue;
+
+    const roomNumber = word.text;
+
+    // Collect nearby words that form the room name label
+
+    const nearby: Array<{ text: string; x: number }> = [];
+
+    for (let j = 0; j < words.length; j++) {
+
+      if (j === i || usedIndices.has(j)) continue;
+
+      const w2 = words[j];
+
+      const dy = Math.abs(w2.y0 - ry);
+
+      const dx = Math.abs(w2.x0 - rx);
+
+      if (dy < 35 && dx < 320 && !ROOM_NUMBER_RE.test(w2.text)) {
+
+        const upper = w2.text.toUpperCase();
+
+        if (
+
+          !IGNORE_WORDS.has(upper) &&
+
+          !YEAR_RE.test(w2.text) &&
+
+          w2.text.length <= 30 &&
+
+          !/^\d+['"\-\/]/.test(w2.text)
+
+        ) {
+
+          nearby.push({ text: upper, x: w2.x0 });
+
+        }
+
+      }
+
+    }
+
+    const sortedNearby = nearby
+
+      .sort((a, b) => a.x - b.x)
+
+      .map((n) => n.text);
+
+    const rawName = sortedNearby.slice(0, 5).join(" ").trim();
+
+    // Reject if the "name" looks like a street address or copyright notice
+
+    const isAddressLike =
+
+      rawName.includes(",") ||
+
+      /\b(AVE|BLVD|ST\b|RD\b|DR\b|MA\b|NY\b|CA\b|COPYRIGHT|DRAWING|PROJECT|JACOBS|CORPS)\b/.test(rawName);
+
+    if (isAddressLike) continue;
+
+    const roomName = rawName ? expandSynonyms(rawName) : `ROOM ${roomNumber}`;
+
+    const normX = Math.round((rx / pageWidth) * 1000);
+
+    const normY = Math.round((ry / pageHeight) * 1000);
+
+    usedIndices.add(i);
+
+    rooms.push({ roomNumber, roomName, x: normX, y: normY, pageWidth, pageHeight });
+
+  }
+
+  return rooms;
+
+}
+Expected results after fix
+SOF 7087 (government): ~60 Level 1 rooms + ~30 Level 2 rooms, totaling 123 signs matching the signage schedule on sheet I-601. Example rooms: 1100 CORRIDOR, 1101 UCC/COMP RM, 1119 AUDITORIUM, 2102 CBT RM 1
+
+NOVO Riverside (residential): ~200+ rooms per building across 7 levels, totaling 412 signs. Example rooms: BP1-101 BIKE STORAGE, 103 UNIT B3, SP1-201 STAIR 1
+After making the fix
+cd artifacts/api-server && pnpm run build
+
+Then in the app:
+
+Open the SOF 7087 job → click Rescan
+Open the NOVO Riverside job → click Rescan
+Check the Rooms tab on each job to verify correct rooms are found

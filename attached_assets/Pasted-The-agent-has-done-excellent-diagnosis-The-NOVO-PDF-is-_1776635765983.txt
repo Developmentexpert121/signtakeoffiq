@@ -1,0 +1,56 @@
+The agent has done excellent diagnosis. The NOVO PDF is a different type than SOF — it's a full construction document set with finish plans, not just signage plans. The room extraction is reading finish codes (WD1, C4, B3) instead of room names.
+
+Before fixing anything, I need to look at the actual NOVO PDF structure to tell the agent exactly which sheets to use.Now I have the full picture. This is a **finish plan PDF**, not a signage plan PDF. Pages 2-4 are residential floor plans but covered in finish material codes (C6j, A1-420, C1-202, A-539) — not room name labels. Page 1 and 5 are schedules/legends.
+
+**Paste this into Replit Agent:**
+
+> The NOVO Riverside PDF is a **finish plan set** (5 pages), not a dedicated signage plan. Here's what each page actually is:
+>
+> - **Page 1:** Level 1 floor plan with signage legend (has UNIT#, ELEVATOR, EXIT, ROOM ID, STAIR counts in legend) — this IS a valid signage reference sheet
+> - **Page 2:** Level 2 finish floor plan — covered in finish codes (C6j, A1-420, C1-202) not room name labels  
+> - **Page 3:** Level 3 finish floor plan — same issue
+> - **Page 4:** Level 5 finish floor plan — same issue
+> - **Page 5:** 294 Baker Level 1 — another signage/finish plan
+>
+> **The core problem:** The room name extractor is reading finish material codes as room names (WD1, C4, B3, A1-G2) because these codes appear near room numbers on finish plans.
+>
+> **The fix for residential finish plans:**
+>
+> In `artifacts/api-server/src/lib/pipeline.ts` in `extractRoomsFromWords`, add a filter to reject finish material code patterns as room names:
+>
+> ```typescript
+> // After building rawName, add this check:
+> // Finish material codes look like: "C6j", "A1-420", "WD1", "C4", "B3", "C1.8"
+> // They are short alphanumeric codes, often with numbers
+> const isFinishCode = /^[A-Z]\d/.test(rawName) || // starts with letter+digit like C6, A1, B3
+>   /^[A-Z]{1,2}\d+[a-z]?$/.test(rawName) || // WD1, C4, B3
+>   rawName.split(' ').every(w => /^[A-Z]\d|^\d+$/.test(w)); // all words are codes
+> if (isFinishCode && rawName.length < 10) continue; // skip short finish codes
+> ```
+>
+> **More importantly** — for residential projects, room names are often just "UNIT 101", "UNIT 102" etc. The room NUMBER is the key identifier. The room name should default to "UNIT {roomNumber}" for 3-digit numbers when no clear room label is found nearby.
+>
+> Add this fallback after the finish code check:
+> ```typescript
+> // For residential: if rawName looks like codes/garbage, use "UNIT {roomNumber}"
+> const isResidentialUnit = /^\d{3}[A-Z]?$/.test(roomNumber); // 3-digit room numbers
+> if (isResidentialUnit && (isFinishCode || rawName.length === 0 || rawName.split(' ').length > 4)) {
+>   roomName = `UNIT ${roomNumber}`;
+> }
+> ```
+>
+> Also — **page 1 of the NOVO PDF has a signage legend** showing:
+> - UNIT# : 40 Count
+> - ELEVATOR: 4 Count  
+> - EVACUATION MAP: 4 Count
+> - EXIT: 5 Count
+> - ROOM ID: 12 Count
+> - STAIR (Corridor): 4 Count
+> - STAIRS (Landing): 4 Count
+>
+> This is per-level data for 292 Baker. The total for both buildings should be ~412.
+>
+> After applying the fix, rebuild and rescan:
+> ```bash
+> cd artifacts/api-server && pnpm run build
+> ```

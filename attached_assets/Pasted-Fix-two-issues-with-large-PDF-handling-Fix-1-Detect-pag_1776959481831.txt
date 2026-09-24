@@ -1,0 +1,71 @@
+Fix two issues with large PDF handling:
+Fix 1 — Detect page count when PDF is uploaded via Google Drive:
+In jobs.ts, in the POST /jobs/:jobId/files/drive route, after downloading the PDF buffer, detect the actual page count:
+ts// Detect actual PDF page count from bytes
+let detectedPageCount: number | null = null;
+try {
+  // Count /Type /Page occurrences in PDF structure
+  const pdfHeader = buffer.slice(0, Math.min(buffer.length, 500_000)).toString("binary");
+  const pageMatches = pdfHeader.match(/\/Type\s*\/Page[^s]/g);
+  if (pageMatches && pageMatches.length > 0) {
+    detectedPageCount = pageMatches.length;
+  } else {
+    // Fallback: ask sidecar for page count via rasterize page 1
+    // Just check if page exists — get total from response
+    detectedPageCount = null; 
+  }
+} catch {
+  detectedPageCount = null;
+}
+
+logger.log(`[jobs] Drive upload: ${filename} — ${(buffer.length/1024/1024).toFixed(1)}MB, detected ${detectedPageCount ?? 'unknown'} pages`);
+Store detectedPageCount in the job_files insert as pageCount.
+Fix 2 — For null page count, ask sidecar for actual page count:
+In pipeline.ts, in Step 1 after files are loaded, for any floor plan file where pageCount is null, call the sidecar to get the real page count:
+tsfor (const file of floorPlanFiles) {
+  if (file.pageCount != null) continue;
+  try {
+    // Try to rasterize page 999 — sidecar returns error with actual page count
+    // Or use parse-drawing-index which returns pageCount
+    const indexResult = await Promise.race([
+      parseDrawingIndex(file.storagePath, file.filename),
+      new Promise<null>(r => setTimeout(() => r(null), 10_000)),
+    ]);
+    if (indexResult?.pageCount) {
+      file.pageCount = indexResult.pageCount;
+      logger.log(`[pipeline] Detected ${indexResult.pageCount} pages in ${file.filename}`);
+    }
+  } catch { /* ignore */ }
+}
+Fix 3 — Increase synthesized sheet cap for large multi-floor PDFs:
+When page_count is null AND file size > 100MB, assume it's a multi-floor plan and synthesize more pages:
+tsconst fileSizeMB = (file.sizeBytes ?? 0) / 1024 / 1024;
+const synthSizeCap = file.pageCount 
+  ? Math.min(file.pageCount, fileSizeMB > 100 ? 15 : fileSizeMB > 20 ? 8 : 5)
+  : fileSizeMB > 100 ? 15  // null page count + large file = assume multi-floor
+  : fileSizeMB > 20 ? 8
+  : 5;
+Also increase the vision scan cap to match:
+tsconst effectiveVisionCap = isSingleFileSynthesized
+  ? Math.min(synthSizeCap, rawVisionCap)
+  : Math.max(1, Math.round(rawVisionCap));
+Fix 4 — Don't count text-only sheets toward the vision cap:
+In the Step 6 vision loop, find where step6CacheHits and step6FreshScans are tracked. The "Cap reached" badge shows 8 of 8 but only 1 was a fresh scan — text-only sheets are being counted against the cap incorrectly.
+Find the cap check and change it to only count actual vision scans:
+ts// Only count fresh scans and cache hits toward the cap
+// text-only sheets don't consume vision quota
+const visionScansUsed = step6SheetResults.filter(
+  r => r.status === "fresh_scan" || r.status === "cached"
+).length;
+
+if (visionScansUsed >= effectiveVisionCap) {
+  logger.log(`[pipeline] Vision cap reached: ${visionScansUsed} actual scans`);
+  break;
+}
+After saving, rescan Cambridge Moses with Force Fresh AI Scan. Expected:
+
+Synthesizes 15 pages (null page count + 134MB file)
+Vision cap = 15
+Text-only pages don't count toward cap
+Scans pages 8, 9, 10+ finding Basement, Level 1, Level 2 floor plans
+Total signs improves from 25 toward 63

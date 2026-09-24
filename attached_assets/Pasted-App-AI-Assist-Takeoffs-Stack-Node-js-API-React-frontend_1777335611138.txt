@@ -1,0 +1,128 @@
+App: AI-Assist Takeoffs
+Stack: Node.js API, React frontend, PostgreSQL, 
+       Python PDF sidecar (port 8008)
+
+Fix marker placement accuracy across the full pipeline.
+Touch only the files listed. All 1,430 tests must pass.
+
+══════════════════════════════════════════════════
+CHANGE 1 — Upgrade coordinate grid: 1000 → 100000
+══════════════════════════════════════════════════
+The current 0–1000 integer grid causes rounding 
+errors up to 0.1% per axis. Upgrade to 0–100000.
+
+In the Python PDF sidecar:
+  normX = round((label_center_x / page_width)  × 100000)
+  normY = round((label_center_y / page_height) × 100000)
+  + 3% downward nudge stays: normY += round(0.03 × 100000)
+
+In the vision-estimated path (Claude or Gemini):
+  x = percentage_guess × 1000  (was × 10)
+  y = percentage_guess × 1000
+
+In the React frontend marker renderer:
+  pixelX = (markerX / 100000) × imageWidth
+  pixelY = (markerY / 100000) × imageHeight
+
+In the DB: if x/y columns are INTEGER, ALTER to 
+BIGINT. If stored as normalized floats (0.0–1.0), 
+no DB change needed — just update the math.
+
+Verify: a marker at the center of a 2000×1500px 
+image should land at exactly (1000px, 750px).
+
+══════════════════════════════════════════════════
+CHANGE 2 — Fix PDF native coordinate alignment
+══════════════════════════════════════════════════
+PDF native coords are calculated against raw PDF 
+page dimensions, but the rendered PNG may have 
+been cropped, padded, or scaled differently.
+
+In the Python PDF sidecar, when rasterizing the PDF:
+1. Record the EXACT pixel dimensions of the output PNG
+2. Record any margins/padding added during rasterization
+3. Pass these back with each coordinate:
+   {
+     "normX": 45231,
+     "normY": 31820,
+     "coordSource": "pdf_native",
+     "renderWidth": 3400,
+     "renderHeight": 2200,
+     "renderOffsetX": 0,   ← pixels of left padding
+     "renderOffsetY": 0    ← pixels of top padding
+   }
+
+In the Node API, when saving pdf_native coords:
+  Adjust for offset before storing:
+  adjustedX = round((labelCenterX - offsetX) / 
+               renderWidth × 100000)
+  adjustedY = round((labelCenterY - offsetY) / 
+               renderHeight × 100000)
+
+This eliminates systematic drift where all markers 
+are shifted in the same direction.
+
+══════════════════════════════════════════════════
+CHANGE 3 — Switch vision fallback to Gemini 1.5 Pro
+══════════════════════════════════════════════════
+Replace Claude Vision with Gemini 1.5 Pro for the 
+coordinate estimation fallback ONLY. Keep Claude 
+for all other steps (rules engine, classification, 
+sign type inference).
+
+Install: npm install @google/generative-ai
+
+In the vision estimation module, replace the 
+Anthropic vision call with:
+
+  const { GoogleGenerativeAI } = require("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-pro" 
+  });
+
+Prompt to Gemini (keep identical structure to 
+current Claude prompt):
+  "You are analyzing a floor plan image. For each 
+   room label listed below, estimate its CENTER 
+   position as a percentage of the total image 
+   width (left=0%, right=100%) and height 
+   (top=0%, bottom=100%). Be precise to 1 decimal.
+   
+   Rooms to locate: [room list]
+   
+   Respond ONLY in JSON:
+   [{"roomId": "110", "xPct": 23.4, "yPct": 41.2}, ...]"
+
+Convert response: x = xPct × 1000, y = yPct × 1000
+Tag these: coordSource: "vision_estimated_gemini"
+
+Add GEMINI_API_KEY to .env and Replit Secrets.
+Fallback: if Gemini call fails, fall back to 
+current Claude vision path.
+
+══════════════════════════════════════════════════
+CHANGE 4 — Improve the downward nudge heuristic
+══════════════════════════════════════════════════
+The fixed 3% nudge is too blunt. Replace with a 
+room-size-aware nudge:
+
+  If room bounding box height is known from PDF:
+    nudge = roomHeight × 0.35  ← 35% into the room
+  Else (vision estimated, no bbox):
+    nudge = 0.025 × imageHeight  ← 2.5% fixed
+
+This keeps markers inside the room for both 
+large conference rooms and small closets.
+
+══════════════════════════════════════════════════
+VERIFY
+══════════════════════════════════════════════════
+1. Rescan Gleason Lib — check that pdf_native 
+   markers land on their room labels, not offset
+2. Confirm no systematic directional drift
+3. Vision-estimated markers should show 
+   "vision_estimated_gemini" in tooltip
+4. Manually drag 3 markers → confirm saved 
+   canvasX/Y still works correctly post-grid change
+5. All 1,430 tests pass

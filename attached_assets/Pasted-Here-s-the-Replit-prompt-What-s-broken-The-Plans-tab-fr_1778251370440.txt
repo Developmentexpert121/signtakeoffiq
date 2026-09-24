@@ -1,0 +1,25 @@
+Here's the Replit prompt:
+
+What's broken: The Plans tab freezes the browser renderer on every job regardless of building type — Fox Hill (74 markers, rules_engine) freezes intermittently, Walking Court_2 (450 markers, schedule_primary) freezes every time. Root cause: all sign markers are rendered as DOM nodes simultaneously with no viewport culling. This is a frontend-only change — no pipeline, no DB, no API routes touched.
+What changes: artifacts/web/src/components/FloorPlanTab.tsx only.
+What won't be affected: pipeline.ts, rooms.ts, sheets.ts, exports.ts, any DB schema, any API route, all existing jobs and their sign data. The marker data itself is unchanged — only which subset renders at a given moment.
+The fix — viewport-culled marker rendering:
+Replace the current "render all markers" loop with a virtualized approach:
+
+Maintain a visibleMarkers derived list — recalculate on pan, zoom, or sheet change. A marker is visible if its canvas pixel position falls within the viewport bounds plus a 10% overflow buffer (so markers don't pop in at the edge).
+Use useMemo keyed on [currentSheetId, panOffset, zoomLevel] to compute visibleMarkers — avoid recomputing on every render.
+Always render a maximum of 150 marker DOM nodes at once. If the visible set exceeds 150, prioritize markers closest to the viewport center. This hard cap prevents any sheet from freezing the renderer regardless of total sign count.
+When zoomed out far enough that markers would overlap (zoom < 20%), switch to a cluster dot — a single <circle> showing the count for that area rather than individual markers. This handles the Walking Court 450-marker case at default zoom.
+Keep the existing marker click, hover, and edit behavior fully intact for all visible markers — no behavior change, only a reduction in simultaneous DOM nodes.
+
+Must work correctly across all building types:
+
+Fox Hill (rules_engine, 74 markers, 4 sheets) — all markers visible at normal zoom, no freeze
+Walking Court_2 (schedule_primary, 450 markers, 11 sheets) — clusters at low zoom, individual markers as you zoom in
+Tower District (rules_engine, 340 markers) — same cluster behavior
+Gibson Library (16 egress markers) — renders fully without clustering, no change from current behavior
+
+Regression test: Rescan Fox Hill (job_a81ec18d15cec938) after the change — confirm sign count stays 185–215, Plans tab loads without freezing, all 74 markers are individually clickable at 100% zoom.
+Typecheck must pass — 0 errors. Full test suite must pass — 1,571 API + 156 web.
+
+That framing explicitly names all four building types so the agent can't optimize for just one case. The 150-node hard cap and the cluster-at-low-zoom rule together handle both the Fox Hill intermittent freeze and the Walking Court full lock. Want me to send this or adjust anything first?

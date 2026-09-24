@@ -1,0 +1,77 @@
+What's broken in one sentence:
+Floor replication never fires because floor_label is never auto-populated from filenames like AA103-A-FLOOR-PLAN_-LEVELS-03-06--PART-A, and the AA831 sign schedule never reaches Step 3a because sign_schedule files are never sidecar-parsed into job_sheets rows.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — both fixes
+No other files
+
+
+Fix 2b — Auto-extract floor label from filename (pipeline.ts, Step 1 / file ingestion)
+Find where job_files rows are read or updated at the start of the pipeline — the point where file.floorLabel is first available. Add a function that extracts a floor range from the filename if floorLabel is null:
+typescriptfunction inferFloorLabelFromFilename(filename: string): string | null {
+  const name = filename.toUpperCase();
+
+  // Match patterns like: LEVELS-03-06, LEVEL-03-06, FLOORS-3-6, FL-3-6
+  const rangeMatch = name.match(/(?:LEVELS?|FLOORS?|FL)[_\-\s]+(\d+)[_\-\s]+(?:TO[_\-\s]+)?(\d+)/);
+  if (rangeMatch) {
+    return `Floors ${parseInt(rangeMatch[1], 10)}-${parseInt(rangeMatch[2], 10)}`;
+  }
+
+  // Match single level: LEVEL-03, FLOOR-2, FL-01
+  const singleMatch = name.match(/(?:LEVELS?|FLOORS?|FL)[_\-\s]+(\d+)/);
+  if (singleMatch) {
+    return `Floor ${parseInt(singleMatch[1], 10)}`;
+  }
+
+  return null;
+}
+After loading floorPlanFiles, for any file where file.floorLabel is null or empty, call this function and use the result as the effective floor label for that file (do not write back to DB — just use it in memory for the replication step). Log when inference fires:
+typescriptconst effectiveLabel = file.floorLabel?.trim() || inferFloorLabelFromFilename(file.filename) || inferFloorLabelFromFilename(file.originalName ?? "");
+if (!file.floorLabel && effectiveLabel) {
+  logger.log(`[pipeline] Auto-inferred floorLabel="${effectiveLabel}" from filename "${file.filename}"`);
+}
+Pass effectiveLabel into parseFloorLabelRange() instead of file.floorLabel in the replication block.
+
+Fix 4b — Ensure sign_schedule files get job_sheets rows before Step 3a (pipeline.ts, after drawing index parse)
+After the drawing index parse completes and allSheets is finalized, add a dedicated pass for sign_schedule files. For each file in dedicatedSignScheduleFiles, check whether any job_sheets rows already exist for that file. If none exist, synthesize one row per page:
+typescript// Ensure sign_schedule files have job_sheets rows so Step 3a can process them
+for (const sigFile of dedicatedSignScheduleFiles) {
+  const existingSheets = sheetDbRows.filter(s => s.fileId === sigFile.id);
+  if (existingSheets.length > 0) continue; // already parsed
+
+  const pageCount = sigFile.pageCount ?? 1;
+  logger.log(`[pipeline] Synthesising ${pageCount} signage_schedule sheet(s) for ${sigFile.filename}`);
+  for (let p = 1; p <= pageCount; p++) {
+    const synthSheet = {
+      id: newId("sheet"),
+      jobId,
+      tenantId,
+      sheetId: `SIGN-SCHED-${sigFile.id.slice(-6)}-P${p}`,
+      sheetTitle: `Sign Schedule Page ${p}`,
+      pdfPage: p,
+      sheetType: "signage_schedule" as const,
+      level: null,
+      fileId: sigFile.id,
+      confidence: "1.000",
+      status: "extracted",
+    };
+    sheetDbRows.push(synthSheet);
+    // Also insert into DB so subsequent runs find it cached
+    await db.insert(jobSheetsTable).values(synthSheet).onConflictDoNothing();
+  }
+}
+This runs before Step 3a, so when Step 3a filters sheetDbRows for signage_schedule type, AA831's pages are present and the 300 DPI retry path is reachable.
+
+Regression + test sequence
+
+Typecheck — 0 errors
+Full test suite — 1,585 passing
+Do NOT rescan until tests pass
+Force full re-process Fox Hill (check the "Force full re-process" checkbox) — confirm 193–215 signs, confirm no new errors in Step 1 or the sign schedule synthesis block
+Rescan Walking Court with Force full re-process checked — Steps 1–8 must re-run so the new code executes. Watch console for:
+
+Auto-inferred floorLabel="Floors 3-6" firing three times (AA103-A, B, C)
+Synthesising N signage_schedule sheet(s) for AA831
+[Step 3a] ... 300 DPI retry extracted N entries
+Levels 3–6 appearing in the XLSX output
+Target: 200–400+ signs

@@ -1,0 +1,60 @@
+I can see the issue clearly in Image 2. The markers are placed on the **left side and outside the building outline** — many dots are in the empty space to the left of the actual floor plan, not inside the rooms. The rooms like CLASSRM 1-6, AES 1ST SGT, CORRIDOR are visible in the lower portion but the markers aren't aligned with them.
+
+The root cause is the **title block exclusion is cutting off too much** or the coordinate system origin is wrong. Looking at this plan (IN118 Overall Signage Plan Level 2), the building is positioned in the right-center of the page, but the markers are landing on the left edge.
+
+Also Image 1 shows **178 total signs** which is higher than the expected 123 for SOF 7087 — suggests duplicate signs or overcounting.
+
+**Paste this into Replit Agent:**
+
+> Two issues visible in the floor plan viewer after rescan:
+>
+> **Issue 1 — Markers placed outside the building (left edge of page)**
+> The building footprint is in the center-right of the page but markers are clustering on the left edge and outside the building outline. This means the X coordinates are being calculated from the wrong origin.
+>
+> Run this SQL to see the actual coordinate distribution:
+> ```sql
+> SELECT
+>   ROUND(marker_x / 10) * 10 as x_bucket,
+>   ROUND(marker_y / 10) * 10 as y_bucket,
+>   COUNT(*) as count
+> FROM signs
+> WHERE job_id = (SELECT id FROM jobs ORDER BY updated_at DESC LIMIT 1)
+>   AND marker_x IS NOT NULL
+> GROUP BY x_bucket, y_bucket
+> ORDER BY count DESC
+> LIMIT 20;
+> ```
+>
+> Also check what page dimensions are being used:
+> ```sql
+> SELECT DISTINCT page_width, page_height
+> FROM rooms
+> WHERE job_id = (SELECT id FROM jobs ORDER BY updated_at DESC LIMIT 1)
+> LIMIT 5;
+> ```
+>
+> The issue is likely that `pageWidth` and `pageHeight` from the sidecar are the PDF points dimensions (e.g. 2448 x 1584 for an ANSI D sheet), but the room X coordinates from pdfplumber use a different coordinate system (pdfplumber uses bottom-left origin, PDF uses top-left). Check in `extractRoomsFromWords` in `pipeline.ts`:
+>
+> ```typescript
+> // The normY calculation may be inverted
+> // pdfplumber y0 = distance from TOP of page
+> // But PDF coordinate system has y=0 at BOTTOM
+> // Current code:
+> const normY = Math.round((ry / pageHeight) * 1000);
+> // May need to be:
+> const normY = Math.round(((pageHeight - ry) / pageHeight) * 1000);
+> ```
+>
+> **Issue 2 — 178 signs vs expected 123**
+> The SOF 7087 project signage schedule (sheet I-601) has exactly 123 signs (S1-S123). Having 178 suggests duplicate room entries or rules engine assigning multiple sign types per room incorrectly.
+>
+> Run:
+> ```sql
+> SELECT sign_type, COUNT(*) as count
+> FROM signs
+> WHERE job_id = (SELECT id FROM jobs ORDER BY updated_at DESC LIMIT 1)
+> GROUP BY sign_type
+> ORDER BY count DESC;
+> ```
+>
+> Show me both query results before making any code changes.

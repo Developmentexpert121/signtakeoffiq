@@ -1,0 +1,140 @@
+App: AI-Assist Takeoffs
+Applies to ALL jobs, ALL building types.
+
+════════════════════════════════════════════════
+FIX — Overview count must always match Sign Table
+════════════════════════════════════════════════
+Overview reads from job.total_signs (cached).
+Sign Table reads live from signs table.
+They diverge whenever signs change post-scan.
+
+PART A — Fix the source of truth:
+Overview metric cards must query signs table
+LIVE — not read from job.total_signs:
+
+In job-detail.tsx or the Overview API endpoint,
+replace:
+
+  // WRONG — reads stale cached value
+  totalSigns: job.total_signs
+
+  // CORRECT — live count from signs table
+  totalSigns: await db.queryOne(\`
+    SELECT COUNT(*) as cnt
+    FROM signs
+    WHERE job_id = $1
+    AND dismissed = false
+  \`, [jobId])
+
+Same fix for High Confidence and Needs Review:
+
+  highConfidence: await db.queryOne(\`
+    SELECT COUNT(*) as cnt
+    FROM signs
+    WHERE job_id = $1
+    AND confidence >= 0.75
+    AND dismissed = false
+  \`, [jobId])
+
+  needsReview: await db.queryOne(\`
+    SELECT COUNT(*) as cnt
+    FROM signs
+    WHERE job_id = $1
+    AND confidence < 0.75
+    AND dismissed = false
+  \`, [jobId])
+
+PART B — Keep job.total_signs in sync:
+After ANY operation that adds or removes signs
+(rules engine, egress generator, manual dismiss,
+train button, re-apply keywords), update the
+job record:
+
+  async function syncJobCounts(jobId) {
+    const counts = await db.queryOne(\`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE dismissed = false
+        ) as total,
+        COUNT(*) FILTER (
+          WHERE confidence >= 0.75
+          AND dismissed = false
+        ) as high_confidence,
+        COUNT(*) FILTER (
+          WHERE confidence < 0.75
+          AND dismissed = false
+        ) as needs_review
+      FROM signs
+      WHERE job_id = $1
+    \`, [jobId]);
+
+    await db.query(\`
+      UPDATE jobs SET
+        total_signs = $1,
+        high_confidence_signs = $2,
+        needs_review = $3,
+        updated_at = NOW()
+      WHERE id = $4
+    \`, [
+      counts.total,
+      counts.high_confidence,
+      counts.needs_review,
+      jobId
+    ]);
+  }
+
+Call syncJobCounts() after:
+  - Pipeline completes (end of processJob)
+  - Egress generator completes
+  - User dismisses/restores a sign
+  - Train button runs
+  - Re-apply Keywords runs
+  - Manual flag override saves
+
+PART C — Overview API endpoint:
+If Overview stats come from a dedicated endpoint
+(e.g. GET /api/jobs/:jobId/stats), make it
+always query live:
+
+  router.get('/jobs/:jobId/stats', async (req, res) => {
+    const counts = await db.queryOne(\`
+      SELECT
+        COUNT(*) FILTER (WHERE dismissed=false) 
+          as total_signs,
+        COUNT(*) FILTER (
+          WHERE confidence >= 0.75 
+          AND dismissed=false
+        ) as high_confidence,
+        COUNT(*) FILTER (
+          WHERE confidence < 0.75 
+          AND dismissed=false
+        ) as needs_review,
+        SUM(ai_cost_usd) as ai_cost
+      FROM signs
+      WHERE job_id = $1
+    \`, [req.params.jobId]);
+
+    return res.json(counts);
+  });
+
+════════════════════════════════════════════════
+VERIFY — all building types, all jobs
+════════════════════════════════════════════════
+1. Overview Total Signs = Sign Table room count
+   + Egress & Code Signs count
+   They must always match exactly.
+
+2. Dismiss a sign in Review tab →
+   Overview count decreases by 1 immediately
+
+3. Restore a dismissed sign →
+   Overview count increases by 1 immediately
+
+4. Run Train button →
+   Overview count unchanged (Train doesn't
+   add/remove signs, just reclassifies)
+
+5. Check Gleason Lib and Fox Hill —
+   both should show matching counts
+
+All 1,461 tests pass.

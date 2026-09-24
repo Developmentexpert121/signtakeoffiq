@@ -1,0 +1,54 @@
+Here's the P3 prompt:
+
+Session 9 — P3: XLSX Per-Line-Item Pricing on Takeoff Sheet
+All changes in artifacts/api-server/src/routes/exports.ts only. No schema, no pipeline, no frontend touched. Typecheck must pass, 1,501 API + 124 web tests must stay green. Do not rescan any job.
+
+Change 1 — Update COLS constant
+Find the COLS = 8 constant controlling merge spans and column loop ranges. Change it to COLS = 12.
+
+Change 2 — Add four new column headers to the Takeoff sheet
+After the existing ADA column header (col 8), add:
+ColHeaderWidth9Material2010Finish2011Unit Price1212Extended12
+Apply currency number format ($#,##0.00) to cols 11 and 12.
+
+Change 3 — Populate pricing on each data row
+For each data row in the Takeoff sheet, call getPriceForSignType(signType, pricingConfig) to get materialName, finishingName, materialRate, finishingRate, width, height, minPrice, and flatPrice.
+Compute unit price as follows:
+typescriptconst spec = getPriceForSignType(signType, pricingConfig);
+const unitPrice = spec.flatPrice != null
+  ? spec.flatPrice
+  : Math.max(
+      spec.minPrice ?? 0,
+      (spec.materialRate + spec.finishingRate) * spec.width * spec.height
+    );
+const extended = unitPrice * qty;
+Write to the row:
+
+Col 9: spec.materialName
+Col 10: spec.finishingName
+Col 11: unitPrice (number, currency format)
+Col 12: extended (number, currency format)
+
+
+Change 4 — Floor subtotal rows
+Floor subtotal rows currently merge all 8 cols into col 1 as a label string. Update them:
+
+Col 1 merge span: cols 1–11 (label text unchanged)
+Col 12: sum of all extended values for that floor group (number, currency format, bold)
+
+
+Change 5 — Grand total row
+Grand total row currently shows total sign count. Update it:
+
+Col 1 merge span: cols 1–11 (label text unchanged)
+Col 12: sum of all floor subtotal extended values (number, currency format, bold, amber fill matching existing total row style)
+
+
+After changes: Run typecheck, confirm 1,501 API + 124 web tests passing. Download XLSX for Fox Hill job_a81ec18d15cec938 and verify:
+
+12 columns present on Takeoff sheet
+Material / Finish populated on every sign row
+Unit Price and Extended are numbers with currency format, not text
+Floor subtotals show extended dollar sum in col 12
+Grand total shows total dollar value in col 12
+Evacuation map rows use flat $45.00, not rate × area

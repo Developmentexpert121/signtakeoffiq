@@ -1,0 +1,2413 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Sign Takeoff IQ API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: jobs
+    description: Takeoff job operations
+  - name: files
+    description: PDF file operations
+  - name: sheets
+    description: Drawing sheet operations
+  - name: signs
+    description: Sign assignment operations
+  - name: rooms
+    description: Room inventory operations
+  - name: training
+    description: Training and feedback operations
+  - name: exports
+    description: Export operations
+  - name: admin
+    description: Admin operations
+  - name: storage
+    description: Object storage operations
+  - name: dashboard
+    description: Dashboard summary operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── STORAGE ─────────────────────────────────────────────────────────────────
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
+  /storage/objects/{objectPath}:
+    get:
+      operationId: getStorageObject
+      tags: [storage]
+      summary: Serve a stored object
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object file
+
+  # ─── DASHBOARD ───────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Tenant dashboard summary
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-jobs:
+    get:
+      operationId: getRecentJobs
+      tags: [dashboard]
+      summary: Recent jobs for the tenant
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of recent jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  # ─── JOBS ─────────────────────────────────────────────────────────────────────
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all jobs for tenant
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: buildingType
+          in: query
+          style: form
+          explode: true
+          schema:
+            oneOf:
+              - type: string
+              - type: array
+                items:
+                  type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a new job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job details
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateJob
+      tags: [jobs]
+      summary: Update a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobBody"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      summary: Archive a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Archived
+
+  /jobs/{jobId}/process:
+    post:
+      operationId: processJob
+      tags: [jobs]
+      summary: Trigger the processing pipeline
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Processing started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessJobResponse"
+
+  /jobs/{jobId}/rescan:
+    post:
+      operationId: rescanJob
+      tags: [jobs]
+      summary: Re-run rules engine with updated overrides
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                forceAiRescan:
+                  type: boolean
+                  description: When true, bypasses the AI scan cache and forces a fresh scan
+                forceRescanSheetIds:
+                  type: array
+                  items:
+                    type: string
+                  description: List of sheet IDs to force a fresh AI scan on (others remain cached)
+      responses:
+        "202":
+          description: Rescan started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessJobResponse"
+
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a currently-processing job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Job not found
+        "409":
+          description: Job is not currently processing
+
+  /jobs/{jobId}/re-rule:
+    post:
+      operationId: reRuleJob
+      tags: [jobs]
+      summary: Re-apply rules engine to existing rooms without re-running OCR/AI
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Re-rule complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  signsUpdated:
+                    type: integer
+                  totalSignQty:
+                    type: integer
+        "404":
+          description: Job not found
+        "409":
+          description: Job is not in a re-ruleable state
+        "422":
+          description: No rooms exist for this job
+
+  /jobs/{jobId}/sign-type-distribution:
+    get:
+      operationId: getSignTypeDistribution
+      tags: [jobs]
+      summary: Sign count grouped by type for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sign type distribution
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SignTypeCount"
+
+  /jobs/{jobId}/confidence-histogram:
+    get:
+      operationId: getConfidenceHistogram
+      tags: [jobs]
+      summary: Confidence score distribution for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Confidence histogram
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConfidenceBucket"
+
+  /jobs/{jobId}/ai-scans:
+    get:
+      operationId: getAiScans
+      tags: [jobs]
+      summary: Claude API calls log for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI scan log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiScan"
+
+  # ─── FILES ────────────────────────────────────────────────────────────────────
+  /jobs/{jobId}/files:
+    post:
+      operationId: uploadJobFile
+      tags: [files]
+      summary: Upload a PDF file to a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadJobFileBody"
+      responses:
+        "201":
+          description: File record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobFile"
+    get:
+      operationId: listJobFiles
+      tags: [files]
+      summary: List files for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobFile"
+
+  # ─── SHEETS ───────────────────────────────────────────────────────────────────
+  /jobs/{jobId}/sheets:
+    get:
+      operationId: listJobSheets
+      tags: [sheets]
+      summary: List identified sheets for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sheets list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobSheet"
+
+  /jobs/{jobId}/sheets/{sheetId}:
+    get:
+      operationId: getJobSheet
+      tags: [sheets]
+      summary: Get a single sheet
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sheetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sheet detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobSheet"
+
+  # ─── ROOMS ────────────────────────────────────────────────────────────────────
+  /jobs/{jobId}/rooms:
+    get:
+      operationId: listRooms
+      tags: [rooms]
+      summary: List all rooms for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: sheetId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rooms list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Room"
+
+  /jobs/{jobId}/rooms/{roomId}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Room detail with signs
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomWithSigns"
+    patch:
+      operationId: updateRoomReviewStatus
+      tags: [rooms]
+      summary: Accept or dismiss an AI-vision room suggestion
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoomReviewStatusBody"
+      responses:
+        "200":
+          description: Updated room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  /jobs/{jobId}/rooms/bulk-review:
+    post:
+      operationId: bulkReviewRooms
+      tags: [rooms]
+      summary: Accept or dismiss all AI-vision rooms at once
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkReviewRoomsBody"
+      responses:
+        "200":
+          description: Number of rooms updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                required:
+                  - updated
+
+  /jobs/{jobId}/rooms/dismiss-warnings:
+    post:
+      operationId: dismissRoomWarnings
+      tags: [rooms]
+      summary: Dismiss warning flags for one or more rooms
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomIds:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - roomIds
+      responses:
+        "200":
+          description: Number of rooms updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                required:
+                  - updated
+
+  # ─── SIGNS ────────────────────────────────────────────────────────────────────
+  /jobs/{jobId}/signs:
+    get:
+      operationId: listSigns
+      tags: [signs]
+      summary: List signs for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: signType
+          in: query
+          schema:
+            type: string
+        - name: sheetId
+          in: query
+          schema:
+            type: string
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: minConfidence
+          in: query
+          schema:
+            type: number
+        - name: maxConfidence
+          in: query
+          schema:
+            type: number
+        - name: source
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signs list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sign"
+    post:
+      operationId: createSign
+      tags: [signs]
+      summary: Manually add a sign
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSignBody"
+      responses:
+        "201":
+          description: Created sign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sign"
+
+  /jobs/{jobId}/signs/{signId}:
+    get:
+      operationId: getSign
+      tags: [signs]
+      summary: Get a single sign
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: signId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sign detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sign"
+    patch:
+      operationId: updateSign
+      tags: [signs]
+      summary: Edit a sign
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: signId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSignBody"
+      responses:
+        "200":
+          description: Updated sign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sign"
+    delete:
+      operationId: deleteSign
+      tags: [signs]
+      summary: Soft-delete a sign (records training correction)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: signId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── PLAQUE SCHEDULE & OCCUPANT LOADS ────────────────────────────────────────
+  /jobs/{jobId}/plaque-schedule:
+    get:
+      operationId: getPlaqueSchedule
+      tags: [jobs]
+      summary: Extracted plaque schedule for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Plaque schedule
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaqueScheduleItem"
+
+  /jobs/{jobId}/occupant-loads:
+    get:
+      operationId: getOccupantLoads
+      tags: [jobs]
+      summary: Occupant loads table for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Occupant loads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Room"
+
+  /jobs/{jobId}/validation:
+    get:
+      operationId: getValidationResults
+      tags: [jobs]
+      summary: Validation check results for a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ValidationResult"
+
+  # ─── EXPORTS ──────────────────────────────────────────────────────────────────
+  /jobs/{jobId}/export/xlsx:
+    get:
+      operationId: exportJobXlsx
+      tags: [exports]
+      summary: Download XLSX takeoff
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Excel file
+
+  /jobs/{jobId}/export/pdf:
+    get:
+      operationId: exportJobPdf
+      tags: [exports]
+      summary: Download marked-up PDF
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked-up PDF
+
+  # ─── TRAINING ─────────────────────────────────────────────────────────────────
+  /training/corrections:
+    get:
+      operationId: listCorrections
+      tags: [training]
+      summary: List training corrections for tenant
+      parameters:
+        - name: jobId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Corrections list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingCorrection"
+
+  /training/overrides:
+    get:
+      operationId: listRuleOverrides
+      tags: [training]
+      summary: List rule overrides for tenant
+      responses:
+        "200":
+          description: Overrides list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuleOverride"
+
+  /training/overrides/{overrideId}:
+    patch:
+      operationId: updateRuleOverride
+      tags: [training]
+      summary: Toggle or edit a rule override
+      parameters:
+        - name: overrideId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRuleOverrideBody"
+      responses:
+        "200":
+          description: Updated override
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleOverride"
+
+  /training/import:
+    post:
+      operationId: importTraining
+      tags: [training]
+      summary: Bulk import historical takeoff for training
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportTrainingBody"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportTrainingResponse"
+
+  /training/snapshots:
+    get:
+      operationId: getTrainingSnapshots
+      tags: [training]
+      summary: List import snapshots for the confidence trend chart
+      parameters:
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ISO 8601 start date to filter snapshots
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ISO 8601 end date to filter snapshots
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of snapshots to return (1–1000, default 100)
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of snapshots to skip for pagination (default 0)
+      responses:
+        "200":
+          description: List of import snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrainingSnapshot"
+                  total:
+                    type: integer
+                required:
+                  - snapshots
+                  - total
+
+  /training/snapshots/{snapshotId}:
+    delete:
+      operationId: deleteSnapshot
+      tags: [training]
+      summary: Delete an import snapshot
+      parameters:
+        - name: snapshotId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Snapshot not found
+    patch:
+      operationId: updateSnapshot
+      tags: [training]
+      summary: Update a snapshot's batch label
+      parameters:
+        - name: snapshotId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSnapshotBody"
+      responses:
+        "200":
+          description: Updated snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSnapshotResponse"
+        "404":
+          description: Snapshot not found
+
+  /training/override-impact:
+    get:
+      operationId: getOverrideImpact
+      tags: [training]
+      summary: Training impact stats — overrides and corrections applied counts
+      parameters:
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ISO 8601 start date to filter the confidence trend
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ISO 8601 end date to filter the confidence trend
+      responses:
+        "200":
+          description: Override impact stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverrideImpact"
+
+  # ─── SAVED DATE RANGES ────────────────────────────────────────────────────────
+  /saved-date-ranges:
+    get:
+      operationId: listSavedDateRanges
+      tags: [training]
+      summary: List saved date ranges for the current user
+      responses:
+        "200":
+          description: List of saved date ranges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedDateRange"
+    post:
+      operationId: createSavedDateRange
+      tags: [training]
+      summary: Create a saved date range
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSavedDateRangeBody"
+      responses:
+        "201":
+          description: Created saved date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedDateRange"
+
+  /saved-date-ranges/reorder:
+    patch:
+      operationId: reorderSavedDateRanges
+      tags: [training]
+      summary: Reorder saved date ranges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderedIds:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - orderedIds
+      responses:
+        "204":
+          description: Reordered
+
+  /saved-date-ranges/{rangeId}:
+    delete:
+      operationId: deleteSavedDateRange
+      tags: [training]
+      summary: Delete a saved date range
+      parameters:
+        - name: rangeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── ADMIN ────────────────────────────────────────────────────────────────────
+  /admin/tenant:
+    get:
+      operationId: getTenant
+      tags: [admin]
+      summary: Get current tenant settings
+      responses:
+        "200":
+          description: Tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+    patch:
+      operationId: updateTenant
+      tags: [admin]
+      summary: Update tenant settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTenantBody"
+      responses:
+        "200":
+          description: Updated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+
+  /admin/users:
+    get:
+      operationId: listTenantUsers
+      tags: [admin]
+      summary: List users in the tenant
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TenantUser"
+
+  /admin/users/{userId}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [admin]
+      summary: Update a user's role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRoleBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantUser"
+
+  /admin/tenants:
+    get:
+      operationId: listAllTenants
+      tags: [admin]
+      summary: Super admin — list all tenants
+      responses:
+        "200":
+          description: All tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tenant"
+
+  /admin/config:
+    get:
+      operationId: getServerConfig
+      tags: [admin]
+      summary: Get active server runtime configuration (non-sensitive operator settings)
+      responses:
+        "200":
+          description: Active server configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerConfig"
+    patch:
+      operationId: patchAdminConfig
+      tags: [admin]
+      summary: Update operator-tunable cleanup retention settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cleanupHistoryMaxAgeDays:
+                  type: integer
+                cleanupHistoryMaxRows:
+                  type: integer
+      responses:
+        "200":
+          description: Updated server configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerConfig"
+        "400":
+          description: Validation error
+
+  /admin/guest-cleanup/stats:
+    get:
+      operationId: getGuestCleanupStats
+      tags: [admin]
+      summary: Get expired guest tenant count and last cleanup run results
+      responses:
+        "200":
+          description: Guest cleanup statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestCleanupStats"
+
+  /admin/guest-cleanup/run:
+    post:
+      operationId: runGuestCleanup
+      tags: [admin]
+      summary: Manually trigger guest session cleanup and return results
+      responses:
+        "200":
+          description: Cleanup run results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestCleanupRunResult"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # ─── STORAGE ───────────────────────────────────────────────────────────────
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath
+
+    # ─── DASHBOARD ─────────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      properties:
+        totalJobs:
+          type: integer
+        activeJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        totalSigns:
+          type: integer
+        totalHighConfidence:
+          type: integer
+        totalNeedsReview:
+          type: integer
+        totalAiCost:
+          type: number
+      required:
+        - totalJobs
+        - activeJobs
+        - completedJobs
+        - totalSigns
+        - totalHighConfidence
+        - totalNeedsReview
+        - totalAiCost
+
+    # ─── TENANT ────────────────────────────────────────────────────────────────
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        settings:
+          type: object
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+        - plan
+        - createdAt
+
+    UpdateTenantBody:
+      type: object
+      properties:
+        name:
+          type: string
+        settings:
+          type: object
+
+    TenantUser:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        email:
+          type: string
+        fullName:
+          type: ["string", "null"]
+        role:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - tenantId
+        - email
+        - role
+        - createdAt
+
+    UpdateUserRoleBody:
+      type: object
+      properties:
+        role:
+          type: string
+      required:
+        - role
+
+    CleanupRunResult:
+      type: object
+      properties:
+        tenantsDeleted:
+          type: integer
+        filesDeleted:
+          type: integer
+        bytesRecovered:
+          type: integer
+        ranAt:
+          type: string
+      required:
+        - tenantsDeleted
+        - filesDeleted
+        - bytesRecovered
+        - ranAt
+
+    ServerConfig:
+      type: object
+      properties:
+        rasterizeDpi:
+          type: number
+          description: DPI used when rasterizing PDF pages for AI scanning (RASTERIZE_DPI)
+        maxAiVisionCallsPerRun:
+          type: integer
+          description: Maximum AI vision API calls allowed per pipeline run (AI_VISION_CALLS_PER_RUN)
+        cleanupHistoryMaxAgeDays:
+          type: integer
+          description: How many days cleanup run history is retained (CLEANUP_HISTORY_MAX_AGE_DAYS)
+        cleanupHistoryMaxAgeDaysIsDefault:
+          type: boolean
+          description: True when CLEANUP_HISTORY_MAX_AGE_DAYS was absent or invalid and the built-in default is in use
+        cleanupHistoryMaxRows:
+          type: integer
+          description: Maximum number of cleanup run rows kept in history (CLEANUP_HISTORY_MAX_ROWS)
+        cleanupHistoryMaxRowsIsDefault:
+          type: boolean
+          description: True when CLEANUP_HISTORY_MAX_ROWS was absent or invalid and the built-in default is in use
+        aiModel:
+          type: string
+          description: AI model identifier used for vision scans (e.g. claude-sonnet-4-6)
+        aiProvider:
+          type: string
+          description: AI provider powering vision scans (e.g. Anthropic)
+        builtInMultiEntryKeywords:
+          type: array
+          items:
+            type: string
+          description: Human-readable display names for the built-in multi-entry room keyword patterns (read-only, sourced from the rules engine)
+      required:
+        - rasterizeDpi
+        - maxAiVisionCallsPerRun
+        - cleanupHistoryMaxAgeDays
+        - cleanupHistoryMaxAgeDaysIsDefault
+        - cleanupHistoryMaxRows
+        - cleanupHistoryMaxRowsIsDefault
+        - aiModel
+        - aiProvider
+        - builtInMultiEntryKeywords
+
+    GuestCleanupStats:
+      type: object
+      properties:
+        expiredGuestTenants:
+          type: integer
+        lastRun:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/CleanupRunResult"
+            - type: "null"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/CleanupRunResult"
+      required:
+        - expiredGuestTenants
+        - lastRun
+        - history
+
+    GuestCleanupRunResult:
+      type: object
+      properties:
+        deletedGuestTenants:
+          type: integer
+        filesDeleted:
+          type: integer
+        bytesRecovered:
+          type: integer
+      required:
+        - deletedGuestTenants
+        - filesDeleted
+        - bytesRecovered
+
+    # ─── JOB ───────────────────────────────────────────────────────────────────
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        location:
+          type: ["string", "null"]
+        jurisdiction:
+          type: ["string", "null"]
+        buildingType:
+          type: ["string", "null"]
+        fileCount:
+          type: integer
+        totalSigns:
+          type: integer
+        highConfidence:
+          type: integer
+        needsReview:
+          type: integer
+        aiTokenCost:
+          type: number
+        visionThreshold:
+          type: ["number", "null"]
+          description: Custom AI vision confidence threshold (0–50) for this job
+        metadata:
+          type: object
+        scopeFlag:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - tenantId
+        - name
+        - status
+        - fileCount
+        - totalSigns
+        - highConfidence
+        - needsReview
+        - aiTokenCost
+        - createdAt
+        - updatedAt
+
+    CreateJobBody:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        jurisdiction:
+          type: string
+        buildingType:
+          type: string
+        visionThreshold:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 50
+          description: Custom AI vision confidence threshold (0–50) for this job
+      required:
+        - name
+
+    UpdateJobBody:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        location:
+          type: string
+        jurisdiction:
+          type: string
+        buildingType:
+          type: string
+        metadata:
+          type: object
+        visionThreshold:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 50
+          description: Custom AI vision confidence threshold (0–50) for this job
+
+    ProcessJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - jobId
+        - status
+        - message
+
+    SignTypeCount:
+      type: object
+      properties:
+        signType:
+          type: string
+        count:
+          type: integer
+        color:
+          type: string
+      required:
+        - signType
+        - count
+        - color
+
+    ConfidenceBucket:
+      type: object
+      properties:
+        bucket:
+          type: string
+        count:
+          type: integer
+        minConfidence:
+          type: number
+        maxConfidence:
+          type: number
+      required:
+        - bucket
+        - count
+        - minConfidence
+        - maxConfidence
+
+    AiScan:
+      type: object
+      properties:
+        id:
+          type: string
+        callType:
+          type: string
+        model:
+          type: string
+          description: AI model identifier used for this scan (e.g. claude-sonnet-4-6)
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cost:
+          type: number
+        createdAt:
+          type: string
+      required:
+        - id
+        - callType
+        - model
+        - inputTokens
+        - outputTokens
+        - cost
+        - createdAt
+
+    # ─── FILE ──────────────────────────────────────────────────────────────────
+    JobFile:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        filename:
+          type: string
+        storagePath:
+          type: string
+        pageCount:
+          type: ["integer", "null"]
+        fileSizeBytes:
+          type: ["integer", "null"]
+        fileCategory:
+          type: ["string", "null"]
+        floorLabel:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tenantId
+        - filename
+        - storagePath
+        - createdAt
+
+    UploadJobFileBody:
+      type: object
+      properties:
+        filename:
+          type: string
+        storagePath:
+          type: string
+        fileSizeBytes:
+          type: integer
+      required:
+        - filename
+        - storagePath
+
+    # ─── SHEET ─────────────────────────────────────────────────────────────────
+    JobSheet:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        fileId:
+          type: ["string", "null"]
+        sheetId:
+          type: string
+        sheetTitle:
+          type: ["string", "null"]
+        pdfPage:
+          type: integer
+        sheetType:
+          type: ["string", "null"]
+        rasterizedPath:
+          type: ["string", "null"]
+        level:
+          type: ["string", "null"]
+        isRelevant:
+          type: boolean
+        hasCachedResult:
+          type: boolean
+          description: True if this sheet has at least one cached AI vision scan result (ai_vision room).
+      required:
+        - id
+        - jobId
+        - tenantId
+        - sheetId
+        - pdfPage
+        - isRelevant
+        - hasCachedResult
+
+    # ─── ROOM ──────────────────────────────────────────────────────────────────
+    Room:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        sheetId:
+          type: ["string", "null"]
+        roomNumber:
+          type: string
+        roomName:
+          type: string
+        level:
+          type: string
+        coordX:
+          type: ["integer", "null"]
+        coordY:
+          type: ["integer", "null"]
+        occupantLoad:
+          type: ["integer", "null"]
+        occupancyGroup:
+          type: ["string", "null"]
+        isResidentialUnit:
+          type: boolean
+        isRestroom:
+          type: boolean
+        isStair:
+          type: boolean
+        isElevator:
+          type: boolean
+        isVestibule:
+          type: boolean
+        isCorridorOrHall:
+          type: boolean
+        isVehicleBay:
+          type: boolean
+        isMepUnoccupied:
+          type: boolean
+        isVariableUse:
+          type: boolean
+        isPublicFacing:
+          type: boolean
+        isAssembly:
+          type: boolean
+        source:
+          type: string
+        confidence:
+          type: ["number", "null"]
+        warningDismissed:
+          type: boolean
+        reviewStatus:
+          type: string
+          enum: [pending, confirmed, dismissed]
+        dismissalReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tenantId
+        - roomNumber
+        - roomName
+        - level
+        - isResidentialUnit
+        - isRestroom
+        - isStair
+        - isElevator
+        - isVestibule
+        - isCorridorOrHall
+        - isVehicleBay
+        - isMepUnoccupied
+        - isVariableUse
+        - isPublicFacing
+        - isAssembly
+        - source
+        - reviewStatus
+        - createdAt
+
+    RoomWithSigns:
+      allOf:
+        - $ref: "#/components/schemas/Room"
+        - type: object
+          properties:
+            signs:
+              type: array
+              items:
+                $ref: "#/components/schemas/Sign"
+
+    # ─── SIGN ──────────────────────────────────────────────────────────────────
+    Sign:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        roomId:
+          type: ["string", "null"]
+        signType:
+          type: string
+        plaqueTypeId:
+          type: ["string", "null"]
+        qty:
+          type: integer
+        markerX:
+          type: ["integer", "null"]
+        markerY:
+          type: ["integer", "null"]
+        sheetId:
+          type: ["string", "null"]
+        ruleRef:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        confidence:
+          type: number
+        status:
+          type: string
+        source:
+          type: string
+        dimensions:
+          type: ["string", "null"]
+        mounting:
+          type: ["string", "null"]
+        finishColor:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+        roomNumber:
+          type: ["string", "null"]
+        roomName:
+          type: ["string", "null"]
+        level:
+          type: ["string", "null"]
+        floorLabel:
+          type: ["string", "null"]
+        adaRequired:
+          type: ["boolean", "null"]
+        notes:
+          type: ["string", "null"]
+        dimSource:
+          type: ["string", "null"]
+        canvasX:
+          type: ["number", "null"]
+        canvasY:
+          type: ["number", "null"]
+        markerColor:
+          type: ["string", "null"]
+        isDeleted:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tenantId
+        - signType
+        - qty
+        - confidence
+        - status
+        - source
+        - createdAt
+        - updatedAt
+
+    CreateSignBody:
+      type: object
+      properties:
+        roomId:
+          type: string
+        signType:
+          type: string
+        qty:
+          type: integer
+        markerX:
+          type: integer
+        markerY:
+          type: integer
+        sheetId:
+          type: string
+        color:
+          type: string
+        dimensions:
+          type: string
+        mounting:
+          type: string
+        finishColor:
+          type: string
+        message:
+          type: string
+        roomNumber:
+          type: string
+        roomName:
+          type: string
+        reason:
+          type: string
+      required:
+        - signType
+
+    UpdateRoomReviewStatusBody:
+      type: object
+      properties:
+        reviewStatus:
+          type: string
+          enum: [confirmed, dismissed, pending]
+        dismissalReason:
+          type: ["string", "null"]
+      required:
+        - reviewStatus
+
+    BulkReviewRoomsBody:
+      type: object
+      properties:
+        reviewStatus:
+          type: string
+          enum: [confirmed, dismissed, pending]
+        dismissalReason:
+          type: string
+          nullable: true
+        fromStatus:
+          type: string
+          enum: [confirmed, dismissed]
+          description: When reviewStatus is "pending", restricts which rooms are reset by their current status.
+      required:
+        - reviewStatus
+
+    UpdateSignBody:
+      type: object
+      properties:
+        signType:
+          type: string
+        qty:
+          type: integer
+        markerX:
+          type: ["integer", "null"]
+        markerY:
+          type: ["integer", "null"]
+        canvasX:
+          type: ["number", "null"]
+        canvasY:
+          type: ["number", "null"]
+        sheetId:
+          type: ["string", "null"]
+        status:
+          type: string
+        dimensions:
+          type: string
+        dimSource:
+          type: ["string", "null"]
+        mounting:
+          type: string
+        finishColor:
+          type: string
+        message:
+          type: string
+        markerColor:
+          type: ["string", "null"]
+        roomName:
+          type: ["string", "null"]
+        roomNumber:
+          type: ["string", "null"]
+        floorLabel:
+          type: ["string", "null"]
+        reason:
+          type: string
+
+    # ─── PLAQUE SCHEDULE ───────────────────────────────────────────────────────
+    PlaqueScheduleItem:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        typeId:
+          type: string
+        name:
+          type: string
+        braille:
+          type: boolean
+        hasInsert:
+          type: boolean
+        insertSize:
+          type: ["string", "null"]
+        letterHeight:
+          type: ["string", "null"]
+        triggerDescription:
+          type: ["string", "null"]
+        mapsToColumn:
+          type: ["string", "null"]
+        materialNotes:
+          type: ["string", "null"]
+      required:
+        - id
+        - jobId
+        - tenantId
+        - typeId
+        - name
+        - braille
+        - hasInsert
+
+    # ─── VALIDATION ────────────────────────────────────────────────────────────
+    ValidationResult:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tenantId:
+          type: string
+        checkName:
+          type: string
+        status:
+          type: string
+        details:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tenantId
+        - checkName
+        - status
+        - createdAt
+
+    # ─── TRAINING ──────────────────────────────────────────────────────────────
+    TrainingCorrection:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        jobId:
+          type: ["string", "null"]
+        signId:
+          type: ["string", "null"]
+        roomId:
+          type: ["string", "null"]
+        correctionType:
+          type: string
+        originalValue:
+          type: object
+        correctedValue:
+          type: object
+        roomNamePattern:
+          type: ["string", "null"]
+        signType:
+          type: ["string", "null"]
+        ruleRef:
+          type: ["string", "null"]
+        reason:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        appliedCount:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - tenantId
+        - correctionType
+        - isActive
+        - appliedCount
+        - createdAt
+
+    RuleOverride:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        ruleRef:
+          type: string
+        overrideType:
+          type: string
+        condition:
+          type: object
+        action:
+          type: object
+        confidence:
+          type: number
+        sourceCorrections:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - tenantId
+        - ruleRef
+        - overrideType
+        - condition
+        - action
+        - confidence
+        - sourceCorrections
+        - isActive
+        - createdAt
+
+    UpdateRuleOverrideBody:
+      type: object
+      properties:
+        isActive:
+          type: boolean
+        action:
+          type: object
+        condition:
+          type: object
+
+    ImportTrainingBody:
+      type: object
+      properties:
+        pdfStoragePath:
+          type: string
+        xlsxStoragePath:
+          type: string
+      required:
+        - pdfStoragePath
+        - xlsxStoragePath
+
+    ImportTrainingResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        totalDiffs:
+          type: integer
+        corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingCorrection"
+      required:
+        - totalDiffs
+        - corrections
+
+    ConfidenceTrendPoint:
+      type: object
+      properties:
+        snapshotId:
+          type: string
+          description: ID of the import snapshot record
+        week:
+          type: string
+          description: ISO date (YYYY-MM-DD) of the import snapshot
+        importDate:
+          type: string
+          description: Full ISO timestamp of the import
+        avgConfidence:
+          type: number
+          description: Average confidence of all active overrides at the time of this import
+        count:
+          type: integer
+          description: Number of active overrides at the time of this import
+        newRulesCount:
+          type: integer
+          description: Number of new rules created in this import batch
+        updatedRulesCount:
+          type: integer
+          description: Number of existing rules updated in this import batch
+        batchLabel:
+          type: string
+          description: Optional user-provided label for this import batch
+        sourceJobId:
+          type: string
+          description: Optional ID of the job this import batch was sourced from
+        sourceJobName:
+          type: string
+          description: Name of the source job, if any
+      required:
+        - snapshotId
+        - week
+        - avgConfidence
+        - count
+
+    TrainingSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID of the import snapshot record
+        snapshotDate:
+          type: string
+          description: Full ISO timestamp of the import
+        avgConfidence:
+          type: number
+          description: Average confidence of all active overrides at the time of this import
+        activeOverrideCount:
+          type: integer
+          description: Number of active overrides at the time of this import
+        newRulesCount:
+          type: integer
+          description: Number of new rules created in this import batch
+        updatedRulesCount:
+          type: integer
+          description: Number of existing rules updated in this import batch
+        correctionCount:
+          type: integer
+          description: Number of training corrections created during the calendar week containing this snapshot
+        batchLabel:
+          type: string
+          nullable: true
+          description: Optional user-provided label for this import batch
+        sourceJobId:
+          type: string
+          nullable: true
+          description: ID of the job linked to this import batch, if any
+        sourceJobName:
+          type: string
+          nullable: true
+          description: Name of the job linked to this import batch, if any
+      required:
+        - id
+        - snapshotDate
+        - avgConfidence
+        - activeOverrideCount
+        - newRulesCount
+        - updatedRulesCount
+        - correctionCount
+
+    UpdateSnapshotBody:
+      type: object
+      properties:
+        batchLabel:
+          type: string
+          nullable: true
+          description: New label for the import batch (null to clear)
+        sourceJobId:
+          type: string
+          nullable: true
+          description: Job ID to link to this import batch (null to clear)
+      required: []
+
+    UpdateSnapshotResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        batchLabel:
+          type: string
+          nullable: true
+        sourceJobId:
+          type: string
+          nullable: true
+      required:
+        - id
+
+    OverrideImpact:
+      type: object
+      properties:
+        totalOverrides:
+          type: integer
+        activeOverrides:
+          type: integer
+        totalCorrections:
+          type: integer
+        correctionsThisMonth:
+          type: integer
+        topPatterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopCorrectionPattern"
+        confidenceTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfidenceTrendPoint"
+          description: Average confidence by week over time
+      required:
+        - totalOverrides
+        - activeOverrides
+        - totalCorrections
+        - correctionsThisMonth
+        - topPatterns
+        - confidenceTrend
+
+    TopCorrectionPattern:
+      type: object
+      properties:
+        correctionType:
+          type: string
+        signType:
+          type: string
+          nullable: true
+        roomNamePattern:
+          type: string
+          nullable: true
+        count:
+          type: integer
+      required:
+        - correctionType
+        - count
+
+    SavedDateRange:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        start:
+          type: string
+        end:
+          type: string
+      required:
+        - id
+        - name
+        - start
+        - end
+
+    CreateSavedDateRangeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        start:
+          type: string
+        end:
+          type: string
+      required:
+        - name
+        - start
+        - end

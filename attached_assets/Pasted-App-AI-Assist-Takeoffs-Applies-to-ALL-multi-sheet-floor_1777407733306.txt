@@ -1,0 +1,62 @@
+App: AI-Assist Takeoffs
+Applies to ALL multi-sheet floor plans, ALL types.
+
+════════════════════════════════════════════════
+BUG 1 — Markers on wrong sheet (critical)
+E118 GYMNASIUM showing on Academic Wing sheet
+instead of Community Wing sheet
+════════════════════════════════════════════════
+When a floor has multiple sheets (e.g. Fox Hill
+Level 1 = sheet 3.9.51 Academic + 3.9.52 Community),
+all markers are being rendered on the FIRST sheet.
+E-prefix rooms belong on 3.9.52 but show on 3.9.51.
+
+Root cause: each sign has coord_x/coord_y that are
+relative to the sheet they were extracted from.
+But the renderer is not tracking WHICH sheet each
+room came from — it just uses the first sheet for
+that floor level.
+
+Fix: add sheet_id or sheet_number to each sign row
+so the renderer knows which sheet image to use.
+
+STEP 1 — Add sheet tracking to signs table:
+  ALTER TABLE signs 
+    ADD COLUMN IF NOT EXISTS source_sheet_id VARCHAR,
+    ADD COLUMN IF NOT EXISTS source_sheet_number VARCHAR;
+  -- e.g. source_sheet_number = '3.9.51' or '3.9.52'
+
+STEP 2 — During extraction, tag each room with
+its source sheet:
+  When extracting rooms from sheet 3.9.51:
+    INSERT INTO signs (..., source_sheet_number)
+    VALUES (..., '3.9.51')
+  When extracting rooms from sheet 3.9.52:
+    INSERT INTO signs (..., source_sheet_number)
+    VALUES (..., '3.9.52')
+
+STEP 3 — In the Plans tab renderer:
+  Current: render all Level 1 markers on sheet[0]
+  Fix: for each marker, look up source_sheet_number
+  and render it on the matching sheet image
+
+  // Group markers by source sheet
+  const markersBySheet = groupBy(
+    markers, m => m.source_sheet_number
+  );
+  
+  // Render each group on its correct sheet
+  for (const [sheetNum, sheetMarkers] of 
+       Object.entries(markersBySheet)) {
+    const sheetImage = sheets.find(
+      s => s.sheet_number === sheetNum
+    );
+    renderMarkersOnSheet(sheetImage, sheetMarkers);
+  }
+
+STEP 4 — Floor plan viewer: show sheet selector
+When a floor has multiple sheets, show a sheet
+sub-selector below the floor selector:
+
+  LEVEL 1 ▼
+  [3.9.51 Acade

@@ -1,0 +1,72 @@
+In artifacts/web/src/, find ALL places where building 
+type is displayed or selected:
+1. New job creation form
+2. Job Overview page (editable field)
+3. Job list page (badge)
+4. Training import page (if shown)
+5. Any filter/search dropdowns
+
+Replace ALL building type selectors and displays 
+with this standardized set — same icons, same labels, 
+same values everywhere:
+
+CANONICAL BUILDING TYPES:
+Value           | Label          | Icon | Subtitle
+----------------|----------------|------|------------------
+commercial      | Commercial     | 🏢   | Office, retail, airport, mixed-use
+residential     | Residential    | 🏠   | Apartments, condos, senior living
+education       | Education      | 🎓   | School, university, library, daycare
+healthcare      | Healthcare     | 🏥   | Hospital, clinic, medical office
+government      | Government     | 🏛️   | Municipal, federal, courthouse
+hotel           | Hotel          | 🏨   | Hotel, motel, resort
+assembly        | Assembly       | 🎭   | Church, theater, arena, museum
+unknown         | Unknown        | ❓   | Let AI detect from plans
+
+REMOVE these old values from anywhere they appear:
+- "other" → replace with closest match or unknown
+- "office" → merge into commercial
+- "multifamily" → merge into residential  
+- "hospital" → merge into healthcare
+- Any free-text building type fields
+
+ON NEW JOB FORM:
+Show as a card grid (2 columns on mobile, 4 on desktop)
+Each card: large icon + bold label + subtitle text
+Selected state: amber border + amber background tint
+Unselected: dark border, no tint
+Unknown card: yellow border, shows warning text below:
+"AI will attempt to detect building type from your 
+plans. Select a specific type for best accuracy."
+
+ON JOB OVERVIEW PAGE:
+Show as an editable pill/badge:
+[🏢 Commercial ▾]
+Click to open a dropdown with the same 8 options.
+When changed, show inline confirmation:
+"Building type updated to Education. 
+Re-process this job to apply updated sign rules? 
+[Re-process Now] [Later]"
+
+ON JOB LIST PAGE:
+Show icon only as a small badge next to job name.
+Tooltip on hover shows full label.
+Example: "Gleason Library 🎓"
+
+ALSO update the API:
+In artifacts/api-server/src/routes/jobs.ts,
+update the buildingType validation to accept exactly 
+these 8 values:
+commercial, residential, education, healthcare, 
+government, hotel, assembly, unknown
+
+Reject any other value with 400 error:
+"Invalid building type. Must be one of: 
+commercial, residential, education, healthcare, 
+government, hotel, assembly, unknown"
+
+Also migrate existing jobs:
+- building_type = 'other' → 'unknown'
+- building_type = 'office' → 'commercial'
+- building_type = 'multifamily' → 'residential'
+- building_type = 'hospital' → 'healthcare'
+Run as a one-time migration on server start.

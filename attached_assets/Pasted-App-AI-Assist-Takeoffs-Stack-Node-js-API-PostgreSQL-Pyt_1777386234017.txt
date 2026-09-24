@@ -1,0 +1,166 @@
+App: AI-Assist Takeoffs
+Stack: Node.js API, PostgreSQL, Python PDF sidecar
+
+DIAGNOSIS (verified across 4 consecutive scans):
+The SAME ~30 garbled rows appear in every rescan 
+unchanged. The filters from previous prompts are 
+NOT running against cached data. The rows were 
+written to the DB on scan #1 and every subsequent 
+scan restores them from cache without re-filtering.
+
+This is a single-root-cause bug: the cache restore 
+path skips validation entirely.
+
+══════════════════════════════════════════════════
+STEP 1 — IMMEDIATE: Delete garbled rows from DB
+══════════════════════════════════════════════════
+Run this SQL RIGHT NOW against the Fox Hill job 
+(find job ID where name ILIKE '%Fox Hill%'):
+
+DELETE FROM signs
+WHERE job_id = (SELECT id FROM jobs WHERE name ILIKE '%Fox Hill%' LIMIT 1)
+AND (
+  -- Invalid room numbers (not matching W/E + 3 digits pattern)
+  room_number !~ '^[WE]C?\d{3}[A-Z]?$'
+  AND room_number !~ '^S[ABCD]\d{2}$'
+  AND room_number !~ '^EV\d{2}$'
+  AND room_number !~ '^E[A-Z]C?\d{3}[A-Z]?$'
+)
+OR (
+  -- Garbled names regardless of room number
+  room_name ~ '\d+X\d+'
+  OR room_name ~ $r$\d+'-\d$r$
+  OR room_name ~ 'TO [EW]\d'
+  OR room_name ~ $r$^[.'\"\-\s\d]+$$r$
+  OR room_name ~ 'RY CT'
+  OR room_name ~ 'KIT EN'
+  OR room_name ~ 'CAF ERIA'
+  OR room_name ~ '\.1.*\.1'
+  OR room_name ~ $r$19[A-J]$r$
+  OR (length(regexp_replace(room_name, '[^a-zA-Z]', '', 'g')) 
+      < length(room_name) * 0.4)
+);
+
+Log how many rows were deleted.
+
+══════════════════════════════════════════════════  
+STEP 2 — FIX: Validation must run on cache restore
+══════════════════════════════════════════════════
+Find the cache restore function in the API — 
+the code path that runs when a sheet cache hit 
+occurs (triggered by "reusing cached sheets" 
+message in pipeline log).
+
+Currently: cache restore copies rows directly 
+from cache → signs table with NO validation.
+
+Fix: wrap the cache restore with the SAME 
+validation that runs on fresh extraction:
+
+async function restoreFromCache(jobId, sheetId) {
+  const cachedRooms = await getCachedRooms(sheetId);
+  
+  // ADD THIS — validate before restoring
+  const validRooms = cachedRooms.filter(room => 
+    isValidRoomNumber(room.room_number, job.buildingType) &&
+    isValidRoomName(room.room_name)
+  );
+  
+  const rejected = cachedRooms.length - validRooms.length;
+  if (rejected > 0) {
+    log(`Cache restore: rejected ${rejected} invalid 
+        rooms for sheet ${sheetId}`);
+  }
+  
+  await insertRooms(jobId, validRooms);
+}
+
+══════════════════════════════════════════════════
+STEP 3 — FIX: Validation functions (shared)
+══════════════════════════════════════════════════
+Create one shared validation module used by BOTH 
+the fresh extraction path AND the cache restore 
+path. This ensures they can never diverge again.
+
+// shared/room-validation.ts
+
+const VALID_ROOM_NUMBER_PATTERNS: Record<string, RegExp[]> = {
+  education: [
+    /^[WE]C?\d{3}[A-Z]?$/,   // W123, E456A, WC100, EC110A
+    /^S[ABCD]\d{2}$/,          // SA01, SB02
+    /^EV\d{2}$/,               // EV01
+  ],
+  healthcare:   [/^\d{3,4}[A-Z]?$/, /^[A-Z]{1,3}\d{3}$/],
+  office:       [/^\d{3,4}[A-Z]?$/, /^[A-Z]\d{3}$/],
+  government:   [/^\d{3,4}[A-Z]?$/, /^[A-Z]-?\d{3}$/],
+  hotel:        [/^\d{3,4}[A-Z]?$/],
+  residential:  [/^\d{3,4}[A-Z]?$/],
+  assembly:     [/^\d{3,4}[A-Z]?$/, /^[A-Z]{1,2}-?\d{2,3}$/],
+  unknown:      [/^.{2,10}$/],  // permissive fallback
+};
+
+const GARBLED_NAME_PATTERNS = [
+  /\d+X\d+/,             // 60X21, 48X21 (casework dims)
+  /\d+'-\d/,             // 8'-0'' (imperial dims)
+  /TO [EW]\d/,           // E119C.1 TO E119C.2
+  /^[.'"\-\s\d]+$/,      // only punctuation/numbers
+  /(\.\d){2,}/,          // .1 .1 .1 (callout refs)
+  /\b19[A-J]\b/,         // 19A 19B (LEED sign codes)
+  /\bMB\b|\bTB\b|\bCB\b/, // marker/tackboard callouts
+];
+
+export function isValidRoomNumber(
+  num: string, 
+  buildingType: string
+): boolean {
+  const patterns = VALID_ROOM_NUMBER_PATTERNS[buildingType] 
+    ?? VALID_ROOM_NUMBER_PATTERNS.unknown;
+  return patterns.some(p => p.test(num));
+}
+
+export function isValidRoomName(name: string): boolean {
+  if (!name || name.trim().length < 2) return false;
+  if (GARBLED_NAME_PATTERNS.some(p => p.test(name))) return false;
+  // Must be at least 40% alpha characters
+  const alphaCount = (name.match(/[a-zA-Z]/g) || []).length;
+  return alphaCount / name.length >= 0.4;
+}
+
+══════════════════════════════════════════════════
+STEP 4 — FIX: Force full re-process must bypass cache
+══════════════════════════════════════════════════
+When "Force full re-process" checkbox is checked:
+1. DELETE all existing signs for this job first
+2. DELETE the sheet cache entries for this job
+3. Re-extract from scratch
+4. Apply validation via shared module above
+
+Currently force re-process is keeping cached rows 
+and only re-running the rules engine on top. 
+That's why the garbled rows survive force rescans.
+
+══════════════════════════════════════════════════
+STEP 5 — VERIFY
+══════════════════════════════════════════════════
+After Steps 1-4 are implemented:
+
+1. Run Step 1 SQL — confirm X rows deleted from Fox Hill
+2. Force rescan Fox Hill WITH "Force full re-process" 
+   checked — pipeline log must show 
+   "Cache restore: rejected N invalid rooms"
+   OR "Deleted N cached entries, re-extracting"
+3. Review tab must show ZERO rows with:
+   - Names containing X21, '-0'', .1 .1, RY CT
+   - Room numbers that are 1-2 characters (10, 15, E1)
+4. Total sign count should be 100-120 with all 
+   readable room names
+5. Run same rescan on Gleason Lib — confirm count 
+   unchanged (existing valid jobs not affected)
+6. All 1,430 tests pass
+
+ROOT CAUSE SUMMARY for Replit AI:
+The issue is NOT in the extraction filters.
+The issue IS in the cache restore path that 
+copies rows from cache → DB without any 
+validation. Fix the cache path and do the 
+one-time SQL purge. Everything else is working.

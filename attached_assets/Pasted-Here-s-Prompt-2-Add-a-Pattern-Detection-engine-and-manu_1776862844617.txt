@@ -1,0 +1,98 @@
+Here's Prompt 2:
+
+---
+
+Add a Pattern Detection engine and manual "Run Analysis" trigger to the Training tab. This reads all confirmed training diffs, groups them into systematic patterns, and surfaces them for super admin review.
+
+**Database — add new table `training_patterns`:**
+
+In `./lib/db/src/schema/` create a new file `trainingPatterns.ts`:
+
+```ts
+import { pgTable, text, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
+import { tenantsTable } from "./tenants";
+
+export const trainingPatternsTable = pgTable("training_patterns", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  patternType: text("pattern_type").notNull(), // "sign_type_mismatch" | "ai_missed" | "ai_extra"
+  description: text("description").notNull(),
+  evidenceCount: integer("evidence_count").notNull().default(0),
+  buildingTypesAffected: jsonb("building_types_affected").notNull().default([]),
+  exampleJobIds: jsonb("example_job_ids").notNull().default([]),
+  suggestedFix: text("suggested_fix"),
+  status: text("status").notNull().default("detected"), // "detected" | "reviewed" | "approved" | "deployed" | "dismissed"
+  accuracyImpactEstimate: text("accuracy_impact_estimate"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  deployedAt: timestamp("deployed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+```
+
+Export it from the db schema index. Generate and run the migration.
+
+**API — add pattern detection routes to `training.ts`:**
+
+Add a pattern detection function `detectPatterns(tenantId)` that:
+1. Queries all `training_corrections` for the tenant
+2. Groups by `(correctionType, roomNamePattern, signType)` 
+3. Any group with 2+ occurrences becomes a pattern
+4. Also queries `import_snapshots` to get building types affected per pattern
+5. Generates a `suggestedFix` string automatically:
+   - For sign_type_mismatch: `"When room name contains '{pattern}', use '{humanSignType}' instead of '{pipelineSignType}'"`
+   - For ai_missed patterns: `"Room type '{pattern}' is consistently missed by AI vision — add to extraction prompt"`
+6. Upserts into `training_patterns` table (update evidenceCount if pattern already exists)
+7. Returns count of new patterns detected
+
+Add these routes:
+
+```
+POST /training/patterns/analyze
+```
+Runs `detectPatterns()` manually. Returns `{ newPatterns, updatedPatterns, totalPatterns }`.
+
+```
+GET /training/patterns
+```
+Returns all patterns for tenant, ordered by evidenceCount desc. Supports `?status=detected` filter.
+
+```
+PATCH /training/patterns/:patternId
+```
+Update status (reviewed → approved → deployed → dismissed). When approving, record `approvedBy` and `approvedAt`.
+
+**UI — add Patterns tab to Training page:**
+
+Add a 5th tab "Patterns" to the existing TabsList (expand grid from `grid-cols-4` to `grid-cols-5`).
+
+The Patterns tab shows:
+
+**Top section — "Run Analysis" button:**
+```
+[Run Analysis] button — calls POST /training/patterns/analyze
+Shows: "Last run: X minutes ago" 
+Shows spinner while running
+On complete: "Found N new patterns, updated M existing"
+```
+
+**Patterns table:**
+Columns: Pattern Type | Description | Evidence | Building Types | Suggested Fix | Status | Actions
+
+- Pattern Type badge: red=ai_missed, amber=sign_type_mismatch, blue=ai_extra
+- Evidence count: bold number — higher = more reliable
+- Building Types: comma-separated chips
+- Suggested Fix: truncated with expand
+- Status badge: detected (gray) | reviewed (blue) | approved (green) | deployed (purple) | dismissed (strikethrough)
+- Actions: "Approve" button (green) | "Dismiss" button (red) | "Mark Reviewed" button (blue)
+
+**Filter bar:**
+- Filter by status (All | Detected | Reviewed | Approved | Deployed | Dismissed)
+- Sort by Evidence Count (default desc) or Created Date
+
+Show empty state: "No patterns detected yet. Run Analysis to scan your training data."
+
+After saving, test by clicking Run Analysis — it should immediately detect the 3 Novo patterns: Elevator mismatch, Exit Door mismatch, Stair combined sign type. Share a screenshot of the Patterns tab after running.
+
+---

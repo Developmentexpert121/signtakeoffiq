@@ -1,0 +1,82 @@
+App: AI-Assist Takeoffs
+
+Fox Hill is now 104 clean + 12 garbled rows.
+The garbled rows are caused by the vision/raster 
+path picking up drawing callout fragments and 
+assigning them truncated fake room numbers.
+
+This is the FINAL fix needed for Fox Hill.
+
+══════════════════════════════════════════════════
+ROOT CAUSE
+══════════════════════════════════════════════════
+All 12 garbled rows share the same signature:
+- Room number is truncated or invalid:
+  W1, W12, E1, E11, W23, 35, 21, 27, 37
+  (real rooms are W100+, E100+, WC100+)
+- Room name contains drawing annotation 
+  fragments: dimension strings, callout refs,
+  symbol codes (MB, TB, 19A, .1, X21, etc.)
+
+These are NOT real rooms. They are noise from 
+the PDF annotation layer being misread as room 
+label text.
+
+══════════════════════════════════════════════════
+FIX — Room number allowlist validation
+══════════════════════════════════════════════════
+In the room extraction pipeline, after parsing 
+room numbers from the PDF, apply a strict 
+allowlist filter BEFORE saving to the database.
+
+Valid room number patterns for this project type
+(K-12 Education, DiNisco Design):
+
+  VALID:
+  - W + 3 digits:    W100–W999
+  - E + 3 digits:    E100–E999  
+  - WC + 3 digits:   WC100–WC999
+  - EC + 3 digits:   EC100–EC999
+  - SA/SB/SC/SD + 2 digits: SA01, SB02
+  - EV + 2 digits:   EV01, EV02
+  - W/E + 3 digits + letter suffix: W223A, E106B
+  - WC/EC + 3 digits + letter suffix: WC210A
+
+  INVALID (reject and discard):
+  - Single digit: 1, 2, 35, 21, 27, 37
+  - 1-2 char: W1, E1, C1, M0, V01, Y12, A19
+  - Partial matches: W12 (only 2 digits after W)
+  - Non-standard prefixes: U16, V01, Y12
+
+Make this pattern-based and configurable per 
+building type — load from the job's building 
+type settings. For Education buildings use the 
+patterns above. For other types use a broader 
+but still validated set.
+
+══════════════════════════════════════════════════
+ALSO FIX — Room name secondary filter  
+══════════════════════════════════════════════════
+As a second defense, reject any room where the 
+extracted name matches these patterns regardless 
+of room number validity:
+
+  REJECT if name matches:
+  - Contains \d+X\d+ (dimension like 60X21, 48X21)
+  - Contains \d+'-\d (dimension like 8'-0)
+  - Contains 3+ tokens that are all non-words
+    (tokens of only digits, dashes, quotes, dots)
+  - Starts with a quote character or dash
+  - Contains "TO E" or "TO W" (callout range refs
+    like "E119C.1 TO E119C.2")
+  - More than 50% of characters are non-alpha
+
+══════════════════════════════════════════════════
+DO NOT CHANGE
+══════════════════════════════════════════════════
+- The 104 clean rooms already extracted correctly
+- The wing merge logic (single LEVEL per floor)
+- The restroom/evac map fixes from last prompt
+- Anything not related to room extraction
+
+══════════════════════════════════════════

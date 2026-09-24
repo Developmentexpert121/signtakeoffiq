@@ -1,0 +1,135 @@
+Jun 03 07:43:45 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Jun 03 07:43:45 [signtakeoffiq-demo] [34m│[0m [34m › fetching app source code[0m
+Jun 03 07:43:45 [signtakeoffiq-demo] [34m│[0m => Selecting branch "dev-work"
+Jun 03 07:43:52 [signtakeoffiq-demo] [34m│[0m => Checking out commit "e08498257f183f270b418ad53b4aaa07ac39d866"
+Jun 03 07:43:52 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:43:52 [signtakeoffiq-demo] [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jun 03 07:43:52 [signtakeoffiq-demo] [34m╰────────────────────────────────────────╼[0m
+Jun 03 07:43:52 [signtakeoffiq-demo] 
+Jun 03 07:43:52 [signtakeoffiq-demo] [34m › configuring build-time app environment variables:[0m
+Jun 03 07:43:52 [signtakeoffiq-demo]      AI_INTEGRATIONS_ANTHROPIC_API_KEY SMTP_PORT GUEST_JWT_SECRET DEFAULT_OBJECT_STORAGE_BUCKET_ID CLERK_SECRET_KEY AI_INTEGRATIONS_GEMINI_BASE_URL DO_DATABASE_URL DEV_BYPASS_AUTH CLERK_PUBLISHABLE_KEY AI_INTEGRATIONS_GEMINI_API_KEY SPACES_ACCESS_KEY_ID RASTERIZE_DPI PRIVATE_OBJECT_DIR PUBLIC_OBJECT_SEARCH_PATHS SMTP_FROM PIPELINE_CACHE_ENABLED SPACES_SECRET_ACCESS_KEY SPACES_REGION AI_INTEGRATIONS_ANTHROPIC_BASE_URL SPACES_ENDPOINT SMTP_HOST SMTP_USER SMTP_PASS SESSION_SECRET VITE_CLERK_PUBLISHABLE_KEY
+Jun 03 07:43:52 [signtakeoffiq-demo] 
+Jun 03 07:43:53 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jun 03 07:43:53 [signtakeoffiq-demo] [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m Detected the following buildpacks suitable to build your app:
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    heroku/nodejs                  v0.341.5  (Node.js)
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    digitalocean/python-appdetect  v0.1.2    
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    heroku/python                  v5.339.5  (Python)
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m╰─────────────────────────────────────────────╼[0m
+Jun 03 07:43:54 [signtakeoffiq-demo] 
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m build caching [0m[0m[34m───────────╼[0m
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m [34m › checking for cache from a previous build[0m
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m Timer: Analyzer started at 2026-06-03T07:43:54Z
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m Restoring metadata for "heroku/nodejs:shim" from cache
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m Timer: Analyzer ran for 561.794346ms and ended at 2026-06-03T07:43:54Z
+Jun 03 07:43:54 [signtakeoffiq-demo] [34m│[0m Timer: Restorer started at 2026-06-03T07:43:54Z
+Jun 03 07:43:55 [signtakeoffiq-demo] [34m│[0m Restoring data for "heroku/nodejs:shim" from cache
+Jun 03 07:44:03 [signtakeoffiq-demo] [34m│[0m Timer: Restorer ran for 8.508341349s and ended at 2026-06-03T07:44:03Z
+Jun 03 07:44:03 [signtakeoffiq-demo] [34m╰───────────────────────────────────────╼[0m
+Jun 03 07:44:03 [signtakeoffiq-demo] 
+Jun 03 07:44:03 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jun 03 07:44:03 [signtakeoffiq-demo] [34m│[0m Timer: Builder started at 2026-06-03T07:44:03Z
+Jun 03 07:44:03 [signtakeoffiq-demo] [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m -----> Creating runtime environment
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        NODE_VERBOSE=false
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        NODE_ENV=
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        NODE_MODULES_CACHE=true
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m -----> Installing binaries
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        engines.node (package.json):   22.x
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        packageManager (package.json): pnpm@10.26.1
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        Resolving node version 22.x...
+Jun 03 07:44:04 [signtakeoffiq-demo] [34m│[0m        Downloading and installing node 22.22.2...
+Jun 03 07:44:05 [signtakeoffiq-demo] [34m│[0m        Validating checksum
+Jun 03 07:44:07 [signtakeoffiq-demo] [34m│[0m        Using default npm version: 10.9.7
+Jun 03 07:44:07 [signtakeoffiq-demo] [34m│[0m        Downloading and installing pnpm (10.26.1)
+Jun 03 07:44:10 [signtakeoffiq-demo] [34m│[0m        Using pnpm 10.26.1
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m -----> Restoring cache
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m        - pnpm cache
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m -----> Installing dependencies
+Jun 03 07:44:12 [signtakeoffiq-demo] [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m -----> Build
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        Running build
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 build /workspace
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        > pnpm run typecheck && pnpm -r --if-present run build
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 typecheck /workspace
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        > pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+Jun 03 07:44:17 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:18 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:18 [signtakeoffiq-demo] [34m│[0m        > workspace@0.0.0 typecheck:libs /workspace
+Jun 03 07:44:18 [signtakeoffiq-demo] [34m│[0m        > tsc --build
+Jun 03 07:44:18 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m -----> Caching build
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        - pnpm cache
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m -----> Pruning devDependencies
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        Skipping because NODE_ENV is not 'production'
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m -----> Build succeeded!
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m  !     This app may not specify any way to start a node process
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m        https://devcenter.heroku.com/articles/nodejs-support#default-web-process-type
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m 
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m -----> Using Python 3.11 specified in .python-version
+Jun 03 07:44:46 [signtakeoffiq-demo] [34m│[0m -----> Installing Python 3.11.15
+Jun 03 07:44:48 [signtakeoffiq-demo] [34m│[0m -----> Installing uv 0.10.9
+Jun 03 07:44:48 [signtakeoffiq-demo] [34m│[0m -----> Installing dependencies using 'uv sync --locked --no-default-groups'
+Jun 03 07:44:48 [signtakeoffiq-demo] [34m│[0m        [2mResolved [1m1 package[0m [2min 0.91ms[0m[0m
+Jun 03 07:44:48 [signtakeoffiq-demo] [34m│[0m        [2mBytecode compiled [1m0 files[0m [2min 39ms[0m[0m
+Jun 03 07:44:48 [signtakeoffiq-demo] [34m│[0m -----> Saving cache
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m│[0m Timer: Builder ran for 45.556957635s and ended at 2026-06-03T07:44:49Z
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m╰───────────────────────────────────╼[0m
+Jun 03 07:44:49 [signtakeoffiq-demo] 
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m╭────────────[34m[30m[44m app upload [0m[0m[34m───────────╼[0m
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m│[0m [34m › uploading app container image to DOCR[0m
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m│[0m Reusing layers from image <registry-uri-0>
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m│[0m Timer: Exporter started at 2026-06-03T07:44:49Z
+Jun 03 07:44:49 [signtakeoffiq-demo] [34m│[0m Reusing layer 'heroku/nodejs:profile'
+Jun 03 07:44:50 [signtakeoffiq-demo] [34m│[0m Adding layer 'heroku/python:profile'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Adding 1/1 app layer(s)
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Reusing layer 'buildpacksio/lifecycle:launcher'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Adding layer 'buildpacksio/lifecycle:config'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.lifecycle.metadata'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.build.metadata'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Adding label 'io.buildpacks.project.metadata'
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m no default process type
+Jun 03 07:45:07 [signtakeoffiq-demo] [34m│[0m Timer: Saving <image-1>... started at 2026-06-03T07:45:07Z
+Jun 03 07:45:25 [signtakeoffiq-demo] [34m│[0m *** Images (sha256:eddf47581c93f798b82fb7e79f7a6c7554bddebcfd6c6a7d952336ca4498417d):
+Jun 03 07:45:25 [signtakeoffiq-demo] [34m│[0m       <image-2>
+Jun 03 07:45:25 [signtakeoffiq-demo] [34m│[0m Timer: Saving <image-3>... ran for 18.280267673s and ended at 2026-06-03T07:45:25Z
+Jun 03 07:45:25 [signtakeoffiq-demo] [34m│[0m Timer: Exporter ran for 35.868548239s and ended at 2026-06-03T07:45:25Z
+Jun 03 07:45:25 [signtakeoffiq-demo] [34m│[0m Timer: Cache started at 2026-06-03T07:45:25Z
+Jun 03 07:45:33 [signtakeoffiq-demo] [34m│[0m Adding cache layer 'heroku/nodejs:shim'
+Jun 03 07:45:41 [signtakeoffiq-demo] [34m│[0m Adding cache layer 'heroku/python:shim'
+Jun 03 07:45:53 [signtakeoffiq-demo] [34m│[0m [32m ✔ uploaded app image to DOCR[0m
+Jun 03 07:45:53 [signtakeoffiq-demo] [34m╰────────────────────────────────────╼[0m
+Jun 03 07:45:53 [signtakeoffiq-demo] 
+Jun 03 07:45:53 [signtakeoffiq-demo] [32m ✔ [0m[30m[42m build complete [0m[0m
+Jun 03 07:45:53 [signtakeoffiq-demo] 
+Jun 03 07:46:45 [signtakeoffiq-demo] [31;1mERROR: [0mfailed to launch: determine start command: when there is no default process a command is required
+Jun 03 07:46:47 [signtakeoffiq-demo] ERROR component signtakeoffiq-demo exited with code: 190
+Jun 03 07:46:47 [signtakeoffiq-demo] [31;1mERROR: [0mfailed to launch: determine start command: when there is no default process a command is required
+Jun 03 07:46:47 [signtakeoffiq-demo] ERROR component signtakeoffiq-demo exited with code: 190
+Jun 03 07:47:03 [signtakeoffiq-demo] [31;1mERROR: [0mfailed to launch: determine start command: when there is no default process a command is required
+Jun 03 07:47:29 [signtakeoffiq-demo] ERROR component signtakeoffiq-demo exited with code: 190
+Jun 03 07:47:29 [signtakeoffiq-demo] [31;1mERROR: [0mfailed to launch: determine start command: when there is no default process a command is required

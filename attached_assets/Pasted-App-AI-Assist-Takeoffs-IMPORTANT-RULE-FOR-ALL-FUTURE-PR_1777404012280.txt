@@ -1,0 +1,356 @@
+App: AI-Assist Takeoffs
+
+IMPORTANT RULE FOR ALL FUTURE PROMPTS:
+Every fix must work for ALL 8 building types:
+education, healthcare, commercial, government,
+hotel, residential, assembly, unknown.
+Never hardcode Fox Hill values. Always read
+from building_type_profiles table.
+
+════════════════════════════════════════════════
+FIX 1 — Stair sign rows: blank room_number,
+         room_name, floor in XLSX + Review tab
+         (affects ALL building types)
+════════════════════════════════════════════════
+Egress generator inserts stair signs but they
+have empty room_number, room_name, floor.
+They're invisible in Review tab and show blank
+in XLSX. Affects every building type.
+
+In egress-sign-generator.ts, find the stair
+sign INSERT and ensure ALL fields are populated:
+
+  const stairLabel = stairCount <= 6
+    ? String.fromCharCode(64 + s)  // A,B,C,D,E,F
+    : String(s);                   // 1,2,3... for >6
+
+  // These values must be set BEFORE insert
+  const roomNumber = \`STAIR-\${stairLabel}\`;
+  const roomName   = \`STAIR \${stairLabel}\`;
+  const floorLabel = \`LEVEL \${f}\`;
+
+  // Verify column names match your DB schema
+  // Run once: SELECT column_name FROM 
+  // information_schema.columns WHERE table_name='signs'
+  // Use EXACT column names in INSERT below
+
+  await db.query(\`
+    INSERT INTO signs (
+      job_id, room_number, room_name, floor,
+      sign_type, qty, ada_required, rule_ref,
+      source, confidence, notes
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    ON CONFLICT DO NOTHING
+  \`, [
+    job.id,
+    roomNumber,    // 'STAIR-A'
+    roomName,      // 'STAIR A'  
+    floorLabel,    // 'LEVEL 1'
+    signType,      // 'Stair (Corridor)' or 'Stair (Landing)'
+    1,
+    true,
+    'R11',
+    'rules',
+    1.0,
+    isEstimated ? 'Estimated — verify on plans' : ''
+  ]);
+
+Apply same fix to ALL egress generator inserts:
+  Exit signs:     room_number='EXIT-STAIR-A-L1'
+                  room_name='Exit — Stair A Door'
+                  floor='LEVEL 1'
+  Evac Maps:      room_number='EVAC-L1'
+                  room_name='Main Corridor'
+                  floor='LEVEL 1'
+  Area of Rescue: room_number='AOR-STAIR-A-L1'
+                  room_name='Area of Rescue — Stair A'
+                  floor='LEVEL 1'
+
+════════════════════════════════════════════════
+FIX 2 — Review tab: show all egress sign rows
+         (affects ALL building types)
+════════════════════════════════════════════════
+Egress signs (source='rules') are not showing
+in the Review tab Sign Table.
+
+Fix the Review tab query to include ALL sources:
+
+  WHERE job_id = $1
+  AND (
+    source IN (
+      'ai_vision', 'vision_estimated',
+      'pdf_native', 'trained',
+      'csv_import', 'rules'    -- ← add this
+    )
+    OR source IS NULL          -- ← catch legacy rows
+  )
+
+In the Review tab UI, add a visual section break
+between room signs and egress signs:
+
+  Room Signs section (source != 'rules' OR
+    room_number NOT LIKE 'STAIR-%' etc)
+  ─────── Egress & Code Signs ───────
+  Egress Signs section (source = 'rules' AND
+    room_number LIKE ANY('{STAIR-%,EXIT-%,
+    EVAC-%,AOR-%,EV-%}'))
+
+Egress rows should show:
+  Room #: STAIR-A, EXIT-STAIR-A-L1, etc
+  Name:   STAIR A, Exit — Stair A Door, etc
+  Level:  LEVEL 1, LEVEL 2, etc
+  Source badge: "Rules" (amber, existing style)
+  Note badge: "Estimated" (gray) if confidence < 1.0
+
+════════════════════════════════════════════════
+FIX 3 — Stair detection: universal patterns
+         for all 8 building types
+════════════════════════════════════════════════
+Current detection misses stairs on some plan
+styles. Different firms use different naming.
+Make detection universal.
+
+In detectStairCores(), replace the current query
+with a comprehensive pattern that catches ALL
+common stair naming conventions:
+
+  SELECT COUNT(DISTINCT stair_core) as stair_count
+  FROM (
+    SELECT
+      CASE
+        -- Education: SA01, SB02, SC01, SD01
+        WHEN room_number ~ '^S[A-F]\\d{2}[A-Z]?$'
+          THEN REGEXP_REPLACE(room_number,'\\d+[A-Z]?$','')
+        -- Numeric stair: S1, S2, S01, S02  
+        WHEN room_number ~ '^S\\d{1,2}[A-Z]?$'
+          THEN REGEXP_REPLACE(room_number,'\\d+[A-Z]?$','')
+        -- Named stair room number: STAIR-1, STAIR-A
+        WHEN room_number ~* '^STAIR-?[A-Z0-9]'
+          THEN REGEXP_REPLACE(
+            UPPER(room_number),'[^A-Z0-9]','','g')
+        -- Room name contains STAIR
+        WHEN room_name ~* '^STAIR(WAY|WELL)?\\s*[A-Z0-9]'
+          THEN REGEXP_REPLACE(
+            UPPER(room_name),'\\s+','_','g')
+        WHEN room_name ~* 'STAIR'
+          THEN REGEXP_REPLACE(
+            UPPER(room_name),'\\s+','_','g')
+        ELSE NULL
+      END as stair_core
+    FROM signs
+    WHERE job_id = $1
+    AND (
+      room_number ~ '^S[A-F]\\d{1,2}'
+      OR room_number ~* '^STAIR'
+      OR room_name ~* 'STAIR'
+    )
+  ) cores
+  WHERE stair_core IS NOT NULL;
+
+Then apply building type default as floor:
+
+  const profile = await getProfile(job.building_type);
+  const detectedCount = queryResult.stair_count || 0;
+  const stairCount = Math.max(
+    detectedCount,
+    profile.stair_count_default
+  );
+  // Always use the HIGHER of detected vs default
+  // Never under-count stairs
+
+Default stair counts by building type
+(must match building_type_profiles table):
+  education:   4
+  healthcare:  3
+  commercial:  2
+  government:  3
+  hotel:       2
+  residential: 2
+  assembly:    4
+  unknown:     2
+
+════════════════════════════════════════════════
+FIX 4 — Floor count detection: universal
+         (affects ALL building types)
+════════════════════════════════════════════════
+floorsServed resolves to wrong value.
+Fix detectFloorCount to work for all plans:
+
+  async function detectFloorCount(jobId) {
+    const result = await db.query(\`
+      SELECT COUNT(DISTINCT floor) as floor_count
+      FROM signs
+      WHERE job_id = $1
+      AND floor IS NOT NULL
+      AND floor != ''
+      AND floor NOT ILIKE '%unspecified%'
+      AND floor NOT ILIKE '%unknown%'
+    \`, [jobId]);
+    return parseInt(result.rows[0].floor_count) || 2;
+  }
+
+  const floorsServed = await detectFloorCount(job.id)
+    || job.floor_count
+    || 2;  // absolute fallback
+
+For single-floor buildings (Assembly, some
+Commercial): this correctly returns 1.
+For multi-floor: returns actual floor count.
+
+════════════════════════════════════════════════
+FIX 5 — Exit sign cleanup: remove room-name
+         based exits for ALL building types
+════════════════════════════════════════════════
+LOBBY, GYMNASIUM, GYM LOBBY, MECHANICAL etc
+are still getting Exit signs from room-name
+based assignment in the rules engine.
+
+Two-part fix:
+
+PART A — Rules engine guard (all building types):
+In rules-engine.ts, add explicit exclusions
+before any Exit sign assignment:
+
+  // NEVER assign Exit based on room name
+  // Exit signs come from egress generator only
+  const NEVER_EXIT_BY_NAME = [
+    'LOBBY', 'GYM LOBBY', 'MUSIC LOBBY',
+    'GYMNASIUM', 'GYM', 'CAFETERIA',
+    'MECHANICAL', 'ELECTRICAL', 'CORRIDOR',
+    'VESTIBULE', 'FOYER', 'WAITING ROOM',
+    // Add any room type — Exit is ALWAYS
+    // door-based, never room-name-based
+  ];
+
+  // Remove the room-name Exit rule entirely
+  // from the rules engine (R9 should only
+  // live in egress-sign-generator.ts)
+
+PART B — Cleanup query (runs last in pipeline):
+  // Remove any Exit not from egress generator
+  await db.query(\`
+    DELETE FROM signs
+    WHERE job_id = $1
+    AND sign_type = 'Exit'
+    AND source != 'rules'
+  \`, [jobId]);
+
+  // Remove Elevator not from egress generator
+  // (e.g. WORKSHOP LAUNDRY getting Elevator)
+  await db.query(\`
+    DELETE FROM signs
+    WHERE job_id = $1
+    AND sign_type IN ('Elevator', 'In Case of Fire')
+    AND source != 'rules'
+    AND room_number NOT LIKE 'EV%'
+  \`, [jobId]);
+
+This cleanup runs AFTER generateEgressSigns()
+as the absolute last step in pipeline.ts.
+Order must be:
+  1. extractRooms()
+  2. semanticMapper()
+  3. rulesEngine()         ← assigns room signs
+  4. generateEgressSigns() ← generates stair/exit/evac
+  5. cleanupInvalidSigns() ← removes wrong assignments
+
+════════════════════════════════════════════════
+FIX 6 — Force rescan: cache not clearing
+         (affects ALL building types)
+════════════════════════════════════════════════
+"Force full re-process" still shows cache savings.
+The DELETE from sheet_cache is not executing.
+
+Find the actual cache table name:
+  SELECT table_name 
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+  AND (
+    table_name ILIKE '%cache%'
+    OR table_name ILIKE '%sheet%'
+    OR table_name ILIKE '%page%'
+  );
+
+Then in the force rescan handler, use that
+exact table name and add logging:
+
+  if (forceReprocess) {
+    // Find and log cache table name at startup
+    const cacheTable = 'sheet_cache'; // UPDATE IF DIFFERENT
+    
+    const deleted = await db.query(
+      \`DELETE FROM \${cacheTable} WHERE job_id = $1\`,
+      [jobId]
+    );
+    log(\`Force rescan: purged \${deleted.rowCount} 
+         cached sheets for job \${jobId}\`);
+
+    await db.query(
+      'DELETE FROM signs WHERE job_id = $1',
+      [jobId]
+    );
+    log(\`Force rescan: cleared all signs for 
+         job \${jobId} — full re-extraction\`);
+  }
+
+Pipeline log message when force=true:
+  SHOW: "Force rescan — full re-extraction (N sheets)"
+  HIDE: "~$X saved by reusing N cached sheets"
+
+Pipeline log message when force=false and cache hit:
+  SHOW: "~$X saved by reusing N cached sheets"
+
+════════════════════════════════════════════════
+VERIFICATION — test after every rescan
+════════════════════════════════════════════════
+
+These checks must pass for ANY building type,
+not just Fox Hill:
+
+UNIVERSAL CHECKS:
+  ✓ Stair signs have populated room_number,
+    room_name, and floor — never blank
+  ✓ Stair signs visible in Review tab under
+    "Egress & Code Signs" section
+  ✓ Stair count = MAX(detected, type_default)
+  ✓ Floor count detected from signs table
+  ✓ Exit signs only from source='rules'
+  ✓ No Exit on LOBBY, GYMNASIUM, MECHANICAL etc
+  ✓ No Elevator on non-elevator rooms
+  ✓ Force rescan log shows cache purge count
+  ✓ Force rescan AI Cost > $0.00
+
+EDUCATION (Fox Hill 4 stairs, 2 floors):
+  Stair (Corridor): 8   (4 × 2)
+  Stair (Landing):  8   (4 × 2)
+  Exit:             12+ (8 stair + 4 exterior)
+  Max Occupancy:    8+
+  Evac Map:         4   (2/floor)
+  Total:            ~198-215
+
+HEALTHCARE (3 stairs, 4 floors):
+  Stair (Corridor): 12  (3 × 4)
+  Stair (Landing):  12  (3 × 4)
+  Exit:             16+ 
+  Evac Map:         16  (4/floor)
+
+COMMERCIAL (2 stairs, 3 floors):
+  Stair (Corridor): 6   (2 × 3)
+  Stair (Landing):  6   (2 × 3)
+  Exit:             8+
+  Evac Map:         6   (2/floor)
+
+ASSEMBLY (4 stairs, 2 floors):
+  Stair (Corridor): 8   (4 × 2)
+  Stair (Landing):  8   (4 × 2)
+  Area of Rescue:   16  (2/stair/floor)
+  Exit:             16+
+  Evac Map:         8   (4/floor)
+
+HOTEL/RESIDENTIAL (2 stairs, 6 floors):
+  Stair (Corridor): 12  (2 × 6)
+  Stair (Landing):  12  (2 × 6)
+  Evac Map:         6   (1/floor)
+
+All 1,461 tests pass.
+Gleason Lib rescan unchanged.

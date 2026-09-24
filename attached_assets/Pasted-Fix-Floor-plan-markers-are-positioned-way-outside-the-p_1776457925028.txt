@@ -1,0 +1,29 @@
+Fix: Floor plan markers are positioned way outside the plan image.
+Root cause: The pipeline saves sign coordinates as 0–1000 values (e.g. xPos = 450, yPos = 320). The floor plan viewer (UnifiedPlanViewer.tsx) multiplies these directly by renderedW and renderedH:
+typescriptconst cx = m.x * renderedW;  // e.g. 450 * 800px = 360,000px — way off screen
+const cy = m.y * renderedH;
+The viewer expects 0–1 fractional coordinates, but receives 0–1000.
+Fix option A — Normalize in the viewer (preferred, no DB migration needed):
+In artifacts/web/src/components/UnifiedPlanViewer.tsx, find where markers are built from s.xPos and s.yPos (around line 720):
+typescriptmarkers.push({
+  x: s.xPos, y: s.yPos,
+Change to divide by 1000:
+typescriptmarkers.push({
+  x: s.xPos / 1000, y: s.yPos / 1000,
+Also find where xPos/yPos are stored back after drag (line ~803 and ~875 and ~900):
+typescriptbody: JSON.stringify({ xPos: m.x, yPos: m.y, ... })
+These need to save back as 0–1000, so multiply by 1000 when saving:
+typescriptbody: JSON.stringify({ xPos: m.x * 1000, yPos: m.y * 1000, ... })
+Also fix the click-to-add handler — when the user clicks to place a new marker, the click position is calculated as a fraction (0–1) and needs to be stored as 0–1000:
+typescript// Find where new marker xPos/yPos is calculated from click event
+// It will look like: xPos: clickX / renderedW
+// Change to: xPos: (clickX / renderedW) * 1000
+Fix option B — Normalize in the pipeline (alternative):
+In artifacts/api-server/src/lib/pipeline.ts, in extractRoomsFromWords, the normalization currently outputs 0–1000:
+typescriptconst normX = Math.round((rx / pageWidth) * 1000);
+const normY = Math.round((ry / pageHeight) * 1000);
+Change to 0–1 (divide by 1000 removed):
+typescriptconst normX = rx / pageWidth;
+const normY = ry / pageHeight;
+But this breaks existing DB records. Use Fix option A instead.
+After the fix: Rebuild frontend with cd artifacts/web && pnpm run build. Re-run the NOVO or SOF job with Rescan, then check the Floor Plans tab — markers should now appear on top of the rooms inside the plan image, not scattered outside it.

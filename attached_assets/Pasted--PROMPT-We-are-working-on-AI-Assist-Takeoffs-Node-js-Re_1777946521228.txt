@@ -1,0 +1,38 @@
+
+PROMPT:
+
+We are working on AI-Assist Takeoffs (Node.js/React/PostgreSQL, Gemini 2.5 Flash). Three changes in one session. Follow all standing rules: typecheck must pass 0 errors, test suite must stay at 1,461 passing, do not rescan until tests pass, rescan Fox Hill job_a81ec18d15cec938 first (confirm 185–215 range), then rescan Walking Court_2.
+
+Fix 1 — Level 4/5/6 sign distribution (pipeline.ts)
+Run this diagnostic query on Walking Court_2 first:
+sqlSELECT room_number, level, coord_source 
+FROM extracted_rooms 
+WHERE job_id = '[Walking Court_2 job ID]' 
+AND level IN ('LEVEL 4', 'LEVEL 5', 'LEVEL 6')
+ORDER BY level, room_number LIMIT 50;
+If replicated rooms show LEVEL 3 (wrong) — fix the replication loop in pipeline.ts to stamp each cloned room with its actual target level (LEVEL 4, LEVEL 5, LEVEL 6) instead of inheriting the source room's level.
+If replicated rooms show correct levels — fix sign row creation to copy level from the matched room, not the source room.
+Target: Levels 4, 5, 6 each showing ~30+ signs. Total Walking Court_2 should reach 400+.
+
+Fix 2 — Schedule-first sign count (pipeline.ts, Step 9 routing only)
+When hasScheduleImport === true and sign_schedule_entries has 100+ rows for the job, treat each schedule row as exactly 1 sign. Do not run rules engine multiplication on schedule-matched rooms. Rules engine still runs normally for: egress signs (stairs, exits, evacuation maps, AOR) and any rooms not matched to the schedule. No other pipeline steps change.
+This eliminates AI-multiplied overcounting on jobs with an architect-provided sign schedule.
+
+Fix 3 — Estimation disclaimer messaging (display-only, no pipeline impact)
+artifacts/web/src/components/StructuredUploader.tsx — add one line of helper text below the building type selector:
+
+Sign counts are AI-assisted estimates. Add 10–15% when quoting.
+Style: text-sm text-gray-400, no icon, no box.
+
+artifacts/api-server/src/routes/exports.ts — in the handoff PDF, insert a shaded callout box at the top of page 1 above the sign count summary. Light amber background #fff8e7, amber left border, font-size: 9pt. Copy:
+
+Estimation Use Only — Not for Production. This takeoff combines PDF text extraction and AI vision analysis to deliver up to 85%+ accuracy on architectural plan reads. Sign counts are estimates and should not be used as final production quantities. For quoting purposes, add 10–15% to the total sign count to account for plan ambiguities and unforeseen field conditions.
+
+In the XLSX export, add the same full copy as a merged-cell block with light yellow fill FFF8E7 and bold header at the top of the Assumptions tab (create the tab if it doesn't exist).
+
+Regression sequence:
+
+Typecheck — 0 errors
+Test suite — 1,461 passing
+Rescan Fox Hill job_a81ec18d15cec938 — confirm 185–215 signs
+Rescan Walking Court_2 — confirm 400+ signs, Levels 4/5/6 each 30+

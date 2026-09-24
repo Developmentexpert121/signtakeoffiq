@@ -1,0 +1,188 @@
+~/workspace$ git push origin replit-branch
+
+To https://github.com/Shishir-Mehta/signtakeoffiq.git
+ ! [rejected]          replit-branch -> replit-branch (non-fast-forward)
+error: failed to push some refs to 'https://github.com/Shishir-Mehta/signtakeoffiq.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+~/workspace$ git pull --no-rebase origin replit-branch
+
+From https://github.com/Shishir-Mehta/signtakeoffiq
+ * branch              replit-branch -> FETCH_HEAD
+Auto-merging .replit
+CONFLICT (content): Merge conflict in .replit
+Auto-merging artifacts/api-server/.replit-artifact/artifact.toml
+CONFLICT (content): Merge conflict in artifacts/api-server/.replit-artifact/artifact.toml
+Auto-merging artifacts/api-server/build.mjs
+CONFLICT (content): Merge conflict in artifacts/api-server/build.mjs
+Auto-merging artifacts/api-server/package.json
+CONFLICT (content): Merge conflict in artifacts/api-server/package.json
+CONFLICT (modify/delete): artifacts/api-server/scripts/migrate-gcs-to-spaces.mjs deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/scripts/migrate-gcs-to-spaces.mjs left in tree.
+CONFLICT (modify/delete): artifacts/api-server/scripts/spaces-set-cors.mjs deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/scripts/spaces-set-cors.mjs left in tree.
+CONFLICT (modify/delete): artifacts/api-server/scripts/spaces-smoke.mjs deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/scripts/spaces-smoke.mjs left in tree.
+Auto-merging artifacts/api-server/src/__tests__/exports-pricing.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/exports-pricing.test.ts
+Auto-merging artifacts/api-server/src/__tests__/pipeline-config.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/pipeline-config.test.ts
+Auto-merging artifacts/api-server/src/__tests__/retry-config.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/retry-config.test.ts
+Auto-merging artifacts/api-server/src/__tests__/startup-config.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/startup-config.test.ts
+Auto-merging artifacts/api-server/src/__tests__/startup.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/startup.test.ts
+Auto-merging artifacts/api-server/src/__tests__/step3a-bridge.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/__tests__/step3a-bridge.test.ts
+Auto-merging artifacts/api-server/src/app.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/app.ts
+Auto-merging artifacts/api-server/src/index.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/index.ts
+Auto-merging artifacts/api-server/src/lib/config-parsers.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/config-parsers.ts
+Auto-merging artifacts/api-server/src/lib/config.test.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/config.test.ts
+Auto-merging artifacts/api-server/src/lib/config.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/config.ts
+CONFLICT (modify/delete): artifacts/api-server/src/lib/mailer.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/lib/mailer.ts left in tree.
+Auto-merging artifacts/api-server/src/lib/objectAcl.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/objectAcl.ts
+Auto-merging artifacts/api-server/src/lib/objectStorage.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/objectStorage.ts
+Auto-merging artifacts/api-server/src/lib/pipeline.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/pipeline.ts
+Auto-merging artifacts/api-server/src/lib/sessionAuth.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/sessionAuth.ts
+Auto-merging artifacts/api-server/src/lib/sidecar-client.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/sidecar-client.ts
+CONFLICT (modify/delete): artifacts/api-server/src/lib/signCounts.test.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/lib/signCounts.test.ts left in tree.
+Auto-merging artifacts/api-server/src/lib/signCounts.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/signCounts.ts
+CONFLICT (modify/delete): artifacts/api-server/src/lib/spaces.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/lib/spaces.ts left in tree.
+Auto-merging artifacts/api-server/src/lib/tenantAuth.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/lib/tenantAuth.ts
+Auto-merging artifacts/api-server/src/routes/admin.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/admin.ts
+Auto-merging artifacts/api-server/src/routes/exports.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/exports.ts
+Auto-merging artifacts/api-server/src/routes/index.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/index.ts
+CONFLICT (modify/delete): artifacts/api-server/src/routes/internalProvisioning.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/routes/internalProvisioning.ts left in tree.
+Auto-merging artifacts/api-server/src/routes/invitations.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/invitations.ts
+Auto-merging artifacts/api-server/src/routes/jobs.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/jobs.ts
+CONFLICT (modify/delete): artifacts/api-server/src/routes/sessionAuth.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/routes/sessionAuth.ts left in tree.
+CONFLICT (modify/delete): artifacts/api-server/src/routes/sso.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/routes/sso.ts left in tree.
+Auto-merging artifacts/api-server/src/routes/training.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/src/routes/training.ts
+CONFLICT (modify/delete): artifacts/api-server/src/routes/userManagement.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/routes/userManagement.ts left in tree.
+CONFLICT (modify/delete): artifacts/api-server/src/seed.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/api-server/src/seed.ts left in tree.
+Auto-merging artifacts/api-server/tsconfig.json
+CONFLICT (content): Merge conflict in artifacts/api-server/tsconfig.json
+Auto-merging artifacts/api-server/vitest.config.ts
+CONFLICT (content): Merge conflict in artifacts/api-server/vitest.config.ts
+CONFLICT (modify/delete): artifacts/pdf-sidecar/.gitignore deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/pdf-sidecar/.gitignore left in tree.
+CONFLICT (modify/delete): artifacts/pdf-sidecar/.python-version deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/pdf-sidecar/.python-version left in tree.
+Auto-merging artifacts/pdf-sidecar/main.py
+CONFLICT (content): Merge conflict in artifacts/pdf-sidecar/main.py
+CONFLICT (modify/delete): artifacts/pdf-sidecar/pyproject.toml deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/pdf-sidecar/pyproject.toml left in tree.
+Auto-merging artifacts/pdf-sidecar/requirements.txt
+CONFLICT (content): Merge conflict in artifacts/pdf-sidecar/requirements.txt
+CONFLICT (modify/delete): artifacts/pdf-sidecar/start-prod.sh deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/pdf-sidecar/start-prod.sh left in tree.
+CONFLICT (modify/delete): artifacts/pdf-sidecar/uv.lock deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/pdf-sidecar/uv.lock left in tree.
+Auto-merging artifacts/web/public/favicon.svg
+CONFLICT (content): Merge conflict in artifacts/web/public/favicon.svg
+Auto-merging artifacts/web/src/App.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/App.tsx
+Auto-merging artifacts/web/src/components/AdminRoute.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/AdminRoute.tsx
+CONFLICT (modify/delete): artifacts/web/src/components/AppSwitcher.tsx deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/web/src/components/AppSwitcher.tsx left in tree.
+Auto-merging artifacts/web/src/components/DualZoneUploader.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/DualZoneUploader.tsx
+Auto-merging artifacts/web/src/components/OwnerRoute.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/OwnerRoute.tsx
+CONFLICT (modify/delete): artifacts/web/src/components/SyncUser.tsx deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/web/src/components/SyncUser.tsx left in tree.
+Auto-merging artifacts/web/src/components/layout.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/layout.tsx
+Auto-merging artifacts/web/src/components/sidebar.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/sidebar.tsx
+Auto-merging artifacts/web/src/components/ui/skeleton.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/components/ui/skeleton.tsx
+Auto-merging artifacts/web/src/contexts/AuthContext.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/contexts/AuthContext.tsx
+Auto-merging artifacts/web/src/contexts/GuestAuthContext.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/contexts/GuestAuthContext.tsx
+Auto-merging artifacts/web/src/hooks/use-auth-fetch.ts
+CONFLICT (content): Merge conflict in artifacts/web/src/hooks/use-auth-fetch.ts
+Auto-merging artifacts/web/src/hooks/use-current-user.ts
+CONFLICT (content): Merge conflict in artifacts/web/src/hooks/use-current-user.ts
+Auto-merging artifacts/web/src/index.css
+CONFLICT (content): Merge conflict in artifacts/web/src/index.css
+Auto-merging artifacts/web/src/pages/accept-invite.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/accept-invite.tsx
+Auto-merging artifacts/web/src/pages/admin.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/admin.tsx
+Auto-merging artifacts/web/src/pages/home.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/home.tsx
+Auto-merging artifacts/web/src/pages/job-detail.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/job-detail.tsx
+Auto-merging artifacts/web/src/pages/jobs-new.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/jobs-new.tsx
+CONFLICT (modify/delete): artifacts/web/src/pages/login.tsx deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of artifacts/web/src/pages/login.tsx left in tree.
+Auto-merging artifacts/web/src/pages/settings/pricing.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/settings/pricing.tsx
+Auto-merging artifacts/web/src/pages/training.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/training.tsx
+Auto-merging artifacts/web/src/pages/users.tsx
+CONFLICT (content): Merge conflict in artifacts/web/src/pages/users.tsx
+CONFLICT (modify/delete): attached_assets/Pasted--id-job-5fad09a93e326a5a-tenantId-default-name-Last-job_1779273368766.txt deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of attached_assets/Pasted--id-job-5fad09a93e326a5a-tenantId-default-name-Last-job_1779273368766.txt left in tree.
+CONFLICT (modify/delete): attached_assets/Pasted-May-20-10-36-05-start-prod-sh-pdf-sidecar-supervisor-st_1779274614545.txt deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of attached_assets/Pasted-May-20-10-36-05-start-prod-sh-pdf-sidecar-supervisor-st_1779274614545.txt left in tree.
+CONFLICT (modify/delete): attached_assets/Pasted-Please-integrate-the-SignSuiteIQ-app-switcher-widget-in_1779181211360.txt deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of attached_assets/Pasted-Please-integrate-the-SignSuiteIQ-app-switcher-widget-in_1779181211360.txt left in tree.
+CONFLICT (modify/delete): attached_assets/Pasted-Prompt-for-SignTakeoffIQ-SignSuiteIQ-SSO-Integration-We_1779173951577.txt deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of attached_assets/Pasted-Prompt-for-SignTakeoffIQ-SignSuiteIQ-SSO-Integration-We_1779173951577.txt left in tree.
+Auto-merging attached_assets/Pasted-We-need-you-to-build-POST-api-internal-provision-user-o_1780306233471.txt
+CONFLICT (content): Merge conflict in attached_assets/Pasted-We-need-you-to-build-POST-api-internal-provision-user-o_1780306233471.txt
+CONFLICT (modify/delete): attached_assets/Pasted-alerts-rule-DEPLOYMENT-FAILED-rule-DOMAIN-FAILED-databa_1779275230479.txt deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of attached_assets/Pasted-alerts-rule-DEPLOYMENT-FAILED-rule-DOMAIN-FAILED-databa_1779275230479.txt left in tree.
+Auto-merging lib/api-client-react/src/generated/api.schemas.ts
+CONFLICT (content): Merge conflict in lib/api-client-react/src/generated/api.schemas.ts
+Auto-merging lib/api-spec/openapi.yaml
+CONFLICT (content): Merge conflict in lib/api-spec/openapi.yaml
+Auto-merging lib/api-zod/src/generated/api.ts
+CONFLICT (content): Merge conflict in lib/api-zod/src/generated/api.ts
+Auto-merging lib/api-zod/src/generated/types/serverConfig.ts
+CONFLICT (content): Merge conflict in lib/api-zod/src/generated/types/serverConfig.ts
+Auto-merging lib/db/drizzle.config.ts
+CONFLICT (content): Merge conflict in lib/db/drizzle.config.ts
+CONFLICT (modify/delete): lib/db/drizzle/0000_init.sql deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/0000_init.sql left in tree.
+CONFLICT (modify/delete): lib/db/drizzle/0001_auth_rbac.sql deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/0001_auth_rbac.sql left in tree.
+CONFLICT (modify/delete): lib/db/drizzle/0002_sso.sql deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/0002_sso.sql left in tree.
+CONFLICT (modify/delete): lib/db/drizzle/0003_provisioning.sql deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/0003_provisioning.sql left in tree.
+CONFLICT (modify/delete): lib/db/drizzle/meta/0000_snapshot.json deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/meta/0000_snapshot.json left in tree.
+CONFLICT (modify/delete): lib/db/drizzle/meta/_journal.json deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/drizzle/meta/_journal.json left in tree.
+Auto-merging lib/db/package.json
+CONFLICT (content): Merge conflict in lib/db/package.json
+Auto-merging lib/db/src/index.ts
+CONFLICT (content): Merge conflict in lib/db/src/index.ts
+Auto-merging lib/db/src/schema/index.ts
+CONFLICT (content): Merge conflict in lib/db/src/schema/index.ts
+Auto-merging lib/db/src/schema/invitations.ts
+CONFLICT (content): Merge conflict in lib/db/src/schema/invitations.ts
+CONFLICT (modify/delete): lib/db/src/schema/sessions.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/src/schema/sessions.ts left in tree.
+Auto-merging lib/db/src/schema/tenants.ts
+CONFLICT (content): Merge conflict in lib/db/src/schema/tenants.ts
+Auto-merging lib/db/src/schema/users.ts
+CONFLICT (content): Merge conflict in lib/db/src/schema/users.ts
+CONFLICT (modify/delete): lib/db/src/seed.ts deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of lib/db/src/seed.ts left in tree.
+Auto-merging package.json
+CONFLICT (content): Merge conflict in package.json
+Auto-merging pnpm-lock.yaml
+CONFLICT (content): Merge conflict in pnpm-lock.yaml
+Auto-merging replit.nix
+CONFLICT (content): Merge conflict in replit.nix
+CONFLICT (modify/delete): scripts/deploy-build.sh deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of scripts/deploy-build.sh left in tree.
+CONFLICT (modify/delete): scripts/migrations/.gitignore deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of scripts/migrations/.gitignore left in tree.
+CONFLICT (modify/delete): scripts/migrations/merge-replit-into-do.sh deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of scripts/migrations/merge-replit-into-do.sh left in tree.
+CONFLICT (modify/delete): start-prod.sh deleted in HEAD and modified in a1f11cf13e230fedc9afe38ea15915304dede5ba.  Version a1f11cf13e230fedc9afe38ea15915304dede5ba of start-prod.sh left in tree.
+Auto-merging tsconfig.json
+CONFLICT (content): Merge conflict in tsconfig.json
+Automatic merge failed; fix conflicts and then commit the result.

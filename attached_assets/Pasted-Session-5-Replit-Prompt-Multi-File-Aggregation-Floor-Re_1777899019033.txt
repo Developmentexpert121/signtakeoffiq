@@ -1,0 +1,72 @@
+Session 5 Replit Prompt — Multi-File Aggregation, Floor Replication, Residential Units, Sign Schedule Image Extraction
+
+What's broken in one sentence:
+Walking Court returns ~36 signs against an expected ~300+ because the pipeline fails to aggregate rooms across all 9 uploaded floor plan files, doesn't replicate floors from range labels like "Floors 3-6", misses residential unit numbers as room identifiers, and can't extract image-based signage schedule tables when pdfplumber returns 0 rows.
+
+Files that will change:
+
+artifacts/api-server/src/lib/pipeline.ts — all four fixes
+artifacts/pdf-sidecar/main.py — higher-DPI rasterization endpoint or parameter for sign schedule fallback
+
+Files that will NOT change:
+
+All UI components (StructuredUploader.tsx, DualZoneUploader.tsx, job-detail.tsx)
+materialSpec.ts, exports.ts, buildingTypes.ts, schema.ts
+Any existing routes other than minor additions to the sidecar call if needed
+
+
+Fix 1 — Multi-file aggregation diagnostic + fix (pipeline.ts)
+Locate the section of the pipeline that processes files tagged floor_plan. Add console logging at the start of the loop:
+console.log(`[pipeline] Processing floor_plan file ${i+1}/${floorPlanFiles.length}: ${file.originalName}, fileId=${file.id}`);
+After each file's room extraction completes, log:
+console.log(`[pipeline] File ${file.originalName} extracted ${rooms.length} rooms. Running total: ${allRooms.length}`);
+If the current code is only processing floorPlanFiles[0] or breaking after the first file, fix the aggregation loop so it iterates over every file in the slot and merges all extracted room arrays into a single allRooms[] accumulator before continuing to the rules engine. The rules engine should receive the merged array, not a per-file result.
+
+Fix 2 — Floor replication from range labels (pipeline.ts)
+In parseLevelFromLabel() (or wherever floor label text is parsed into a level number), extend the function to detect range patterns:
+
+"Floors 3-6" → levels [3, 4, 5, 6], replicate: true
+"Levels 3-6" → same
+"3rd-6th Floor" → same
+"Floor 3" → level [3], replicate: false
+Single floor or no match → existing behavior unchanged
+
+Return type becomes { levels: number[], replicate: boolean }.
+In the room extraction step, when replicate: true, after extracting rooms from that file, clone the full room array once per level in levels[], stamping each clone with the correct level. A file labeled "Floors 3-6" producing 12 rooms becomes 48 rooms (12 × 4) with level values of 3, 3, 3…4, 4, 4…5, 5, 5…6, 6, 6…
+Log this:
+console.log(`[pipeline] Floor label "Floors 3-6" → replicating ${rooms.length} rooms × 4 levels = ${rooms.length * 4} total`);
+This must only fire for files with a floorLabel value on the job_files row. Files with no label or a single-floor label are unaffected.
+
+Fix 3 — Residential unit number extraction (pipeline.ts)
+For jobs where buildingType === "residential", append the following to the Gemini vision prompt used for floor plan extraction (insert it just before the closing instruction to return JSON):
+
+"For residential buildings, floor plans often label apartment or condo units in formats like 'SEE UNIT A A209', 'UNIT B301', or simply 'A209' near door symbols or unit outlines. The alphanumeric code (A209, B301, 101, etc.) is the room identifier — not the label above it like 'SEE UNIT A'. Extract each unit number as a separate room entry with that alphanumeric code as the roomName or roomNumber. Do not collapse multiple unit numbers into one entry labeled 'SEE UNIT A'."
+
+This is additive — no change to non-residential building type prompts.
+
+Fix 4 — Sign schedule image table extraction fallback (pipeline.ts + main.py)
+In Step 3a of the pipeline, after the sign schedule file is processed and extractedRows (or equivalent) comes back empty (length === 0), trigger an image-based fallback:
+
+Call the sidecar's rasterize endpoint for that page, requesting 300 DPI instead of the standard 150. Pass a parameter like dpi=300 if the endpoint supports it, or add that parameter to main.py's rasterize handler.
+After rasterizing, send the full-page image (or if the image is very large, crop to the lower two-thirds where schedule tables typically appear) to Gemini with this prompt:
+
+
+"This is an architectural signage schedule table from a construction drawing. Extract every row as a JSON array. Each entry should have the fields: roomNumber (string), roomName (string), signText (string), quantity (number, default 1 if not shown). There may be 200–400 rows. Include every row — do not truncate. Return a JSON array only, no other text."
+
+
+Parse the JSON response. For each extracted row, push an entry into the signSchedule[] accumulator with source: "schedule" and the room/sign data. These entries should flow into the standard sign generation logic just like text-extracted schedule entries do today.
+Log the result:
+
+console.log(`[pipeline] Sign schedule image fallback extracted ${rows.length} entries from ${file.originalName}`);
+In main.py, if the rasterize endpoint hardcodes 150 DPI, add an optional dpi query parameter (default 150, max 300) so the API server can request 300 DPI for this fallback without breaking existing calls.
+
+Regression test sequence
+
+Run typecheck — must pass with 0 errors
+Run full test suite — must reach 1,585 passing
+Do NOT rescan until tests pass
+Rescan Fox Hill first — confirm result in 193–215 range
+Only then rescan Walking Court — target 200–400+ signs, confirm console logs show all 9 files processed and room counts per file
+
+
+Walking Court is already uploaded in the app. After fixes are in and tests pass, rescan it in place — no re-upload needed

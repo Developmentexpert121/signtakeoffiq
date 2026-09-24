@@ -1,0 +1,49 @@
+Here's the full optimized prompt:
+
+> Fix sheet scanning, cost optimization, and floor plan display. Scope: sheet classifier, vision call logic, and floor plan tab default view only. Do not touch upload component, sign table, pipeline steps 1-9, or any other component.
+>
+> **Change 1 — Hard exclude list (never vision scan these)**
+> - Sheet numbers: A-001, A-002, A-003
+> - Title contains any of: "ELEVATION", "SECTION", "GENERAL NOTES", "DRAWING INDEX", "SYMBOL LEGEND", "ABBREVIATIONS", "SPECIFICATIONS", "CODE ANALYSIS", "LIFE SAFETY NOTES", "DOOR SCHEDULE", "WINDOW SCHEDULE", "PLUMBING FIXTURE", "LIGHTING FIXTURE", "REFLECTED CEILING", "ROOF PLAN", "SITE PLAN"
+> - Discipline prefixes: S-, M-, E-, P-, C-, FP-
+>
+> **Change 2 — Scan priority order**
+> Process non-excluded sheets in this order — stop when cap is reached:
+> 1. Title contains "FLOOR PLAN" or "FURNITURE PLAN"
+> 2. Title contains "PLAN" (any plan type)
+> 3. A-1XX sheets
+> 4. A-2XX sheets
+> 5. A-3XX sheets
+> 6. Everything else not excluded
+>
+> **Change 3 — Two-tier vision model**
+> - Tier 1 (classification): use `claude-haiku-4-5` — ask "Does this sheet show an overhead floor plan with room outlines and door swings? Reply YES or NO only." Run on all non-excluded sheets in priority order.
+> - Tier 2 (door detection): use `claude-sonnet-4-6` — full door + room extraction. Only run on sheets where Tier 1 returned YES.
+> - If Tier 1 returns YES but Tier 2 fails → mark sheet as `vision_failed`, continue to next sheet, never stall pipeline.
+>
+> **Change 4 — Permanent caching**
+> - Cache Tier 1 result (isPlanView true/false) permanently per sheet per job after first scan
+> - Cache Tier 2 result (rooms + coordinates) permanently per sheet per job after first scan
+> - On rescan WITHOUT Force Fresh → skip all cached sheets entirely, use stored results
+> - On rescan WITH Force Fresh → re-run both tiers on all sheets
+> - Log cache hits: "[pipeline] Sheet A-102: using cached isPlanView=true, 8 rooms"
+>
+> **Change 5 — Scan cap management**
+> - Process Priority 1 and 2 sheets first before spending any cap on lower priority sheets
+> - If cap is reached after Priority 1/2 sheets → stop gracefully, log which sheets were skipped
+> - Never skip a Priority 1/2 sheet to scan a Priority 5/6 sheet
+> - Tier 1 Haiku calls count as 1 cap unit, Tier 2 Sonnet calls count as 2 cap units
+>
+> **Change 6 — Floor Plans tab default view**
+> - When user opens Floor Plans tab, default to sheet with the most markers
+> - If tied → prefer sheet with "PLAN" in title
+> - If still tied → prefer lowest sheet number
+> - Never default to a sheet with 0 markers if any sheet has markers
+>
+> **Cost targets:**
+> - First scan: under $0.15 per job
+> - Repeat rescan without Force Fresh: under $0.02 per job
+> - Haiku Tier 1 per sheet: ~$0.001
+> - Sonnet Tier 2 per sheet: ~$0.015
+
+Paste this as one complete prompt. It covers everything needed for accurate, fast, cost-efficient plan marking.

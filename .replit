@@ -1,0 +1,245 @@
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "PDF Sidecar"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start All Services"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "api-server-tests"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "web-build"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "web-lint"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "api-lint"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "lib-lint"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "lint-all"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "web-tests"
+
+[[workflows.workflow]]
+name = "PDF Sidecar"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/pdf-sidecar && python3 main.py"
+
+[[workflows.workflow]]
+name = "Start All Services"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash artifacts/pdf-sidecar/start.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "api-server-tests"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server test"
+
+[[workflows.workflow]]
+name = "web-build"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/web build"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/db build && pnpm --filter @workspace/api-server typecheck"
+
+[[workflows.workflow]]
+name = "web-lint"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/web lint"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+  [[workflows.workflow]]
+  name = "api-lint"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "pnpm --filter @workspace/api-server lint"
+
+  [workflows.workflow.metadata]
+  isValidation = true
+
+[[workflows.workflow]]
+name = "lib-lint"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter './lib/**' --if-present run lint"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "lint-all"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server lint && pnpm --filter @workspace/web lint && pnpm --filter './lib/**' --if-present run lint"
+
+[workflows.workflow.metadata]
+isValidation = true
+  
+  [[workflows.workflow]]
+  name = "web-tests"
+  author = "agent"
+
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "pnpm --filter @workspace/web test"
+
+  [workflows.workflow.metadata]
+  isValidation = true
+    
+  [agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[[ports]]
+localPort = 3000
+externalPort = 3003
+
+[[ports]]
+localPort = 3001
+externalPort = 4200
+
+[[ports]]
+localPort = 3002
+externalPort = 6800
+
+[[ports]]
+localPort = 8008
+externalPort = 8008
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3001
+
+[[ports]]
+localPort = 8083
+externalPort = 5000
+
+[[ports]]
+localPort = 8099
+externalPort = 8099
+
+[[ports]]
+localPort = 8799
+externalPort = 8000
+
+[[ports]]
+localPort = 22333
+externalPort = 3000
+
+[[ports]]
+localPort = 22334
+externalPort = 3002
+
+[[ports]]
+localPort = 22335
+externalPort = 5173
+
+[[ports]]
+localPort = 22336
+externalPort = 6000
+
+[nix]
+channel = "stable-25_05"
+packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "poppler_utils", "tcl", "tk", "zlib"]
+
+[userenv]
+
+[userenv.shared]
+GUEST_JWT_SECRET = "0996615477e21dad460e1e466528fab9ac45c367a9bbec86088c82157ba7a642"
+DEV_BYPASS_AUTH = "false"
+RASTERIZE_DPI = "250"
+PIPELINE_CACHE_ENABLED = "false"
+SMTP_USER = "info@installiq.ai"
+SMTP_FROM = "info@installiq.ai"

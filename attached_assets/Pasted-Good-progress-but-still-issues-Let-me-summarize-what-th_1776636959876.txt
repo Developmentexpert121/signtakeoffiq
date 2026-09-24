@@ -1,0 +1,49 @@
+Good progress but still issues. Let me summarize what the agent found and what needs fixing next.
+
+**Current NOVO state:**
+- ✅ Finish codes (WD1, C4, B3) no longer used as room names
+- ✅ 3-digit units now show as "UNIT 201", "UNIT 203" etc.
+- ✅ 219 signs extracted, 1186 tests passing
+- ⚠️ Negative coordinates on some rooms (markers off left edge)
+- ⚠️ A-004 legends sheet misclassified as floor_plan
+- ⚠️ 219 vs target 412 — still undercounting
+
+**Tell Replit Agent:**
+
+> Fix two remaining NOVO issues:
+>
+> **Fix 1 — Negative coordinates clamped to 0**
+>
+> In `artifacts/api-server/src/lib/pipeline.ts` in `extractRoomsFromWords`, after calculating `normX` and `normY`, clamp them to valid range:
+> ```typescript
+> const normX = Math.round((rx / pageWidth) * 1000);
+> const normY = Math.round((ry / pageHeight) * 1000);
+> // Change to:
+> const normX = Math.max(10, Math.min(990, Math.round((rx / pageWidth) * 1000)));
+> const normY = Math.max(10, Math.min(990, Math.round((ry / pageHeight) * 1000)));
+> ```
+>
+> **Fix 2 — A-004 legends sheet excluded from floor_plan**
+>
+> In `artifacts/pdf-sidecar/main.py`, add `"legends"`, `"notes"`, `"schedule"` to `FLOOR_PLAN_EXCLUSION_KEYWORDS`:
+> ```python
+> FLOOR_PLAN_EXCLUSION_KEYWORDS = [
+>     "plumbing", "mechanical", "electrical", "hvac",
+>     "structural", "civil", "landscape", "demolition",
+>     "reflected ceiling", "foundation", "framing",
+>     "site plan", "roof plan",
+>     "legends", "notes", "finish schedule",  # ADD THESE
+> ]
+> ```
+>
+> After both fixes: rebuild, restart sidecar, rescan NOVO.
+>
+> Then show me:
+> ```sql
+> SELECT sheet_id, sheet_title, sheet_type, pdf_page FROM job_sheets
+> WHERE job_id = (SELECT id FROM jobs WHERE name ILIKE '%novo%' ORDER BY updated_at DESC LIMIT 1)
+> ORDER BY pdf_page;
+> ```
+> And total sign count.
+
+The 219 vs 412 gap is a separate problem — the NOVO PDF only has 5 pages and is a finish plan, not a dedicated signage plan. The full 412 sign count likely requires the rules engine to apply residential sign rules per unit, not just extract signs from explicit markers on the plan.

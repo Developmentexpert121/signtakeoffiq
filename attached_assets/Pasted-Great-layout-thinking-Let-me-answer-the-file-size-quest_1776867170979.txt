@@ -1,0 +1,117 @@
+Great layout thinking. Let me answer the file size question first:
+
+**Recommended upload limits:**
+- **PDF floor plans:** 50MB max per file — covers 95% of single-floor plan PDFs at 150 DPI rasterization quality
+- **Sign schedule PDFs:** 25MB max — schedules are text-heavy, rarely exceed 10MB
+- **XLSX takeoff:** 5MB max — spreadsheets are tiny, this is generous
+
+**Will this make a meaningful impact?**
+
+Yes — here's exactly why:
+
+The training module's value compounds over time:
+
+| Training Jobs | Expected Accuracy Gain |
+|--------------|----------------------|
+| 3 jobs (now) | Baseline established |
+| 10 jobs | +15-20% accuracy on matched building types |
+| 25 jobs | +30-40% — patterns become statistically reliable |
+| 50+ jobs | +50%+ — system knows your estimating style |
+
+The sign schedule upload specifically is high impact because:
+- It gives Claude the **architect's exact sign types** not just the estimator's interpretation
+- Eliminates the biggest source of training noise
+- Park Lane proved this — when the schedule was on the sheet, accuracy hit 100%
+
+---
+
+Here's your Replit prompt:
+
+---
+
+Redesign the Training Import form with the following changes. Do not change any backend logic — UI and validation changes only except where noted.
+
+**Layout change — 3-column form:**
+
+Replace the current 2-column grid with a 3-zone layout:
+
+```
+[Zone 1 - Left]          [Zone 2 - Center]         [Zone 3 - Right]
+Floor Plan PDF           Sign Schedule              Takeoff XLSX
+(required*)              (optional)                 (required)
+Upload OR Drive link     Upload OR Drive link       Upload only
+50MB max                 25MB max                   5MB max
+```
+
+Zone 1 and Zone 2 use the new `FileOrDriveInput` component with toggle between Upload File and Google Drive Link.
+
+Zone 3 stays as the existing `FilePicker` component — XLSX only, no Drive link needed.
+
+**Remove fields:**
+- Remove the Building Type dropdown entirely
+- Remove the Jurisdiction text input entirely
+
+**Auto-fill building type from linked job:**
+
+In `handleAnalyze`, when `sourceJobId` is set, fetch the job details before calling the import API:
+```ts
+const selectedJob = jobsList?.find(j => j.id === sourceJobId);
+const autoDetectedBuildingType = selectedJob?.buildingType ?? null;
+```
+Pass `autoDetectedBuildingType` as `buildingType` in the confirm body. No UI field needed — it's invisible to the user.
+
+**File size validation:**
+
+In `handleAnalyze`, before uploading add client-side size checks:
+```ts
+const PDF_MAX_BYTES = 50 * 1024 * 1024;   // 50MB
+const SCHED_MAX_BYTES = 25 * 1024 * 1024; // 25MB
+const XLSX_MAX_BYTES = 5 * 1024 * 1024;   // 5MB
+
+if (pdfFile && pdfFile.size > PDF_MAX_BYTES) {
+  setUploadError("Floor plan PDF exceeds 50MB limit. Use a Google Drive link instead for large files.");
+  return;
+}
+if (signScheduleFile && signScheduleFile.size > SCHED_MAX_BYTES) {
+  setUploadError("Sign schedule exceeds 25MB limit. Use a Google Drive link instead.");
+  return;
+}
+if (xlsxFile && xlsxFile.size > XLSX_MAX_BYTES) {
+  setUploadError("Takeoff spreadsheet exceeds 5MB limit.");
+  return;
+}
+```
+
+Show the file size limit as a subtle hint inside each upload zone:
+- Floor Plan: `"PDF up to 50MB · or paste a Google Drive link for larger files"`
+- Sign Schedule: `"PDF up to 25MB · or paste a Google Drive link"`
+- Takeoff XLSX: `"XLSX or CSV up to 5MB"`
+
+**Drive link input styling:**
+
+When user toggles to Google Drive Link mode, show:
+```
+[  Paste Google Drive link here...                    ]
+ⓘ File must be shared as "Anyone with the link can view"
+```
+
+With a copy-friendly placeholder and a small info icon linking to instructions.
+
+**Sign schedule state wiring:**
+
+Add to `handleAnalyze` — when `signScheduleFile` or `signScheduleDriveUrl` is present, upload it and pass `signScheduleStoragePath` in the confirm body alongside `pdfStoragePath`.
+
+**Reset:**
+Add `setSignScheduleFile(null)`, `setSignScheduleDriveUrl("")`, `setSignScheduleDriveStatus("idle")` to `handleReset`.
+
+**Zone card styling:**
+
+Each of the 3 zones should be a distinct card with:
+- A colored left border: blue for Floor Plan, purple for Sign Schedule, green for XLSX
+- Zone title in bold at top
+- Required/Optional badge
+- File size limit hint in muted text below the upload area
+
+After saving, share a screenshot of the redesigned Import Data tab.
+
+---

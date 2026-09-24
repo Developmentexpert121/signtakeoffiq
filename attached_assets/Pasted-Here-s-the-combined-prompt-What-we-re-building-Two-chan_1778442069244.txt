@@ -1,0 +1,136 @@
+Here's the combined prompt:
+
+What we're building: Two changes in one pass — (1) replace Gemini-only coordinate estimation in analyzeSheet() with a sidecar-first exact positioning approach, (2) redesign marker visuals to be rectangular, high-contrast, and readable at 30% zoom.
+What changes:
+
+artifacts/api-server/src/lib/pipeline.ts — analyzeSheet() only
+artifacts/api-server/src/routes/sheets.ts — pass PDF storage path to analyzeSheet()
+artifacts/web/src/components/FloorPlanTab.tsx — marker and legend visual redesign
+
+
+Fix 1 — analyzeSheet() new flow:
+Replace the current single Gemini call with a three-step flow:
+Step A — Sidecar text extraction (exact positions):
+typescript// Call sidecar /extract-room-tags with the sheet's PDF path and page number
+const sidecarResponse = await fetch(`${SIDECAR_URL}/extract-room-tags`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ 
+    pdf_path: sheet.pdfStoragePath,
+    page_number: sheet.pageNumber ?? 1
+  })
+})
+const { room_tags } = await sidecarResponse.json()
+// room_tags: [{ text: "A215", x: 312.4, y: 441.2, width: 24, height: 12 }]
+// x,y are already in pixel coordinates via pts_to_pixels()
+// Convert to 0–100,000 grid:
+// coordX = Math.round((x / imageWidth) * 100000)
+// coordY = Math.round((y / imageHeight) * 100000)
+Step B — Gemini door side classification (left/right only):
+Send Gemini:
+
+The rasterized floor plan PNG (existing base64 image)
+The two door reference images as additional image parts:
+
+typescriptconst doorLeftBase64 = // base64 of the left-swing door image uploaded by user
+const doorRightBase64 = // base64 of the right-swing door image uploaded by user
+Store both door reference images as base64 constants in pipeline.ts — embed them directly, they're small grayscale PNGs.
+Gemini prompt — classification only, no coordinates:
+These first two images show what a left-hand door swing and 
+right-hand door swing look like on architectural floor plans.
+
+The third image is a floor plan. For each room number listed 
+below, classify the door swing direction.
+
+Rooms to classify: A215, A213, A211, A209 ... (from sidecar results)
+
+Return JSON array only:
+[
+  { "roomNumber": "A215", "door_side": "left", "confidence": 0.95 },
+  { "roomNumber": "A213", "door_side": "right", "confidence": 0.92 }
+]
+
+door_side must be: "left" | "right" | "none"
+Only include rooms from the provided list.
+Step C — Combine and write:
+typescriptfor (const tag of room_tags) {
+  const geminiResult = geminiResults.find(g => g.roomNumber === tag.text)
+  const coordX = Math.round((tag.x / imageWidth) * 100000)
+  const coordY = Math.round((tag.y / imageHeight) * 100000)
+  
+  // Apply door side offset: ±4,000 on x-axis
+  const offsetX = geminiResult?.door_side === 'left' ? -4000 :
+                  geminiResult?.door_side === 'right' ? 4000 : 0
+  const finalX = Math.max(0, Math.min(100000, coordX + offsetX))
+  
+  // Pass 1: find existing sign, update if sentinel or wrong sheet
+  // Pass 2: create if not found and matches room code pattern
+  // Pass 3: write door_side to rooms table
+  // (same logic as current Pass 1/2/3 — unchanged)
+}
+If sidecar call fails → fall back to existing Gemini-only approach silently.
+sheets.ts change: Pass sheet.pdfStoragePath and sheet.pageNumber into analyzeSheet() call. Add those two fields to the sheet fetch query if not already selected.
+
+Fix 2 — Marker visual redesign (FloorPlanTab.tsx):
+Replace the current circle marker with a rectangular label tag — like a physical sign label stuck to the door:
+tsx// Individual marker — rectangular tag
+<div
+  style={{
+    position: 'absolute',
+    left: markerPixelX,
+    top: markerPixelY,
+    transform: 'translate(-50%, -50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0px',
+    pointerEvents: 'all',
+    cursor: 'pointer',
+  }}
+>
+  {/* Color-coded left bar */}
+  <div style={{
+    width: 4,
+    height: 20,
+    backgroundColor: markerColor,
+    borderRadius: '2px 0 0 2px',
+    flexShrink: 0,
+  }} />
+  {/* Label body */}
+  <div style={{
+    backgroundColor: markerColor,
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 700,
+    fontFamily: 'IBM Plex Sans, monospace',
+    padding: '2px 5px',
+    borderRadius: '0 2px 2px 0',
+    whiteSpace: 'nowrap',
+    maxWidth: 72,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    lineHeight: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+  }}>
+    {markerLabel || signType}
+  </div>
+</div>
+Color scheme by sign type:
+typescriptconst markerColor = 
+  signType?.match(/^(EXIT|STAIR|EGRESS|EVAC)/i) ? '#EF4444' :  // red — egress
+  signType?.match(/^(EXIT)$/i)                  ? '#22C55E' :  // green — exit
+  signType?.match(/^[A-Z][0-9]{3,4}$/)          ? '#F59E0B' :  // amber — residential unit
+  signType?.match(/RESTROOM|TOILET|TLT/i)       ? '#3B82F6' :  // blue — restroom
+  signType?.match(/CORRIDOR|LOBBY|LOUNGE/i)     ? '#8B5CF6' :  // purple — common area
+                                                  '#64748B'    // slate — default
+Cluster dots — keep as circles but use amber #F59E0B fill, white count text, white border. No change to cluster logic.
+Legend update — the legend at the bottom should use the same rectangular tag style as the markers, with the color bar on the left. Replace the current colored circle ● in the legend with a mini version of the rectangular tag for each sign type.
+Selected/hover state: Scale the tag to 1.15x and add box-shadow: 0 2px 8px rgba(0,0,0,0.5) on hover.
+Only show labels at zoom ≥ 25%. Below 25% zoom, render as small colored squares (6×6px) — readable but not cluttered.
+
+What won't change: All pipeline logic outside analyzeSheet(), DB schema, all routes except the analyzeSheet call signature, test count.
+Regression tests:
+
+Fox Hill Plans tab — rectangular markers visible at 30% zoom, color-coded by type, legend matches marker colors. Sign count 185–215 unchanged.
+Walking Court PLAN-3-P1 — click Analyze Sheet — markers appear as amber rectangular tags positioned at room labels with door-side offset. No markers in title block area.
+Zoom below 25% — markers shrink to small squares, no text overflow.
+1,570 API + 156 web tests pass. Typecheck 0 errors.

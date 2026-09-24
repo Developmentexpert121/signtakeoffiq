@@ -1,0 +1,32 @@
+Jun 03 12:05:40  [start-prod.sh] pdf-sidecar supervisor started (PID: 26) on 8008 (not waited on)
+Jun 03 12:05:40  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 12:05:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 12:05:46  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 12:05:46  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 12:05:46  {"level":30,"time":1780488346630,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","port":8080,"msg":"Server listening"}
+Jun 03 12:05:46  {"level":30,"time":1780488346631,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 12:05:46  {"level":30,"time":1780488346631,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 12:05:46  {"level":30,"time":1780488346740,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 12:05:46  {"level":30,"time":1780488346740,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 12:05:46  {"level":30,"time":1780488346740,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 12:05:46  {"level":30,"time":1780488346759,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-m7dbn","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 12:05:46  INFO:     Started server process [27]
+Jun 03 12:05:46  INFO:     Waiting for application startup.
+Jun 03 12:05:46  INFO:     Application startup complete.
+Jun 03 12:05:46  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+Jun 03 12:04:47  [start-prod.sh] pdf-sidecar supervisor started (PID: 26) on 8008 (not waited on)
+Jun 03 12:04:47  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 12:04:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 12:04:54  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 12:04:54  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 12:04:54  {"level":30,"time":1780488294601,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","port":8080,"msg":"Server listening"}
+Jun 03 12:04:54  {"level":30,"time":1780488294602,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 12:04:54  {"level":30,"time":1780488294602,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 12:04:54  {"level":30,"time":1780488294726,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 12:04:54  {"level":30,"time":1780488294726,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 12:04:54  {"level":30,"time":1780488294726,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 12:04:54  {"level":30,"time":1780488294804,"pid":1,"hostname":"signtakeoffiq-7cc7fd6f6c-qkp9x","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 12:04:55  INFO:     Started server process [27]
+Jun 03 12:04:55  INFO:     Waiting for application startup.
+Jun 03 12:04:55  INFO:     Application startup complete.
+Jun 03 12:04:55  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)

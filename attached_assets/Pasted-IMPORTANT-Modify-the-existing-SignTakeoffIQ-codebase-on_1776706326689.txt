@@ -1,0 +1,126 @@
+IMPORTANT: Modify the existing SignTakeoffIQ codebase only. Do not rebuild or restructure. This is Step 1 of 3 — backend extraction fix only. Do not touch the frontend.
+The problem: Step 5 ("Extracting words from floor plans") uses extract_words() from pdfplumber which misses most room tags in modern PDFs. Room tags (e.g. B01, M11, 1100) are stored as individual characters in the PDF stream, not as grouped words. This causes markers to either be missing or placed at wrong positions.
+Fix 1 — Replace word extraction with character stream scanning in Step 5.
+Find the Step 5 function in the backend that extracts room labels from floor plan pages. Replace the extract_words() call with this character stream scanner:
+pythondef extract_room_tags_from_chars(plumber_page, room_patterns=None):
+    """
+    Scan pdfplumber character stream for room tags.
+    Works when PDF stores tags as individual chars (most modern architectural PDFs).
+    Falls back to extract_words() for older PDFs if char scan yields nothing.
+    
+    room_patterns: list of compiled regex patterns to match against.
+    Default patterns cover: 3-4 digit room numbers (101, 1100, 1212A),
+    alpha-numeric tags (B01, M11, U04, S123), and hyphenated service IDs (B1-101).
+    """
+    import re
+    
+    if room_patterns is None:
+        room_patterns = [
+            re.compile(r'^\d{3,4}[A-Z]?$'),           # 101, 1100, 1212A
+            re.compile(r'^[A-Z]{1,2}\d{2}[a-z]?$'),   # B01, M11, U09A
+            re.compile(r'^[A-Z]{1,3}\d[-]\d{3}[A-Z]?$'), # B1-101, EP1-101
+            re.compile(r'^S\d{1,3}[A-Z]?$'),            # S1, S123, S5A (military)
+        ]
+    
+    bbox = plumber_page.bbox
+    bbox_x0, bbox_y0 = float(bbox[0]), float(bbox[1])
+    pw = float(plumber_page.width)
+    ph = float(plumber_page.height)
+    
+    chars = plumber_page.chars
+    found = []
+    seen_tags = set()
+    i = 0
+    
+    while i < len(chars):
+        matched = False
+        # Try lengths longest-first to avoid partial matches
+        for length in [6, 5, 4, 3, 2]:
+            if i + length > len(chars):
+                continue
+            segment = chars[i:i+length]
+            text = ''.join(c['text'] for c in segment).strip()
+            if not text or text in seen_tags:
+                if text in seen_tags and length == 2:
+                    break
+                continue
+            for pattern in room_patterns:
+                if pattern.match(text):
+                    c0, ce = segment[0], segment[-1]
+                    cx = (float(c0['x0']) + float(ce['x1'])) / 2
+                    cy = (float(c0['top']) + float(c0['bottom'])) / 2
+                    found.append({
+                        'tag': text,
+                        'x_pts': cx,
+                        'y_pts': cy,
+                        'bbox_x0': bbox_x0,
+                        'bbox_y0': bbox_y0,
+                        'page_w': pw,
+                        'page_h': ph,
+                    })
+                    seen_tags.add(text)
+                    matched = True
+                    i += length
+                    break
+            if matched:
+                break
+        if not matched:
+            i += 1
+    
+    # Fallback: if char scan found nothing, try extract_words
+    if not found:
+        words = plumber_page.extract_words(x_tolerance=3, y_tolerance=3)
+        for w in words:
+            text = w['text'].strip()
+            if text in seen_tags:
+                continue
+            for pattern in room_patterns:
+                if pattern.match(text):
+                    cx = (float(w['x0']) + float(w['x1'])) / 2
+                    cy = (float(w['top']) + float(w['bottom'])) / 2
+                    found.append({
+                        'tag': text,
+                        'x_pts': cx,
+                        'y_pts': cy,
+                        'bbox_x0': bbox_x0,
+                        'bbox_y0': bbox_y0,
+                        'page_w': pw,
+                        'page_h': ph,
+                    })
+                    seen_tags.add(text)
+                    break
+    
+    return found
+Fix 2 — Fix the pixel coordinate conversion used when placing markers.
+Find everywhere in the backend that converts PDF point coordinates to pixel coordinates for marker placement. Replace those calculations with this function:
+pythondef pts_to_pixels(x_pts, y_pts, bbox_x0, bbox_y0, page_w, page_h, img_w, img_h):
+    """
+    Convert PDF point coordinates to raster image pixel coordinates.
+    MUST use bbox offset — PDF mediabox origin is often not (0,0).
+    Example: NOVO floor plans have bbox (-1728, 1296, 1728, 3888).
+    Without the offset, all markers appear off-page.
+    """
+    if page_w == 0 or page_h == 0:
+        return 0, 0
+    px = int((x_pts - bbox_x0) * (img_w / page_w))
+    py = int((y_pts - bbox_y0) * (img_h / page_h))
+    px = max(0, min(px, img_w - 1))
+    py = max(0, min(py, img_h - 1))
+    return px, py
+Fix 3 — Store bbox metadata with each room.
+When saving room records to the database after extraction, also store these fields from the extraction result. Add these columns to the rooms table if they don't exist:
+sqlALTER TABLE rooms ADD COLUMN IF NOT EXISTS bbox_x0 FLOAT DEFAULT 0;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS bbox_y0 FLOAT DEFAULT 0;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS page_w_pts FLOAT DEFAULT 0;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS page_h_pts FLOAT DEFAULT 0;
+Populate them from the extraction result's bbox_x0, bbox_y0, page_w, page_h fields when inserting room records.
+Fix 4 — Update the step label. Change the Step 5 label string from "Extracting words from floor plans" to "Extracting room tags from floor plans (char stream)" so it's clear in the UI what method is being used.
+Do NOT change:
+
+Any frontend code
+Any other pipeline steps (1, 2, 3, 4, 6, 7, 8, 9, 10)
+Any existing API routes
+Any existing DB tables other than adding 4 columns to rooms
+Any auth, tenant, or job management logic
+
+After making the changes: Re-run the existing "Test 2" job (job_bb582accb761d57d) using the Rescan button to verify the fix works. Check that room counts are the same or higher and that the Step 5 label shows the new text.

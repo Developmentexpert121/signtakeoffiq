@@ -1,0 +1,99 @@
+Confirmed.Confirmed. Let's fix it properly now — one clean prompt:
+
+What's broken: jobMaterialSpec is stored in a plain in-memory Map in materialSpec.ts. Any server restart clears it, making the Pricing tab override and Handoff Report material spec page unreliable. Need to persist to the database.
+Files that change:
+
+artifacts/api-server/src/db/schema.ts — add materialSpec column to jobs table
+artifacts/api-server/src/lib/materialSpec.ts — replace in-memory Map with DB read/write
+artifacts/api-server/src/lib/pipeline.ts — update setJobMaterialSpec call (async now)
+artifacts/api-server/src/routes/exports.ts — update getJobMaterialSpec call (async now)
+artifacts/api-server/src/routes/jobs.ts — update material-spec GET endpoint (async now)
+
+What won't be affected: Rules engine, XLSX export structure, all existing jobs, all benchmark jobs, pipeline logic, frontend components.
+Regression test: Fox Hill — confirm stable after migration.
+
+Step 1 — Add column to jobs table
+In artifacts/api-server/src/db/schema.ts, find the jobsTable definition and add one column:
+typescriptmaterialSpec: jsonb("material_spec").$type<{
+  substrate:      string | null;
+  finishMethod:   string | null;
+  brailleSpec:    string | null;
+  mountingHeight: string | null;
+  manufacturer:   string | null;
+  source:         string;
+} | null>(),
+Run Drizzle migration to apply.
+
+Step 2 — Replace materialSpec.ts with DB-backed implementation
+Replace the entire contents of artifacts/api-server/src/lib/materialSpec.ts:
+typescriptimport { db } from "../db";
+import { jobsTable } from "../db/schema";
+import { eq } from "drizzle-orm";
+
+export interface JobMaterialSpec {
+  jobId:          string;
+  substrate:      string | null;
+  finishMethod:   string | null;
+  brailleSpec:    string | null;
+  mountingHeight: string | null;
+  manufacturer:   string | null;
+  source:         "sign_schedule" | "manual";
+}
+
+export async function setJobMaterialSpec(spec: JobMaterialSpec): Promise<void> {
+  const { jobId, ...rest } = spec;
+  await db.update(jobsTable)
+    .set({ materialSpec: rest })
+    .where(eq(jobsTable.id, jobId));
+}
+
+export async function getJobMaterialSpec(jobId: string): Promise<JobMaterialSpec | null> {
+  const job = await db.query.jobsTable.findFirst({
+    where: eq(jobsTable.id, jobId),
+    columns: { materialSpec: true }
+  });
+  if (!job?.materialSpec) return null;
+  return { jobId, ...job.materialSpec } as JobMaterialSpec;
+}
+
+export async function clearJobMaterialSpec(jobId: string): Promise<void> {
+  await db.update(jobsTable)
+    .set({ materialSpec: null })
+    .where(eq(jobsTable.id, jobId));
+}
+
+Step 3 — Update pipeline.ts
+All three calls are now async — update accordingly:
+setJobMaterialSpec is called in the finally block — it's already in an async context so just add await:
+typescriptif (jobMaterialSpec !== null) {
+  await setJobMaterialSpec(jobMaterialSpec);
+}
+clearJobMaterialSpec is called in the force-fresh clear step — add await:
+typescriptawait clearJobMaterialSpec(jobId);
+
+Step 4 — Update exports.ts and jobs.ts
+Both getJobMaterialSpec calls are now async — add await at each call site:
+In exports.ts:
+typescriptconst materialSpec = await getJobMaterialSpec(jobId);
+In jobs.ts (material-spec GET endpoint):
+typescriptconst spec = await getJobMaterialSpec(jobId);
+res.json(spec);
+
+Step 5 — Typecheck, migration, tests
+
+Run Drizzle migration — confirm material_spec column added to jobs table
+Typecheck — 0 errors
+Full test suite — 1,585 passing
+Rescan Walking Court — confirm material spec persists after server restart
+Download XLSX — confirm Pricing tab shows extracted spec not Rowmark default
+Restart server manually — download XLSX again — confirm spec still shows (proving DB persistence)
+
+Do not rescan Fox Hill or any benchmark job until tests pass.
+
+Definition of done
+
+material_spec JSONB column in jobs table
+Material spec survives server restarts
+Walking Court Pricing tab shows extracted acrylic/painted spec
+Handoff Report material spec page present after restart
+Typecheck 0 errors, 1,585 passing

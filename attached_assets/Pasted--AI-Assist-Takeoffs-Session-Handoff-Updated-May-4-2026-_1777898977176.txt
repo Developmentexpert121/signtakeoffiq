@@ -1,0 +1,164 @@
+# AI-Assist Takeoffs — Session Handoff
+**Updated: May 4, 2026**
+App URL: https://0ead6da4-5862-40dc-894d-6a8499a8547b-00-2rklixt50ks56.worf.replit.dev
+Tests: 1,585 passing (1,461 API + 124 web)
+Sidecar: Running on port 8008 ✅
+
+---
+
+## Sessions 1–4 Status: COMPLETE
+
+The 4-session Structured Upload Redesign is fully built and validated.
+
+| Session | What shipped | Status |
+|---|---|---|
+| 1 | Structured upload UI — 3 slots, building-type tooltips, floor label input, progress checklist | ✅ |
+| 2 | Slot bypass pipeline — room_schedule slot, Example 8 goes 16→48 signs | ✅ |
+| 3 | Sign schedule material/finish extraction, per-slot confidence messaging, DB persistence | ✅ |
+| 4 | Handoff PDF (landscape, pricing dropdown), material override in XLSX, A-1xx/A-7xx hints | ✅ |
+
+---
+
+## Current Benchmarks
+
+| Job | Signs | Status |
+|---|---|---|
+| Fox Hill | ~212 | ✅ Stable (fresh scan drift from cached 193) |
+| NOVO Riverside | ~186-201 | ✅ Stable (fresh scan drift) |
+| Tower District | ~329-341 | ✅ Stable |
+| Gibson Lib | 16 egress | ✅ Exact |
+| Fresh Example 8 (with slots) | 47-48 | ✅ New baseline — Room Schedule slot working |
+| Walking Court (sign schedule only) | 36-38 | ⚠️ Under-counting — see Session 5 scope |
+
+---
+
+## What's Live in Production
+
+### Three Upload Slots
+- **Floor Plans** (required, 50MB limit) — slot bypass fires, skips drawing index, goes straight to vision extraction. `floorLabel` text input persists to DB, parses "Floors 3-6" etc.
+- **Room or Finish Schedule** (optional, 20MB) — triggers direct room inventory extraction, bypasses sidecar title-block reader. Fixed Example 8 A-710 misread permanently.
+- **Sign Schedule / Specs** (optional, 20MB) — triggers Step 3a extraction. Material spec written to `material_spec` JSONB column on jobs table, survives server restarts.
+
+### Material Spec Pipeline
+- Gemini Flash extracts `substrate`, `finishMethod`, `brailleSpec`, `mountingHeight`, `manufacturer` from sign schedule
+- `materialSpec` JSON first in prompt (prevents token truncation), `maxOutputTokens: 16384`, regex fallback rescue
+- On text path: separate lightweight spec call runs even when `textEntries >= 3`
+- DB-backed via `materialSpec.ts` — `setJobMaterialSpec`, `getJobMaterialSpec`, `clearJobMaterialSpec`
+- XLSX Pricing tab Material/Finish columns override when spec present
+- GET `/api/jobs/:jobId/material-spec` endpoint
+
+### Handoff PDF Report
+- GET `/api/jobs/:jobId/export/handoff-pdf?includePricing=true`
+- Landscape orientation (792×612pt), amber header, cover page, sign summary by floor, optional pricing page, optional material spec page
+- Split dropdown button in job header: "Download without pricing" / "Download with pricing"
+
+### Auto-split Banner
+- When file in Floor Plans slot has `pageCount > 1`, dismissible yellow banner suggests splitting pages into separate slots
+
+### Building-type "i" Tooltip
+- All 8 building types have `uploadGuide` with `lookFor`, `avoid`, `roomScheduleHint`, `signScheduleHint`
+- Slot descriptions show A-1xx / A-7xx hints
+
+---
+
+## Session 5 — Multi-File Floor Plan Extraction
+
+### The Core Problem
+Walking Court has 9 floor plan PDFs uploaded. Result: 36 signs. Expected: ~300+.
+
+Two root causes confirmed by reading the actual plans:
+
+**1. Multi-file aggregation gap**
+The pipeline processes floor plan files but may not be correctly aggregating rooms across all 9 uploaded files. Each file needs to be processed and rooms merged into a single inventory. The pipeline must iterate over ALL files in the floor_plan slot, not just the first or a subset.
+
+**2. Floor replication not implemented**
+AA103-A/B/C covers Levels 3-6 (4 identical floors). When `floorLabel = "Floors 3-6"`, the pipeline should extract rooms once from that sheet and replicate them 4 times with different level assignments. Currently each uploaded file is treated as exactly one floor regardless of the floor label content.
+
+**3. Residential unit number extraction**
+Walking Court floor plans label units as "SEE UNIT A A209", "SEE UNIT A A211" etc. The room identifier (A209, A211) is separate from the room type label ("SEE UNIT A"). The current Gemini vision prompt extracts "SEE UNIT A" as the room name and misses or drops the unit number. For residential buildings, the vision prompt needs to specifically look for unit numbers in this format and use them as the room identifier.
+
+**4. Sign schedule image table extraction (AA831)**
+The AA831 sheet has three dense image-based signage schedule tables listing every room number, room name, and sign text — estimated 300-400 entries covering all units across all floors. These are rasterized tables, not machine-readable text, so pdfplumber returns 0 rows. Fix: rasterize at higher DPI, crop to the table area, send cropped image to Gemini with a focused table-extraction prompt. This would give the architect's exact sign count without needing floor plan vision extraction at all for this building type.
+
+### Session 5 Build Plan
+
+**Priority 1 — Multi-file aggregation (pipeline.ts)**
+Confirm the pipeline iterates over ALL files tagged `floor_plan` in the slot and merges extracted rooms. Add diagnostic logging showing how many rooms were extracted per file and the running total. If rooms from files 2-9 are being dropped, fix the aggregation loop.
+
+**Priority 2 — Floor replication from floor label (pipeline.ts)**
+In `parseLevelFromLabel()`, detect range patterns: "Floors 3-6", "Levels 3-6", "3rd-6th floor" etc. When a range is detected, return `{ levels: [3,4,5,6], replicate: true }`. In the room extraction step, when `replicate: true`, clone all extracted rooms once per level in the range with the correct level assignment. This means AA103 uploaded with label "Floors 3-6" produces 4× the rooms, each stamped with their correct floor.
+
+**Priority 3 — Residential vision prompt update (pipeline.ts)**
+For `buildingType = "residential"`, add specific instructions to the Gemini vision prompt: "For residential buildings, look for unit numbers in formats like 'A209', 'B301', 'Unit 101' even when they appear as small reference numbers near door locations. These are the room identifiers, not the room type label above them. Extract each unit number as a separate room."
+
+**Priority 4 — Sign schedule image table extraction (pipeline.ts + sidecar)**
+When a sign schedule sheet is processed in Step 3a and `extractTable` returns 0 rows (image-based table), trigger a fallback: rasterize at 300 DPI (higher than current 150 DPI), detect table region (large rectangular area in bottom-left of page), crop to that region, send to Gemini with prompt: "This is an architectural signage schedule table. Extract every row as JSON: { roomNumber, roomName, signText, quantity }. Include all rows — there may be 200-400 entries. Return JSON array only." Feed results into `signSchedule[]` accumulator as schedule-sourced rooms.
+
+**Philosophy note:** Plans are all different. The goal is not to handle every edge case perfectly — it's to extract as much information as possible from whatever the user uploads, aggregate it correctly, and be transparent about what was found. Duplicate uploads are the user's responsibility. The pipeline should process every file in the slot independently and merge results.
+
+### Walking Court Expected Results After Session 5
+- AA101-A: 0-2 rooms (garage/parking, minimal)
+- AA101-B: ~20 rooms (common areas, offices, restrooms)
+- AA101-C: 0 rooms (garage B)
+- AA102-A: ~12 units (Level 2 Part A, "SEE UNIT A" format)
+- AA102-B: ~12 units + common spaces (Level 2 Part B)
+- AA102-C: ~12 units (Level 2 Part C)
+- AA103-A: ~12 units × 4 floors = ~48 units (Levels 3-6 Part A)
+- AA103-B: ~12 units × 4 floors = ~48 units (Levels 3-6 Part B)
+- AA103-C: ~12 units × 4 floors = ~48 units (Levels 3-6 Part C)
+- AA831 sign schedule tables: ~300-400 explicit sign entries
+
+Target total: 200-400+ signs depending on extraction accuracy.
+
+---
+
+## Other Known Backlog Items
+
+| Item | Priority | Estimate |
+|---|---|---|
+| Type C custom sign codes (Example 7 / Squantum) | Post-launch | 3-4 sessions |
+| Example 13 scanned PDF (no text layer) | Low | 1 session |
+| Tower District full rescan with latest fixes | Low | 1 rescan |
+| South Shore Plaza PDF split | Low | File prep only |
+| Sheet reclassification UI | Deferred | 1 session |
+| BullMQ + Redis + Digital Ocean migration | Design first | Architecture review |
+| Split-panel marker validation UI | Medium | 1-2 sessions |
+
+---
+
+## Standing Rules for All Replit Prompts
+1. State what's broken in one sentence
+2. State what file changes
+3. State what won't be affected
+4. State regression test job
+5. Typecheck must pass — 0 errors
+6. Run full test suite — 1,585 passing
+7. Do NOT rescan until tests pass
+8. Rescan Fox Hill first as regression test (confirm ~193-215 range)
+9. Only then rescan the target job
+
+---
+
+## Architecture Notes
+- Sidecar: Python/FastAPI on port 8008 — text extraction, rasterization, tiling
+- API server: Node.js on port 8080
+- Web: Vite/React on port 22333
+- DB: PostgreSQL via Drizzle ORM
+- Storage: Object storage (S3/R2) for PDFs and rasterized PNGs
+- pdf-lib: Page counting, page extraction, handoff PDF generation
+- Tiling: 2×2 grid for files >15MB, 150 DPI per tile
+- Concurrency: 3 max simultaneous scans
+- Material spec: `material_spec` JSONB column on `jobs` table
+- Floor label: `floor_label` text column on `job_files` table
+
+## Key Files Changed in Sessions 1-4
+- `artifacts/web/src/components/StructuredUploader.tsx` — 3-slot UI, auto-split banner, per-slot confidence
+- `artifacts/web/src/components/DualZoneUploader.tsx` — slotMode prop, filterCategory, warnSizeMB
+- `artifacts/web/src/lib/buildingTypes.ts` — uploadGuide for all 8 types
+- `artifacts/web/src/pages/job-detail.tsx` — StructuredUploader, Handoff Report split button
+- `artifacts/api-server/src/lib/pipeline.ts` — slot override bypass, room_schedule extraction fixes, materialSpec extraction
+- `artifacts/api-server/src/lib/materialSpec.ts` — DB-backed spec store
+- `artifacts/api-server/src/routes/exports.ts` — handoff PDF, pricing override
+- `artifacts/api-server/src/routes/files.ts` — floorLabel in all file routes
+- `artifacts/api-server/src/db/schema.ts` — floorLabel on job_files, materialSpec on jobs
+- `artifacts/pdf-sidecar/main.py` — prompt reorder, maxOutputTokens 16384, regex fallback

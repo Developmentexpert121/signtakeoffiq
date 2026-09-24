@@ -1,0 +1,87 @@
+Good call — let me review and optimize it specifically for Claude Sonnet 4 agent in Replit, which works best with concrete, unambiguous instructions, clear file references, and explicit success criteria.Good. Now let me write the optimized version. The key differences for Claude Sonnet 4 agent in Replit:
+
+- **Explicit file paths** — tell it exactly where to look
+- **One feature at a time** — ordered steps it can execute sequentially
+- **Success criteria** — tells it exactly what "done" looks like so it stops and doesn't over-build
+- **Tech stack specified** — no ambiguity about what libraries to use
+- **No "also fix" items** — one job only
+
+---
+
+Here's the optimized prompt:
+
+---
+
+> **TASK: Floor Plan Tab — Accurate Markers, Draggable, Editable**
+>
+> Modify only the Floor Plan tab component. Do not touch the extraction pipeline, database schema (except adding two columns), or any other tab.
+>
+> ---
+>
+> **STEP 1 — Add two columns to the signs table**
+> ```sql
+> ALTER TABLE signs ADD COLUMN IF NOT EXISTS canvas_x FLOAT;
+> ALTER TABLE signs ADD COLUMN IF NOT EXISTS canvas_y FLOAT;
+> ```
+> These store marker position as 0.0–1.0 percentage of canvas width/height so positions are resolution-independent.
+>
+> ---
+>
+> **STEP 2 — Fix sheet selection**
+> When choosing which PDF page to render as the floor plan background, use this priority:
+> 1. Sheet where `sheet_type = 'floor_plan'` AND `is_relevant = true` with the lowest `pdf_page` number
+> 2. Any sheet matching `^a-?[123]\d{2}` pattern
+> 3. Never select a sheet where the title contains: POWER, COMM, ELECTRICAL, LIGHTING, MECHANICAL, PLUMBING, STRUCTURAL
+>
+> ---
+>
+> **STEP 3 — Initial marker placement using stored coordinates**
+> Each sign in the database has a `room_number` and `room_name`. The rooms table has `pdf_x` and `pdf_y` coordinates from pdfplumber extraction. On page load:
+> 1. For each sign, look up its room in the rooms table to get `pdf_x`, `pdf_y`
+> 2. If `canvas_x` and `canvas_y` are already saved on the sign — use those (user has already positioned it)
+> 3. If not — convert `pdf_x`, `pdf_y` from PDF point coordinates to canvas percentage: `canvas_x = pdf_x / page_width`, `canvas_y = pdf_y / page_height`
+> 4. If neither exists — place the marker in a floating unpositioned tray on the right side of the canvas, labelled "Unpositioned — drag to place"
+>
+> ---
+>
+> **STEP 4 — Marker rendering**
+> Render each marker as a positioned div on the canvas:
+> - Circle, 32px diameter
+> - Color by sign type: Room ID = `#3B82F6` blue, Room ID w/insert = `#8B5CF6` purple, Restroom = `#14B8A6` teal, Exit = `#EF4444` red, Stair = `#F59E0B` amber
+> - Label: `{room_number}` in white, 10px bold, centered in circle
+> - Dashed leader line from circle center to room label position on the plan (use SVG overlay)
+> - `cursor: grab` on hover
+>
+> ---
+>
+> **STEP 5 — Drag to reposition**
+> Use the existing `react-draggable` or `@dnd-kit` library already in the project (check package.json first). On drag end:
+> - Calculate new `canvas_x = newX / canvasWidth`, `canvas_y = newY / canvasHeight`
+> - `PATCH /api/signs/:id` with `{ canvas_x, canvas_y }`
+> - API saves to database
+> - Snap to 20px grid when the Snap toggle (already in UI) is enabled
+>
+> ---
+>
+> **STEP 6 — Click to edit popup**
+> Single click on a marker opens a small popup (not a modal) anchored to the marker with these fields:
+> - Room Number (text input, pre-filled)
+> - Room Name (text input, pre-filled)
+> - Sign Type (select dropdown, options from sign_types table)
+> - **Save** → `PATCH /api/signs/:id` with updated fields, close popup, refresh marker label
+> - **Cancel** → close popup
+> - **Delete** → set `deleted_at = now()` on sign record, remove marker from canvas
+>
+> ---
+>
+> **DONE criteria — stop when all of these are true:**
+> - [ ] Floor plan background shows an A-1XX architectural sheet, not a power/comm sheet
+> - [ ] Markers appear at correct room positions on the plan
+> - [ ] Dragging a marker and refreshing the page shows it in the new position
+> - [ ] Clicking a marker opens the edit popup with correct pre-filled values
+> - [ ] Saving an edit updates the marker label immediately
+> - [ ] Unpositioned rooms appear in the right-side tray
+
+---
+
+That's optimized for one clean agent run. Concrete steps, explicit SQL, exact color codes, clear done criteria. Ready to paste?

@@ -1,0 +1,187 @@
+App: AI-Assist Takeoffs
+
+DIAGNOSTIC + FIX — Force cache clear not working.
+Applies to ALL jobs, ALL building types.
+
+════════════════════════════════════════════════
+STEP 1 — Add console logging to trace the problem
+════════════════════════════════════════════════
+Add these logs in THREE places:
+
+PLACE A — Frontend (where Rescan button is clicked)
+In job-detail.tsx or wherever handleRescan lives:
+
+  console.log('[RESCAN-FRONTEND] Force checkbox 
+    state:', forceReprocess);
+  console.log('[RESCAN-FRONTEND] Payload being 
+    sent:', JSON.stringify(payload));
+  console.log('[RESCAN-FRONTEND] API endpoint:', 
+    url);
+
+PLACE B — API route handler (where request arrives)
+In the rescan POST/PUT handler:
+
+  console.log('[RESCAN-API] Request received');
+  console.log('[RESCAN-API] req.body:', 
+    JSON.stringify(req.body));
+  console.log('[RESCAN-API] req.query:', 
+    JSON.stringify(req.query));
+  console.log('[RESCAN-API] force flags found:',{
+    bodyForce: req.body?.force,
+    bodyForceReprocess: req.body?.forceReprocess,
+    bodyForceFullReprocess: req.body?.forceFullReprocess,
+    queryForce: req.query?.force,
+  });
+
+PLACE C — Cache lookup (where cache hit happens)
+Search for WHERE job_id near a SELECT on the
+cache table. Add immediately before the SELECT:
+
+  console.log('[CACHE-LOOKUP] Checking cache for 
+    sheet:', sheetId, 'job:', jobId);
+  console.log('[CACHE-LOOKUP] Force bypass 
+    active:', isForce);
+
+════════════════════════════════════════════════
+STEP 2 — Find exact cache table + column names
+════════════════════════════════════════════════
+Run this query and log output at server startup:
+
+  const tables = await db.query(\`
+    SELECT t.table_name, 
+           array_agg(c.column_name) as columns
+    FROM information_schema.tables t
+    JOIN information_schema.columns c 
+      ON c.table_name = t.table_name
+    WHERE t.table_schema = 'public'
+    AND t.table_name ILIKE ANY(
+      ARRAY['%cache%','%sheet%','%page%','%chunk%']
+    )
+    GROUP BY t.table_name
+  \`);
+  console.log('[CACHE-TABLES]', 
+    JSON.stringify(tables.rows, null, 2));
+
+This shows exact table names AND column names.
+Use these in all subsequent queries.
+
+════════════════════════════════════════════════
+STEP 3 — Fix force handler using exact names
+════════════════════════════════════════════════
+Once Step 1 shows what field name the frontend
+sends and Step 2 shows the real table name,
+update the force handler:
+
+  // Catch ALL possible field name variants
+  const isForce =
+    req.body?.force === true ||
+    req.body?.force === 'true' ||
+    req.body?.forceReprocess === true ||
+    req.body?.forceReprocess === 'true' ||
+    req.body?.forceFullReprocess === true ||
+    req.body?.forceFullReprocess === 'true' ||
+    req.query?.force === 'true';
+
+  console.log('[FORCE] isForce resolved to:', 
+    isForce);
+
+  if (isForce) {
+    // Use EXACT table/column names from Step 2
+    const cacheDelete = await db.query(
+      \`DELETE FROM <exact_table_name> 
+       WHERE <exact_job_id_column> = $1\`,
+      [jobId]
+    );
+    console.log('[FORCE] Cache rows deleted:', 
+      cacheDelete.rowCount);
+
+    const signsDelete = await db.query(
+      'DELETE FROM signs WHERE job_id = $1',
+      [jobId]
+    );
+    console.log('[FORCE] Signs deleted:', 
+      signsDelete.rowCount);
+
+    await db.query(
+      \`UPDATE jobs SET
+        total_signs = 0,
+        high_confidence_signs = 0,
+        needs_review = 0,
+        ai_cost = 0
+       WHERE id = $1\`,
+      [jobId]
+    );
+
+    if (cacheDelete.rowCount === 0) {
+      console.error('[FORCE] ⚠️ 0 cache rows deleted.',
+        'Table or column name is wrong.',
+        'Check [CACHE-TABLES] log above.');
+    }
+  }
+
+════════════════════════════════════════════════
+STEP 4 — Bypass cache in pipeline when force=true
+════════════════════════════════════════════════
+Even if delete runs, the pipeline may re-read
+from cache before deletion completes, or the
+cache check runs in a separate transaction.
+
+Add an explicit bypass flag throughout pipeline:
+
+  // Pass isForce through pipeline context
+  const pipelineContext = {
+    jobId,
+    isForce,
+    bypassCache: isForce  // explicit flag
+  };
+
+  // At EVERY cache lookup point in pipeline.ts:
+  if (pipelineContext.bypassCache) {
+    console.log('[CACHE-BYPASS] Skipping cache 
+      for sheet', sheetId);
+    // Skip the cache SELECT entirely
+    // Go straight to AI extraction
+  } else {
+    // Normal cache lookup
+    const cached = await getCachedSheet(sheetId);
+    if (cached) return cached;
+  }
+
+Search pipeline.ts for all cache lookup patterns:
+  - SELECT FROM ... WHERE job_id
+  - getCached, checkCache, getFromCache
+  - cache.get(, cacheGet(
+Add bypass check at EACH location found.
+
+════════════════════════════════════════════════
+STEP 5 — Fix pipeline log message
+════════════════════════════════════════════════
+  if (isForce) {
+    addPipelineLog(jobId, 
+      'Force rescan — cache cleared, 
+       full re-extraction from all sheets');
+  } else if (cacheHitsCount > 0) {
+    addPipelineLog(jobId,
+      \`~$\${savings} saved by reusing 
+       \${cacheHitsCount} cached sheets\`);
+  }
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Check Force checkbox, click Rescan
+2. In Replit console look for:
+   [RESCAN-FRONTEND] Force checkbox state: true
+   [RESCAN-API] bodyForceReprocess: true
+   [FORCE] isForce resolved to: true
+   [FORCE] Cache rows deleted: 4
+   [FORCE] Signs deleted: 212
+   [CACHE-BYPASS] Skipping cache for sheet...
+   (×4 times for Fox Hill's 4 sheets)
+
+3. Overview shows:
+   AI Cost > $0.00
+   Pipeline log: "Force rescan — cache cleared"
+   NOT "saved by reusing cached sheets"
+
+4. All 1,461 tests pass

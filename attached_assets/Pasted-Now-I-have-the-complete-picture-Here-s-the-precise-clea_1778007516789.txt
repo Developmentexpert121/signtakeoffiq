@@ -1,0 +1,248 @@
+Now I have the complete picture. Here's the precise cleanup prompt:
+
+Session 8 — Pipeline cleanup: consolidate schedule arrays, remove dead code, golden-file tests
+What this fixes permanently:
+
+scheduleSignRows[] and signSchedule[] are two arrays holding the same data with no clear ownership — consolidate to signSchedule[] as the single source of truth
+dedicatedFileTypeDefMatch is structurally broken dead code — remove it entirely
+7 scattered scheduleSignRows.push() sites replaced by one canonical Step 9 insert
+Golden-file tests prevent future regressions without rescanning
+
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — consolidation only, no behavior change for floor_plan_primary jobs
+artifacts/api-server/src/tests/pipeline-benchmarks.test.ts — new file
+
+Do not change:
+
+exports.ts, UI components, schema, sidecar, any routes
+
+Regression jobs:
+
+Fox Hill job_a81ec18d15cec894 — must stay 185-215, strategy=floor_plan_primary
+Walking Court_2 — must produce 200-280, strategy=schedule_primary
+
+
+Change 1 — Remove scheduleSignRows entirely
+Step A — Delete the declaration at line 3343:
+typescript// DELETE this line:
+const scheduleSignRows: typeof signsTable.$inferInsert[] = [];
+Step B — Delete the declaration at line 3348:
+typescript// DELETE these lines:
+// Set to true in Step 4d when a dedicated sign-schedule file's type-definition...
+let dedicatedFileTypeDefMatch = false;
+Step C — Remove all 7 push/clear sites:
+Line 3951 — inside Step 3a per-sheet loop:
+typescript// DELETE the scheduleSignRows.push() block here
+// signSchedule[] already captures these entries via signSchedule.push(...sheetEntries)
+// No replacement needed — signSchedule is the source of truth
+Lines 5373, 5549, 5693 — Step 4b pdfplumber text rows:
+typescript// DELETE all three scheduleSignRows.push() calls in Step 4b
+// These push pdfplumber-parsed rows that duplicate what Step 3a Gemini already extracted
+// If Step 3a extracted 0 entries (text-only path), add those rows to signSchedule[] instead:
+signSchedule.push({
+  roomNumber: row.roomNumber,
+  roomName: row.roomName,
+  signType: row.signType,
+  quantity: 1,
+  size: "",
+  message: [row.roomNumber, row.roomName, row.signType, row.verbage].filter(Boolean).join(" | "),
+  notes: "",
+  source: "text",
+  sheetId: String(anchorSheetId ?? ""),
+  substrate: null,
+  finishMethod: null,
+  brailleSpec: null,
+  mountingHeight: null,
+  manufacturer: null,
+});
+Lines 6959-6960 — Step 4d clear and rebuild:
+typescript// DELETE these two lines entirely:
+// scheduleSignRows.length = 0;
+// scheduleSignRows.push(...step4bRealRows, ...expandedScheduleRows);
+// Step 4d type expansion is no longer needed when signSchedule[] is the source
+Line 7101 — Step 4d-2 push:
+typescript// DELETE:
+// scheduleSignRows.push(..._4d2Rows);
+// If _4d2Rows contains valid room-matched entries, push to signSchedule[] instead:
+for (const row of _4d2Rows) {
+  signSchedule.push({
+    roomNumber: row.roomNumber ?? "",
+    roomName: row.roomName ?? "",
+    signType: row.signType ?? "",
+    quantity: row.qty ?? 1,
+    size: "",
+    message: row.message ?? "",
+    notes: "",
+    source: "text",
+    sheetId: row.sheetId ?? "",
+    substrate: null, finishMethod: null, brailleSpec: null,
+    mountingHeight: null, manufacturer: null,
+  });
+}
+Step D — Remove dedicatedFileTypeDefMatch block at line 7760:
+typescript// DELETE the entire block:
+// if (dedicatedFileTypeDefMatch && scheduleSignRows.length > 0) { ... }
+// This was dead code — dedicatedFileTypeDefMatch could never be true
+Step E — Replace the Step 9 schedule insert (lines 7884-7889) with the canonical insert:
+Replace:
+typescriptif (scheduleSignRows.length > 0 && !dedicatedFileTypeDefMatch) {
+  await withStepTimeout("Step 9 (schedule sign insert)", async () => {
+    await db.insert(signsTable).values(scheduleSignRows);
+  });
+  logger.log(`[pipeline] Step 9: A-7XX/combo schedule — inserted ${scheduleSignRows.length} room-matched sign(s) for job ${jobId}`);
+}
+With:
+typescript// Canonical schedule sign insert — reads from signSchedule[] which is the
+// single source of truth populated by Step 3a (Gemini) and Step 4b (text fallback).
+// Runs for ALL strategies that have schedule entries — schedule_primary, hybrid, and
+// combo/embedded schedules.
+if (signSchedule.length > 0 && hasScheduleImport) {
+  const scheduleInserts = signSchedule.map(entry => ({
+    id: newId("sign"),
+    jobId,
+    tenantId,
+    roomId: null,
+    sheetId: String(_3aAnchorSheetId ?? ""),
+    signType: entry.signType,
+    qty: entry.quantity ?? 1,
+    ruleRef: "schedule" as const,
+    color: null,
+    confidence: "1.000",
+    status: "extracted" as const,
+    source: "schedule" as const,
+    message: entry.message || [entry.roomNumber, entry.roomName, entry.signType]
+      .filter(Boolean).join(" | ") || undefined,
+    level: entry.floor ? parseScheduleFloor(entry.floor as string) : null,
+  }));
+
+  await withStepTimeout("Step 9 (schedule sign insert)", async () => {
+    if (scheduleInserts.length > 0) {
+      await db.insert(signsTable).values(scheduleInserts);
+    }
+  });
+  logger.log(
+    `[pipeline] Step 9: inserted ${scheduleInserts.length} schedule sign(s) ` +
+    `from signSchedule[] (strategy=${pipelineStrategy})`
+  );
+}
+Also add floor to the SignScheduleEntry interface at line 3492 if not already present:
+typescriptinterface SignScheduleEntry {
+  roomNumber: string;
+  roomName: string;
+  signType: string;
+  quantity: number;
+  size: string;
+  message: string;
+  notes: string;
+  floor?: string | null;        // ← add this
+  source: "text" | "gemini";
+  sheetId: string;
+  substrate: string | null;
+  finishMethod: string | null;
+  brailleSpec: string | null;
+  mountingHeight: string | null;
+  manufacturer: string | null;
+}
+
+Change 2 — Add pipeline data flow comment block
+At the top of processJob(), immediately after the function signature, add:
+typescript/*
+ * ─── PIPELINE DATA FLOW ──────────────────────────────────────────────────────
+ *
+ * schedule_primary  (dedicated sign schedule, 100+ entries):
+ *   Step 3a  → signSchedule[]          Gemini extracts from sign schedule PDF
+ *   Step 3   → floor plan vision       egress rooms + coordinates only
+ *   Step 3b  → coordinate matching     schedule rooms get x,y from floor plans
+ *   Step 9   → signSchedule[] → DB     direct insert, no rules engine multiplication
+ *   Step 9   → rules engine R9/R11/R13/R16 only (egress signs)
+ *
+ * floor_plan_primary  (no sign schedule):
+ *   Step 3   → extractedRooms[]        full Gemini vision extraction
+ *   Step 9   → rules engine fully      all rules R1–R17
+ *
+ * hybrid  (sign schedule with <100 entries):
+ *   Both paths run, results merged
+ *
+ * egress_only  (no floor plans):
+ *   Step 9   → egress rules only
+ *
+ * KEY ARRAYS:
+ *   signSchedule[]      — canonical schedule entries (Step 3a source of truth)
+ *   extractedRooms[]    — floor plan vision rooms (Step 3 source of truth)
+ *   signRows[]          — rules engine output (Step 9)
+ *   scheduleSignRows    — REMOVED (was duplicate of signSchedule[])
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+Change 3 — Golden-file benchmark tests
+Create artifacts/api-server/src/tests/pipeline-benchmarks.test.ts:
+typescriptimport { describe, test, expect, beforeAll } from "vitest";
+import { db } from "../db";
+import { signsTable, jobsTable } from "../db/schema";
+import { eq, count } from "drizzle-orm";
+
+// Job IDs for benchmark jobs — update if jobs are recreated
+const FOX_HILL_JOB_ID = "job_a81ec18d15cec894";
+const WALKING_COURT_2_JOB_ID = process.env.WALKING_COURT_2_JOB_ID ?? "";
+const GIBSON_LIB_JOB_ID = process.env.GIBSON_LIB_JOB_ID ?? "";
+
+async function getJobSignCount(jobId: string): Promise<number> {
+  const result = await db
+    .select({ count: count() })
+    .from(signsTable)
+    .where(eq(signsTable.jobId, jobId));
+  return result[0]?.count ?? 0;
+}
+
+async function getJobStrategy(jobId: string): Promise<string | null> {
+  const job = await db
+    .select({ metadata: jobsTable.metadata })
+    .from(jobsTable)
+    .where(eq(jobsTable.id, jobId))
+    .limit(1);
+  return (job[0]?.metadata as Record<string, string>)?.pipelineStrategy ?? null;
+}
+
+describe("Pipeline benchmarks — DB state assertions (no rescan needed)", () => {
+  test("Fox Hill: 185-215 signs, floor_plan_primary strategy", async () => {
+    const count = await getJobSignCount(FOX_HILL_JOB_ID);
+    const strategy = await getJobStrategy(FOX_HILL_JOB_ID);
+    expect(strategy).toBe("floor_plan_primary");
+    expect(count).toBeGreaterThanOrEqual(185);
+    expect(count).toBeLessThanOrEqual(215);
+  });
+
+  test("Walking Court_2: 200-280 signs, schedule_primary strategy", async () => {
+    if (!WALKING_COURT_2_JOB_ID) return; // skip if not configured
+    const count = await getJobSignCount(WALKING_COURT_2_JOB_ID);
+    const strategy = await getJobStrategy(WALKING_COURT_2_JOB_ID);
+    expect(strategy).toBe("schedule_primary");
+    expect(count).toBeGreaterThanOrEqual(200);
+    expect(count).toBeLessThanOrEqual(280);
+  });
+
+  test("Gibson Lib: exactly 16 egress signs", async () => {
+    if (!GIBSON_LIB_JOB_ID) return; // skip if not configured
+    const count = await getJobSignCount(GIBSON_LIB_JOB_ID);
+    expect(count).toBe(16);
+  });
+});
+Add WALKING_COURT_2_JOB_ID and GIBSON_LIB_JOB_ID to Replit Secrets.
+
+After all changes
+
+Typecheck — 0 errors
+Tests — all 1,461 existing tests passing + 3 new benchmark tests passing
+Rescan Fox Hill — confirm 185-215, confirm floor_plan_primary in logs
+Rescan Walking Court_2 — confirm:
+
+[pipeline] Strategy: schedule_primary
+[pipeline] Step 9: inserted N schedule sign(s) from signSchedule[]
+Total 200-280 signs
+Floor distribution correct across all 7 levels
+0 unspecified floor signs
+
+
+
+After both benchmarks pass, move to plan markers.

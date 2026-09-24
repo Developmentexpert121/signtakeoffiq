@@ -1,0 +1,17 @@
+{
+  "name": "EXAMPLE — replace with a real hand-labelled job",
+  "rooms": [
+    { "roomNumber": "101", "roomName": "LOBBY", "level": "1" },
+    { "roomNumber": "102", "roomName": "OFFICE", "level": "1" },
+    { "roomNumber": "103", "roomName": "MEN'S RESTROOM", "level": "1" },
+    { "roomNumber": "104", "roomName": "WOMEN'S RESTROOM", "level": "1" },
+    { "roomNumber": "201", "roomName": "CONFERENCE", "level": "2" }
+  ],
+  "signs": [
+    { "roomNumber": "101", "signType": "Room ID", "qty": 1 },
+    { "roomNumber": "102", "signType": "Room ID", "qty": 1 },
+    { "roomNumber": "103", "signType": "Restroom", "qty": 1 },
+    { "roomNumber": "104", "signType": "Restroom", "qty": 1 },
+    { "roomNumber": "201", "signType": "Room ID", "qty": 1 }
+  ]
+}

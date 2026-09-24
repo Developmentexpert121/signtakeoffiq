@@ -1,0 +1,182 @@
+App: AI-Assist Takeoffs
+Plans tab UX redesign.
+UI/frontend changes only — no pipeline changes.
+Applies to ALL building types.
+
+════════════════════════════════════════════════
+LAYOUT — Split panel
+════════════════════════════════════════════════
+Change Plans tab from single floor plan view
+to a two-panel split layout:
+
+LEFT PANEL (70% width): Floor plan image
+  - Existing floor plan viewer
+  - Markers rendered on plan (existing)
+  - Floor selector toolbar at top (existing)
+  - Wing pills row (existing)
+  - Zoom controls (existing)
+
+RIGHT PANEL (30% width): Room list sidebar
+  - Appears alongside the plan
+  - Scrollable list of all rooms on current floor
+  - Stays in sync with floor/wing selection
+  - Filter input at top of list
+
+════════════════════════════════════════════════
+RIGHT PANEL — Room list sidebar
+════════════════════════════════════════════════
+
+Header:
+  "[N] rooms on [LEVEL 1]"
+  Filter input: placeholder "Search room..."
+  (filters both list and dims markers on plan)
+
+Room list rows:
+  Each row shows:
+    [color dot] [room number] [room name]
+    [sign type badge] [located/unlocated]
+  
+  Color dot = sign type category:
+    🔴 #ef4444 = Restroom
+    🟠 #f97316 = Room ID
+    🟢 #22c55e = Room ID w/Insert  
+    🔵 #3b82f6 = Assembly/Max Occupancy
+    🟣 #a855f7 = Egress
+    ⚪ #6b7280 = Office Directory/Corridor
+    🟡 #eab308 = Unlocated (📍?)
+
+  Unlocated rooms (coord_source='unlocated'):
+    Show amber pulsing dot
+    Label: "📍 No location — click to place"
+    Clicking enters place mode (see below)
+
+  Verified rooms:
+    Show green checkmark on right
+    Slightly muted background
+
+Interactions:
+  Click any room row:
+    → Plan smoothly pans + zooms to center
+      on that room's marker
+    → Marker pulses/highlights briefly
+    → Edit panel opens on right (existing)
+    → Room row highlights in list
+
+  Click marker on plan:
+    → Corresponding room row scrolls into
+      view and highlights in list
+    → Edit panel opens (existing)
+
+════════════════════════════════════════════════
+MARKER REDESIGN — circles with room numbers
+════════════════════════════════════════════════
+Replace triangle markers with circular markers:
+
+  Normal state:
+    Circle, 24px diameter
+    Color fill = sign type category (see above)
+    Room number text inside (8px, white, bold)
+    White border 2px
+    Drop shadow for visibility
+
+  Hover state:
+    Circle expands to 32px
+    Tooltip appears above:
+      "[Room Number] — [Room Name]"
+      "[Sign Type]"
+    No click required for tooltip
+
+  Selected state (clicked):
+    Circle gets bright white border 3px
+    Pulsing animation
+    List panel scrolls to matching row
+
+  Unlocated state:
+    Amber pulsing ring (no fill)
+    "?" in center
+    In list: shows "📍 No location"
+
+  If room number too long for circle:
+    Show first 4 chars only
+    Full number in tooltip
+
+════════════════════════════════════════════════
+PLACE MODE — for unlocated rooms
+════════════════════════════════════════════════
+When estimator clicks an unlocated room
+(📍? in list OR amber pulsing ring):
+
+  1. Banner appears at top of plan:
+     "📍 Click anywhere on the plan to place
+      [Room Number] — [Room Name]"
+     [Cancel] button on right
+
+  2. Cursor changes to crosshair on plan
+
+  3. Estimator clicks desired location
+
+  4. Marker drops at click position
+     PATCH /api/jobs/:jobId/rooms/:roomId
+     { coord_x: clickX, coord_y: clickY,
+       coord_source: 'human_corrected' }
+
+  5. Banner dismisses
+     Marker shows as placed (gold border =
+     human_corrected)
+     Room row updates in list
+
+  6. Auto-advances to next unlocated room
+     (optional — show toast "1 room placed.
+      Next unlocated: [room]? [Yes] [Skip]")
+
+════════════════════════════════════════════════
+FILTER + HIGHLIGHT
+════════════════════════════════════════════════
+Filter input in room list:
+  Filters list rows in real time
+  Also dims non-matching markers on plan
+    (matching markers stay full opacity,
+     non-matching go to 20% opacity)
+
+Filter matches on:
+  - Room number (W139, E100)
+  - Room name (CLASSROOM, GYMNASIUM)
+  - Sign type (Restroom, Room ID)
+
+Examples:
+  Type "CLASS" → shows all classrooms,
+    dims all other markers
+  Type "TOILET" → shows all toilet rooms
+  Type "W1" → shows all W1xx rooms
+  Clear → restore all markers to full opacity
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Plans tab shows split layout:
+   70% plan + 30% room list
+
+2. Click room in list → plan centers on marker
+   Smooth pan + zoom animation
+
+3. Click marker on plan → list scrolls to row
+
+4. Hover marker → tooltip shows room + sign type
+   No click required
+
+5. Unlocated rooms show 📍? in amber
+   Click → place mode activates
+   Click plan → marker placed
+
+6. Filter "CLASS" → only classrooms visible
+   Other markers dimmed to 20% opacity
+
+7. Works on ALL building types and plans
+   Room list populates from signs table
+   for current job + floor
+
+8. Mobile responsive:
+   On narrow screens: list collapses to
+   bottom drawer, toggle with button
+
+All 1,461 tests pass.

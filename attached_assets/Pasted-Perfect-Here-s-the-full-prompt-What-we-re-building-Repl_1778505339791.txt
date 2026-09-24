@@ -1,0 +1,149 @@
+Perfect. Here's the full prompt:
+
+What we're building: Replace "Analyze Sheet" with a professional drag-and-drop marker placement system. Full marker customization. XLSX sync on every placement.
+What changes:
+
+artifacts/web/src/components/FloorPlanTab.tsx — major UI overhaul
+artifacts/api-server/src/routes/sheets.ts — remove analyze-sheet route
+artifacts/api-server/src/lib/pipeline.ts — remove analyzeSheet()
+artifacts/api-server/src/routes/exports.ts — XLSX regenerates with updated marker data
+artifacts/web/src/pages/job-detail.tsx — Review tab syncs on marker update
+
+
+Layout — three-zone design:
+┌─────────────────────────────────────────────────────────────────┐
+│ TOOLBAR: sheet selector | zoom | FIT | Markers | Snap          │
+├──────────────────────────────────────┬──────────────────────────┤
+│                                      │ ROOMS PANEL              │
+│  FLOOR PLAN CANVAS                   │ Placed markers list      │
+│  (drop target)                       │ Click → focus on plan    │
+│                                      │                          │
+│  Placed markers render as            │ UNLOCATED count          │
+│  rectangular colored tags            │                          │
+├──────────────────────────────────────┴──────────────────────────┤
+│ PLACEMENT TRAY                                          [↑ Hide] │
+│ Floor: LEVEL 1  [Search rooms...]  Unplaced: 9  Placed: 3      │
+│                                                                  │
+│ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐        │
+│ │ A209 │ │ A211 │ │ A213 │ │ A215 │ │ A217 │ │ A219 │  ···   │
+│ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘        │
+│ ✓A210  ✓A212  ✓A214  (placed — green check, still draggable)   │
+└─────────────────────────────────────────────────────────────────┘
+
+Tray behavior:
+
+Scoped to current sheet's floor level — if on PLAN-3-P1 (LEVEL 1), show only rooms whose floor_label matches LEVEL 1. Floor label shown as pill selector if multiple levels exist on this sheet.
+Search box — filters room tags in real time by room number or room name. Clears on sheet change.
+Unplaced rooms — full amber rectangular tags, draggable. Bold room number, smaller sign type below it if different.
+Placed rooms — same tag but green left bar, lighter background, ✓ prefix. Still draggable (allows correction).
+Duplicate prevention — if a room is already placed on this sheet, its tag shows green. If user drags it again, it moves the existing marker rather than creating a second one.
+Tag size — minimum 14px font, 32px height — readable without zooming.
+Tray toggle — collapse/expand button. State persists in localStorage per job.
+
+
+Drag and drop:
+typescript// Tray tag: draggable
+onDragStart={(e) => {
+  e.dataTransfer.setData('roomId', sign.id)
+  e.dataTransfer.setData('signType', sign.signType)
+  e.dataTransfer.effectAllowed = 'move'
+}}
+
+// Canvas: drop target
+onDragOver={(e) => {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  // Show ghost crosshair at cursor position
+}}
+
+onDrop={(e) => {
+  e.preventDefault()
+  const signId = e.dataTransfer.getData('roomId')
+  const rect = canvasRef.current.getBoundingClientRect()
+  
+  // Convert drop position to 0–100,000 grid
+  // Account for pan offset and zoom scale
+  const dropX = (e.clientX - rect.left - panOffset.x) / displayScale
+  const dropY = (e.clientY - rect.top - panOffset.y) / displayScale
+  const coordX = Math.round((dropX / imgSize.w) * 100000)
+  const coordY = Math.round((dropY / imgSize.h) * 100000)
+  
+  // Clamp to valid range
+  const finalX = Math.max(0, Math.min(100000, coordX))
+  const finalY = Math.max(0, Math.min(100000, coordY))
+  
+  // PATCH sign with new position + sheet_id
+  await patchSign(signId, { 
+    markerX: finalX, 
+    markerY: finalY,
+    sheetId: activeSheet.id 
+  })
+  
+  // Invalidate queries
+  invalidateListSigns()
+  invalidateExport() // triggers XLSX regeneration
+}}
+Drop ghost: While dragging over the canvas, show a semi-transparent version of the tag following the cursor — so user knows exactly where it will land before releasing.
+
+Marker customization — right-click context menu on any placed marker:
+┌─────────────────────────┐
+│ ● Change color          │
+│ ✎ Edit label            │
+│ ↕ Move (re-drag)        │
+│ ✕ Remove from plan      │
+└─────────────────────────┘
+Change color: Opens a color picker with 8 preset colors + custom hex input:
+
+Amber #F59E0B (default residential)
+Red #EF4444 (egress/exit)
+Green #22C55E (placed/confirmed)
+Blue #3B82F6 (restroom)
+Purple #8B5CF6 (common area)
+Slate #64748B (default)
+Teal #14B8A6
+Orange #F97316
+
+Color stored in signs.marker_color — add nullable text column via migration.
+Edit label: Inline text input appears on the marker tag. Enter to save, Escape to cancel. Updates signs.room_name via PATCH. Label capped at 20 chars displayed, full value stored.
+Remove from plan: Sets marker_x = null, marker_y = null, sheet_id = null — moves tag back to unplaced tray. Does NOT delete the sign record.
+
+XLSX sync — automatic on every marker change:
+Every PATCH to a sign's marker_x, marker_y, sheet_id, room_name, or marker_color triggers:
+typescript// In the PATCH handler (rooms.ts or signs.ts):
+// After successful update, invalidate the cached XLSX
+await db.update(jobsTable)
+  .set({ xlsxDirty: true, updatedAt: new Date() })
+  .where(eq(jobsTable.id, jobId))
+Add xlsxDirty boolean to jobs table. When XLSX is downloaded, if xlsxDirty = true, regenerate from current data before serving. This means the XLSX always reflects the latest marker placements without a full rescan.
+Review tab sync: The Review tab already reads from the signs/rooms tables via React Query — invalidating getListSignsQueryKey after every PATCH is sufficient. No additional changes needed.
+
+DB migration:
+sqlALTER TABLE signs ADD COLUMN marker_color TEXT;
+ALTER TABLE jobs ADD COLUMN xlsx_dirty BOOLEAN DEFAULT FALSE;
+
+Remove entirely:
+
+analyzeSheet() from pipeline.ts
+POST analyze-sheet route from sheets.ts
+"Analyze Sheet" button from FloorPlanTab.tsx
+analyzeSheet import from sheets.ts
+All related tests in door-analysis.test.ts and FloorPlanTab.test.tsx
+
+
+What won't change:
+
+Pipeline extraction — zero changes
+Existing sign records — no data loss
+Fox Hill, Tower District, Gibson Library — tray shows their rooms, same drag-drop workflow
+All other tabs — Overview, Review, Egress, Specialty, Schedule, Export unchanged except XLSX regenerates on marker change
+
+
+Regression tests:
+
+Fox Hill Plans tab — tray shows rooms filtered to current sheet level, search works, drag a room tag onto plan, marker appears at drop position, XLSX download reflects placement
+Walking Court PLAN-3-P1 — tray shows LEVEL 1 rooms, A209–A220 draggable, placed rooms show green, duplicate prevention works
+Right-click marker → change color → marker updates color immediately
+Right-click marker → edit label → label updates on marker and in Review tab
+Right-click marker → remove → marker disappears from plan, tag returns to unplaced tray
+
+1,570 API + 156 web tests must pass. Typecheck 0 errors.

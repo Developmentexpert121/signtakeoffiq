@@ -1,0 +1,183 @@
+App: AI-Assist Takeoffs
+Reference: Fox Hill Elementary, Burlington MA
+           Education building, 2 floors, 4 stairs,
+           2 wings per floor, 1 elevator
+
+Accuracy audit shows 75%. Fix these 5 issues 
+in order of severity:
+
+════════════════════════════════════════════════
+FIX 1 — CRITICAL: Stair signs completely missing
+         (0 in app, 16 required — R11 FAIL)
+════════════════════════════════════════════════
+Stair rooms SA01, SB01, SC01, SD01 (Level 1)
+and SA02, SB02, SC02, SD02 (Level 2) must be
+extracted and processed.
+
+Rule R11 per stair per level served:
+  1× Stair Identification (Corridor) — on the 
+     wall beside the stair door at corridor level
+  1× Stair Identification (Landing) — inside 
+     stair enclosure at each floor landing
+
+Fox Hill: 4 stairs × 2 floors = 16 stair signs
+
+Implementation:
+1. Stair rooms are currently being filtered out.
+   Ensure /^S[ABCD]\d{2}$/ pattern is in the 
+   education valid room number list AND is not 
+   excluded by any downstream filter.
+
+2. When isStair = true, rules engine must create
+   TWO sign records per floor served:
+   { signType: 'Stair (Corridor)', qty: 1, rule: 'R11' }
+   { signType: 'Stair (Landing)',  qty: 1, rule: 'R11' }
+
+3. Floors served = detect from plan.
+   If unknown, default to all floors in the job.
+   Fox Hill: SA, SB, SC, SD each serve 2 floors.
+
+4. Stair sign content per Fox Hill plans (3.9.55):
+   - Stair A: "STAIR A — NO ROOF ACCESS" 9×8
+   - Stair B: "STAIR B — NO ROOF ACCESS" 9×8  
+   - Stair C: "STAIR C — FIRE DEPT ROOF ACCESS" 9×8
+   - Stair D: "STAIR D — NO ROOF ACCESS" 9×8
+   Store stair variant in notes field.
+
+════════════════════════════════════════════════
+FIX 2 — CRITICAL: ADA flag wrong on Room ID w/Insert
+         (ada_required=No is a code violation)
+════════════════════════════════════════════════
+Per 2010 ADA §703 and MA 521 CMR §41:
+ALL permanently designated interior room signs
+require tactile characters and Grade 2 Braille —
+INCLUDING signs with changeable insert panels.
+
+The insert panel holds the occupant name (which
+changes). The tactile room number/type text is
+PERMANENT and MUST be tactile + Braille.
+
+Fix in Summary tab XLSX and Pricing tab:
+  'Room ID'          → ADA Required: Yes
+  'Room ID w/Insert' → ADA Required: Yes ← fix this
+  'Restroom'         → ADA Required: Yes
+  'Stair (Corridor)' → ADA Required: Yes
+  'Stair (Landing)'  → ADA Required: Yes
+  'Exit (Tactile)'   → ADA Required: Yes
+  'Max Occupancy'    → ADA Required: No  ← informational
+  'Evacuation Map'   → ADA Required: No  ← informational
+  'Office Directory' → ADA Required: No  ← informational
+  'Exit'             → ADA Required: No  ← illuminated sign
+
+Also update the Pricing tab material defaults:
+Room ID w/Insert → same ADA-compliant material 
+as Room ID (Rowmark or equivalent with Braille).
+
+════════════════════════════════════════════════
+FIX 3 — Exit signs severely under-counted
+         (4 in app, 12-16 required — R9 FAIL)
+════════════════════════════════════════════════
+Current logic only assigns Exit when it finds
+an explicit EXIT room or vestibule. That's wrong.
+
+Exit signs (illuminated, IBC §1011) are required
+at EVERY exit access door leading to:
+  - A stair enclosure
+  - An exterior exit door
+  - A horizontal exit
+
+Rule R9 fix — assign Exit signs by location,
+not by room name:
+
+  For each stair identified:
+    Add 1× Exit sign per floor per stair door
+    (the door FROM corridor INTO stair)
+    Fox Hill: 4 stairs × 2 floors = 8 exit signs
+
+  For each exterior exit door (ground floor):
+    Add 1× Exit sign
+    Fox Hill: estimate 4 exterior exits minimum
+    (main entry, gym exit, kitchen exit, community)
+
+  Total minimum: 12 Exit signs
+  Store these as floor=LEVEL N, room=STAIR X DOOR
+
+Do NOT assign Exit to random rooms by name.
+Exit signs are at DOORS, not rooms.
+
+════════════════════════════════════════════════
+FIX 4 — Evacuation Maps over-assigned
+         (13 in app, 4 max correct — R13 FAIL)
+════════════════════════════════════════════════
+R13: Evacuation Maps go at PRIMARY corridor
+     decision points only — NOT one per room.
+
+Fix isCorridorOrHall handling:
+  ASSIGN Evacuation Map when:
+  - Room type is main CORRIDOR (not alcove)
+  - AND it is a primary intersection or 
+    near a stair/exit (decision point)
+  - Max 2 per floor across entire building
+
+  DO NOT assign Evacuation Map to:
+  - PROJECT AREA (open alcoves off corridor)
+  - PASSAGE (small connecting space)
+  - ALCOVE, VESTIBULE
+  - Any room smaller than a primary corridor
+
+For Fox Hill 2 floors: max 4 Evacuation Maps
+(2 per floor — one per wing's main corridor).
+
+════════════════════════════════════════════════
+FIX 5 — Max Occupancy missing
+         (0 in app, 4+ required — R10 FAIL)
+════════════════════════════════════════════════
+When isAssembly = true, the rules engine must
+output TWO sign records for that room:
+  1. Room ID w/Insert  (R2 — the door sign)
+  2. Max Occupancy     (R10 — posted inside room)
+
+These are separate physical signs at different
+locations. Do not collapse them into one record.
+
+Fox Hill assembly rooms requiring Max Occupancy:
+  GYMNASIUM (E119) — est. 500 occupants
+  CAFETERIA (E124) — est. 200 occupants
+  MUSIC LOBBY (E118/E121) — est. 50+ occupants
+  GYM LOBBY (E117) — est. 50+ occupants
+
+Max Occupancy sign = 3×8, non-tactile,
+posted inside the room near primary entrance.
+
+════════════════════════════════════════════════
+EXPECTED RESULT after all 5 fixes
+════════════════════════════════════════════════
+Fox Hill sign count should reach ~195-220:
+
+  Current 148
+  + 16 stair signs     (Fix 1)
+  + 8 exit additions   (Fix 3)
+  - 9 evac map removes (Fix 4, 13→4)
+  + 4 max occupancy    (Fix 5)
+  = ~167 minimum
+
+  Plus any rooms the extraction missed on
+  L1 Community Wing (currently under-represented)
+  Target: 190-220 to match skill output of ~224
+
+VERIFICATION CHECKLIST — confirm in Review tab:
+  ✓ SA01, SB01, SC01, SD01 appear in room list
+  ✓ Each stair has Corridor + Landing signs
+  ✓ Room ID w/Insert shows ADA Required: Yes
+  ✓ Exit count ≥ 12
+  ✓ Evacuation Map count ≤ 4
+  ✓ GYMNASIUM has both Room ID + Max Occupancy
+  ✓ All 1,430 tests pass
+
+ANSWER TO EXIT DETECTION QUESTION:
+Exit sign detection should be driven by STAIR
+and EXTERIOR DOOR inventory, not room names.
+Every stair door on every floor = 1 Exit sign.
+Every exterior egress door = 1 Exit sign.
+This gives deterministic counts from the stair
+list rather than keyword-matching room names.

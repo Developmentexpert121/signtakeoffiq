@@ -1,0 +1,222 @@
+App: AI-Assist Takeoffs
+GOAL: Reduce scan time from 10-15 min to 2-3 min.
+Applies to ALL jobs, ALL building types.
+Do NOT change accuracy — only change speed and
+model selection per step.
+
+════════════════════════════════════════════════
+OPTIMIZATION 1 — Right model for each step
+════════════════════════════════════════════════
+Not every step needs Gemini 2.5 Pro.
+Use the fastest model that gives correct results:
+
+Step 2 — Drawing index parsing:
+  CURRENT: Gemini 2.5 Pro (overkill)
+  CHANGE:  Gemini 2.0 Flash
+  Why: Just reading text from a sheet index —
+       Flash is more than capable, 5x faster
+
+Step 4b — Sheet classification (visual):
+  CURRENT: Gemini 2.5 Pro
+  CHANGE:  Gemini 2.0 Flash
+  Why: Binary classification (floor_plan vs skip)
+       doesn't need extended thinking
+
+Step 6 — Room extraction (vision):
+  KEEP: Gemini 2.5 Pro
+  Why: Most accuracy-sensitive step — room names,
+       coordinates, confidence scores. Worth the time.
+
+Step 9.2 — Specialty signs extraction:
+  CURRENT: Gemini 2.5 Pro
+  CHANGE:  Gemini 2.0 Flash
+  Why: Reading sign codes and dimensions from
+       detail sheets — Flash handles this well
+
+Step B — Project sign dictionary:
+  CURRENT: Gemini 2.5 Pro
+  CHANGE:  Gemini 2.0 Flash
+  Why: Simple dictionary lookup/classification
+
+Model speed reference:
+  Gemini 2.5 Pro:   ~15-30s per call
+  Gemini 2.0 Flash: ~3-8s per call
+  Gemini 1.5 Flash: ~1-3s per call
+
+Expected time saving from model changes alone:
+  Steps 2, 4b, 9.2, B: 4 calls × ~20s saved = 80s
+
+════════════════════════════════════════════════
+OPTIMIZATION 2 — Parallelize independent steps
+════════════════════════════════════════════════
+Several steps are completely independent and
+can run simultaneously instead of sequentially.
+
+Current (sequential):
+  Step 2 → Step 3 → Step 4 → Step 4b → Step 6...
+  Each waits for the previous to finish.
+
+Fix — run these in parallel:
+
+  // Group 1: Run simultaneously after Step 1
+  await Promise.all([
+    parseDrawingIndex(pdf),       // Step 2
+    rasterizeAllPages(pdf),       // Step 3 prep
+    extractSignSchedule(files),   // Step 3a
+  ]);
+
+  // Group 2: Run simultaneously
+  await Promise.all([
+    classifySheets(pages),        // Step 4b
+    extractPlaqueSchedule(files), // Step 4
+    extractSignDictionary(files), // Step B
+  ]);
+
+  // Group 3: Sequential — needs sheet classification
+  // from Group 2 before running
+  for (const sheet of floorPlanSheets) {
+    await extractRooms(sheet);    // Step 6
+  }
+  // Step 6 sheets can also run in parallel:
+  await Promise.all(
+    floorPlanSheets.map(s => extractRooms(s))
+  );
+
+  // Group 4: Run simultaneously after Group 3
+  await Promise.all([
+    runRulesEngine(),             // Step 7
+    extractSpecialtySigns(),      // Step 9.2
+  ]);
+
+Expected time saving from parallelization:
+  Groups 1+2: ~90s saved (3 steps × 30s each)
+  Step 6 sheets in parallel: 
+    Fox Hill: 4 sheets × 30s sequential = 120s
+    Fox Hill: 4 sheets parallel = 30s
+    Saving: 90s
+
+════════════════════════════════════════════════
+OPTIMIZATION 3 — Reduce rasterization DPI
+         for non-extraction steps
+════════════════════════════════════════════════
+Step 3 rasterizes at high DPI for accuracy.
+But sheet classification (Step 4b) doesn't need
+high resolution — just enough to see layout.
+
+  // For CLASSIFICATION only (Step 4b):
+  const thumb = rasterize(page, dpi: 72);
+  // ~0.5MB vs ~8MB at 200 DPI
+  // 16x smaller = faster upload to Gemini
+
+  // For ROOM EXTRACTION (Step 6):
+  const fullRes = rasterize(page, dpi: 150);
+  // Keep quality for accuracy
+
+  // For SPECIALTY SIGNS (Step 9.2):
+  const medRes = rasterize(page, dpi: 100);
+  // Medium quality — reading text/dimensions
+
+Expected time saving: 30-45s less upload time
+to Gemini API across all non-extraction calls.
+
+════════════════════════════════════════════════
+OPTIMIZATION 4 — Cap drawing index timeout
+════════════════════════════════════════════════
+Step 2 currently takes up to 60s because it
+sends full pages to Gemini with no timeout.
+
+Add hard timeout:
+  const INDEX_TIMEOUT_MS = 8000; // 8 seconds max
+
+  const indexResult = await Promise.race([
+    parseDrawingIndex(pdf),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('INDEX_TIMEOUT')),
+        INDEX_TIMEOUT_MS
+      )
+    )
+  ]).catch(err => {
+    if (err.message === 'INDEX_TIMEOUT') {
+      console.log('[STEP-2] Index parse timed out',
+        '— skipping to title block extraction');
+      return null;
+    }
+    throw err;
+  });
+
+Expected time saving: up to 52s on plans where
+index parsing fails (Fox Hill currently wastes
+60s before falling through to title blocks).
+
+════════════════════════════════════════════════
+OPTIMIZATION 5 — Smart cache for repeat scans
+════════════════════════════════════════════════
+Normal rescan (no Force): cache everything
+Force rescan: re-run Step 6 only (room extraction)
+  — skip Steps 2, 3, 4, 4b, B unless PDF changed
+
+The expensive step is Step 6 (room extraction).
+Everything else (index parsing, sheet classification,
+plaque schedule, sign dictionary) only needs to
+re-run if the PDF itself changed.
+
+Add PDF hash check:
+  const pdfHash = await hashFile(pdfPath);
+  const cachedHash = await getCachedHash(jobId);
+  const pdfChanged = pdfHash !== cachedHash;
+
+  if (!pdfChanged && !forceFullRescan) {
+    // Skip Steps 2, 3prep, 4, 4b, B
+    // Only re-run Step 6 if forceAiRescan
+    // or use cached rooms if normal rescan
+  }
+
+Expected time saving on normal rescans:
+  Skip 4 steps × ~15s each = 60s saved
+  Normal rescan: 2-3 min → under 60s
+
+════════════════════════════════════════════════
+TARGET TIMES after all optimizations
+════════════════════════════════════════════════
+                    Current    Target
+First scan:         10-15 min  2-3 min
+Normal rescan:      5-8 min    30-60s
+Force rescan:       10-15 min  3-4 min
+
+Step breakdown target (Fox Hill 6 pages):
+  Steps 1-2:     8s   (was 60s — Flash + timeout)
+  Steps 3+3a:    20s  (parallel rasterize + schedule)
+  Steps 4+4b+B:  15s  (parallel, Flash models)
+  Step 6 ×4:     45s  (parallel sheets, 2.5 Pro)
+  Steps 7-9:     20s  (rules + specialty, parallel)
+  Steps 10-17:   12s  (markers, XLSX, egress)
+  ─────────────────────────────────────────────
+  Total:         ~2 min
+
+════════════════════════════════════════════════
+IMPLEMENT IN THIS ORDER (least risky first)
+════════════════════════════════════════════════
+1. Model changes (Opt 1) — no logic change,
+   just swap model strings. Lowest risk.
+   Test: verify accuracy unchanged on Fox Hill.
+
+2. Timeout on Step 2 (Opt 4) — simple timeout
+   wrapper. Very low risk.
+
+3. DPI reduction for non-extraction (Opt 3) —
+   simple config change.
+
+4. Parallelize Step 6 sheets (Opt 2 partial) —
+   run floor plan sheets in parallel.
+   Medium risk — test carefully.
+
+5. Full parallelization (Opt 2 full) — run step
+   groups in parallel.
+   Higher risk — test on multiple plan types.
+
+6. PDF hash cache (Opt 5) — most complex.
+   Test last after others stable.
+
+All 1,461 tests pass after each optimization.
+Verify Fox Hill accuracy unchanged after each step.

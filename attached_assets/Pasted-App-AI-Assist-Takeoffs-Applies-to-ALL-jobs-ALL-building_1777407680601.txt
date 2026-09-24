@@ -1,0 +1,168 @@
+App: AI-Assist Takeoffs
+Applies to ALL jobs, ALL building types.
+
+════════════════════════════════════════════════
+BUG 1 — Force cache clear: find the real problem
+════════════════════════════════════════════════
+The Force checkbox has been "fixed" multiple times
+but $0.00 AI cost and "saved by reusing N cached
+sheets" proves it is still not clearing cache.
+
+Do this diagnostic FIRST before any other changes:
+
+In the rescan API handler, add these console logs
+and return early with a test response to verify
+the force flag is even being received:
+
+  console.log('=== RESCAN REQUEST ===');
+  console.log('Body:', JSON.stringify(req.body));
+  console.log('Query:', JSON.stringify(req.query));
+  console.log('Headers force:', req.headers['x-force']);
+  console.log('forceReprocess:', req.body?.forceReprocess);
+  console.log('force:', req.body?.force);
+
+Then in the frontend, log what is being sent:
+
+  console.log('=== SENDING RESCAN ===');
+  console.log('force value:', forceChecked);
+  console.log('payload:', JSON.stringify(payload));
+
+Run a force rescan and check Replit console.
+This will show EXACTLY what field name and value
+the frontend sends and whether the API receives it.
+
+Once confirmed, find where the cache lookup
+happens in the pipeline (search for WHERE job_id
+near a cache table SELECT) and add:
+
+  if (isForce) {
+    console.log('[CACHE SKIP] Force mode - 
+                 skipping cache for sheet', sheetId);
+    continue; // skip cache lookup entirely
+  }
+
+The cache skip must happen at the CACHE LOOKUP
+point, not just at a delete step. Even if delete
+runs, if the pipeline re-reads from cache before
+the delete takes effect, rooms still come back.
+
+════════════════════════════════════════════════
+BUG 2 — Only 3 of 4 signage sheets detected
+         Fox Hill sheet 3.9.54 being missed
+         Affects multi-sheet plans ALL types
+════════════════════════════════════════════════
+Pipeline log shows: "3 floor plan sheet(s) of 3"
+Fox Hill has 4 signage sheets:
+  3.9.51 — First Floor Academic Wing
+  3.9.52 — First Floor Community Wing
+  3.9.53 — Second Floor Academic Wing
+  3.9.54 — Second Floor Community Wing  ← MISSING
+
+This is causing:
+  - Missing ~30-40 rooms from 2nd floor community
+  - floorsServed = 3 (wrong — sheets ≠ floors)
+  - Stair signs showing LEVEL 3 (doesn't exist)
+
+Fix the sheet classification logic:
+
+In the sheet identification step (Step 4b in 
+pipeline log "Reclassifying signage sheets"):
+
+Current logic likely counts unique floor numbers
+from sheet titles. Fix: count SHEETS not floor
+numbers, and map sheets→floors correctly.
+
+  // Sheet → Floor mapping
+  // Multiple sheets can belong to the same floor
+  // Sheet title contains the floor designation
+  
+  const sheetFloorMap = {
+    'first floor':  'LEVEL 1',
+    'floor 1':      'LEVEL 1', 
+    'level 1':      'LEVEL 1',
+    'second floor': 'LEVEL 2',
+    'floor 2':      'LEVEL 2',
+    'level 2':      'LEVEL 2',
+    'third floor':  'LEVEL 3',
+    'ground floor': 'LEVEL 1',
+    'basement':     'LEVEL B1',
+  };
+  
+  // For each sheet, extract floor from title
+  // Fox Hill: "Signage Plan - First Floor Academic Wing"
+  //   → LEVEL 1
+  // Fox Hill: "Signage Plan - Second Floor Community Wing" 
+  //   → LEVEL 2
+  
+  // Count DISTINCT floors, not distinct sheets
+  const uniqueFloors = new Set(
+    sheets.map(s => getFloorFromTitle(s.title))
+          .filter(Boolean)
+  );
+  const floorCount = uniqueFloors.size; // 2, not 3
+
+Also fix the sheet DETECTION to find all 4 sheets:
+The current selector is finding 3 sheets because
+it may be deduplicating by floor (finding 2 sheets
+per floor but only keeping 1).
+
+Fix: process ALL sheets that contain signage
+content, even if multiple sheets share the same
+floor number:
+
+  // Find ALL signage-relevant sheets
+  const signageSheets = allSheets.filter(sheet =>
+    sheet.title.toLowerCase().includes('signage') ||
+    sheet.title.toLowerCase().includes('sign plan') ||
+    sheet.sheetNumber.match(/^3\.9\.\d+$/) || 
+    sheet.title.toLowerCase().includes('floor plan')
+  );
+  // Process ALL of them — don't deduplicate by floor
+
+Update the pipeline log message to show both
+sheet count AND floor count distinctly:
+  "Sheets processed: 4 sheets across 2 floors"
+  NOT "3 floor plan sheets of 3"
+
+════════════════════════════════════════════════
+FIX 3 — floorsServed in egress generator
+         must use floor count NOT sheet count
+════════════════════════════════════════════════
+Once Bug 2 is fixed and 4 sheets are processed,
+the egress generator must use FLOOR count (2)
+not SHEET count (4) for stair generation.
+
+In detectFloorCount():
+  // Count distinct floor LABELS from extracted rooms
+  // NOT sheet count from pipeline
+  SELECT COUNT(DISTINCT floor) as floor_count
+  FROM signs
+  WHERE job_id = $1
+  AND floor ~ '^(LEVEL|FLOOR)\s+\d+$'
+  AND source != 'rules'  -- exclude egress generator rows
+
+Fox Hill: LEVEL 1 rooms + LEVEL 2 rooms = 2 floors
+Stair generation: 4 stairs × 2 floors = 8+8 = 16
+
+════════════════════════════════════════════════
+EXPECTED RESULT after all 3 fixes
+Applies to ALL building types
+════════════════════════════════════════════════
+Fox Hill force rescan:
+  AI Cost: > $0.00 (real Gemini calls)
+  Pipeline log: "4 sheets across 2 floors"
+  No "saved by reusing cached sheets"
+  
+  Stair sets: 4 stairs × 2 floors = 8+8 ✓
+  Exit signs: 4 stairs × 2 + 4 exterior = 12 ✓
+  Evac maps: 2 per floor × 2 floors = 4 ✓
+  Stair floor field: LEVEL 1 / LEVEL 2 (not blank)
+  
+  Total: ~210-225 signs
+
+Universal checks (all building types):
+  Multi-wing plans: all wings processed
+  Multi-sheet floors: sheets merged correctly
+  Floor count: from room labels not sheet count
+  Force rescan: always triggers real AI calls
+  All 1,461 tests pass

@@ -1,0 +1,194 @@
+This is exactly what I needed. A few things jump out before writing the prompt:
+
+**Fix 1 (aggregation):** The loop structure looks correct — `floorPlanFiles` is built properly and both synthesis loops iterate over all files. The likely culprit is that `signageSheets` (the source for Step 3a) is populated from files tagged `sign_schedule`, but those files are **also included in `floorPlanFiles`** (the filter only excludes `plaque_schedule` and `other`). So AA831 is probably being fed into the floor plan vision loop instead of Step 3a. The diagnostic logging will confirm this, but the real fix may be excluding `sign_schedule` files from `floorPlanFiles`.
+
+**Fix 4 (image table fallback):** The infrastructure is already there — `rasterizeDpi` is passed to the sidecar, the sidecar already accepts `dpi` as a Form parameter, and `scheduleSignRows` is the right accumulator. The fallback just needs to be inserted in Step 3a at the point where `geminiEntries.length === 0` after vision attempt. The current fallback at that point only rescues partial text rows — it doesn't retry with higher DPI.
+
+**Fix 2 (floor replication):** Can confirm this is safe to write blind — no floor label parsing is visible in this code, so it's additive.
+
+**Fix 3 (residential prompt):** Same — additive prompt injection, no conflicts.
+
+---
+
+Here's the revised prompt with precise line-level guidance:
+
+---
+
+## Session 5 Replit Prompt — Walking Court: Aggregation, Floor Replication, Residential Units, Sign Schedule Image Extraction
+
+**What's broken in one sentence:**
+Walking Court returns ~36 signs against an expected ~300+ due to four issues: sign_schedule files being included in the floor plan processing loop, no floor replication from range labels like "Floors 3-6", residential unit numbers being missed by the vision prompt, and image-based sign schedule tables having no high-DPI retry after the Gemini vision attempt returns 0 entries.
+
+**Files that change:**
+- `artifacts/api-server/src/lib/pipeline.ts`
+- No other files need to change — the sidecar already accepts `dpi` as a Form parameter
+
+---
+
+### Fix 1 — Exclude sign_schedule files from floorPlanFiles (pipeline.ts, ~line 2030)
+
+The current filter is:
+```typescript
+const floorPlanFiles = files.filter(
+  (f) => f.fileCategory !== "plaque_schedule" && f.fileCategory !== "other",
+);
+```
+
+Change it to also exclude `sign_schedule`:
+```typescript
+const floorPlanFiles = files.filter(
+  (f) =>
+    f.fileCategory !== "plaque_schedule" &&
+    f.fileCategory !== "other" &&
+    f.fileCategory !== "sign_schedule",
+);
+```
+
+Then add diagnostic logging immediately after both filter lines:
+```typescript
+logger.log(
+  `[pipeline] Job ${jobId}: ${files.length} total file(s) — ` +
+  `${floorPlanFiles.length} floor plan file(s), ` +
+  `${dedicatedSignScheduleFiles.length} sign schedule file(s), ` +
+  `${files.length - floorPlanFiles.length - dedicatedSignScheduleFiles.length} plaque/other (skipped)`,
+);
+```
+
+Also add per-file logging inside the synthesis fallback loop (lines ~2892–2920) so we can see exactly what each file contributes:
+```typescript
+logger.log(`[pipeline] Synthesising file ${fileIndex + 1}/${floorPlanFiles.length}: ${file.filename}`);
+```
+
+And after each file's room extraction merges into `allRooms` (wherever that merge happens downstream), add:
+```typescript
+logger.log(`[pipeline] File ${file.filename}: extracted N rooms. Running total: allRooms.length`);
+```
+— substituting actual variable names for N and `allRooms.length`.
+
+---
+
+### Fix 2 — Floor replication from range labels (pipeline.ts)
+
+Find `parseLevelFromLabel()` (or wherever `floorLabel` text on `job_files` is parsed into a level number). Replace or extend it to detect range patterns and return a levels array plus a replicate flag:
+
+```typescript
+function parseLevelFromLabel(label: string): { levels: number[]; replicate: boolean } {
+  if (!label) return { levels: [], replicate: false };
+
+  // Range patterns: "Floors 3-6", "Levels 3-6", "3rd-6th Floor", "Floor 3-6"
+  const rangeMatch = label.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
+  if (rangeMatch) {
+    const start = parseInt(rangeMatch[1], 10);
+    const end   = parseInt(rangeMatch[2], 10);
+    if (!isNaN(start) && !isNaN(end) && end > start && (end - start) <= 20) {
+      const levels = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+      return { levels, replicate: true };
+    }
+  }
+
+  // Single level: "Floor 3", "Level 2", "3rd Floor"
+  const singleMatch = label.match(/(\d+)/);
+  if (singleMatch) return { levels: [parseInt(singleMatch[1], 10)], replicate: false };
+
+  return { levels: [], replicate: false };
+}
+```
+
+In the room extraction step, after rooms are extracted for a file that has a `floorLabel` value, call `parseLevelFromLabel(file.floorLabel)`. When `replicate: true`, clone the extracted rooms once per level in `levels[]`, stamping each clone with the correct level value. A file labeled "Floors 3-6" with 12 rooms becomes 48 rooms total.
+
+Add logging:
+```typescript
+logger.log(
+  `[pipeline] floorLabel="${file.floorLabel}" → levels=[${result.levels.join(",")}] replicate=${result.replicate}. ` +
+  `${rooms.length} rooms × ${result.levels.length} = ${rooms.length * result.levels.length} total`,
+);
+```
+
+Only fire this logic when `file.floorLabel` is non-null and non-empty. Files with no label are unaffected.
+
+---
+
+### Fix 3 — Residential unit number extraction (pipeline.ts)
+
+Find the Gemini vision prompt used for floor plan room extraction. For jobs where `buildingType === "residential"`, append the following block to that prompt just before the closing JSON instruction:
+
+> "RESIDENTIAL BUILDINGS: Floor plans often label apartment or condo units in formats like 'SEE UNIT A A209', 'UNIT B301', or a standalone alphanumeric like 'A209' near a door symbol or unit outline. The alphanumeric code (A209, B301, 101) is the room identifier — not the descriptive label above it like 'SEE UNIT A'. Extract each unit number as a separate room entry, using the alphanumeric code as the roomNumber or roomName field. Do not collapse multiple unit numbers into a single entry. If you see 'SEE UNIT A A209' and 'SEE UNIT A A211', extract two rooms: A209 and A211."
+
+This is additive and only fires for `buildingType === "residential"`. All other building types are unaffected.
+
+---
+
+### Fix 4 — High-DPI image table extraction fallback for sign schedules (pipeline.ts, ~line 3620)
+
+In Step 3a, find the block that runs when `geminiEntries.length === 0` after the Gemini vision attempt. Currently it falls back to partial text rows. Before that fallback, insert a **second Gemini attempt at 300 DPI** specifically for image-based schedule tables:
+
+```typescript
+// After geminiEntries.length === 0 check:
+if (geminiEntries.length === 0) {
+  logger.log(`[Step 3a] ${sigSheet.sheetId}: Gemini returned 0 entries — retrying at 300 DPI for image-based table`);
+  try {
+    const hiDpiResult = await rasterizePages(pdfBuf, [sigSheet.pdfPage ?? 1], 300, sheetFile.filename);
+    const hiDpiBase64 = hiDpiResult.pages[0];
+    if (hiDpiBase64) {
+      const tablePrompt =
+        "This is an architectural signage schedule table from a construction drawing. " +
+        "The table may contain 200–400 rows listing every sign location in the building. " +
+        "Extract every row as a JSON array. Each entry: " +
+        '{ "roomNumber": string, "roomName": string, "signType": string, "quantity": number, "message": string }. ' +
+        "Include ALL rows — do not truncate or summarize. " +
+        "If quantity is not shown, default to 1. " +
+        "Return a JSON array only. No markdown. No preamble.";
+      const hiDpiResponse = await geminiAi.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: "image/png", data: hiDpiBase64 } },
+            { text: tablePrompt },
+          ],
+        }],
+        config: { maxOutputTokens: 16384 },
+      });
+      const hiDpiRaw = (hiDpiResponse.text ?? "")
+        .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const hiDpiParsed = JSON.parse(hiDpiRaw);
+      const hiDpiEntries = Array.isArray(hiDpiParsed) ? hiDpiParsed : [];
+      for (const item of hiDpiEntries) {
+        if (typeof item !== "object" || !item) continue;
+        const obj = item as Record<string, unknown>;
+        const signType = (obj.signType ?? obj.typeName ?? "") as string;
+        if (!signType) continue;
+        geminiEntries.push({
+          roomNumber: (obj.roomNumber ?? "") as string,
+          roomName:   (obj.roomName ?? "") as string,
+          signType,
+          quantity:   typeof obj.quantity === "number" ? obj.quantity : 1,
+          size:       (obj.size ?? "") as string,
+          message:    (obj.message ?? "") as string,
+          notes:      (obj.notes ?? "") as string,
+          source: "gemini",
+          sheetId: sigSheet.sheetId ?? "",
+          substrate: null, finishMethod: null, brailleSpec: null,
+          mountingHeight: null, manufacturer: null,
+        });
+      }
+      logger.log(`[Step 3a] ${sigSheet.sheetId}: 300 DPI retry extracted ${geminiEntries.length} entries`);
+    }
+  } catch (hiDpiErr) {
+    logger.warn(`[Step 3a] ${sigSheet.sheetId}: 300 DPI retry failed: ${hiDpiErr}`);
+  }
+}
+```
+
+The existing fallback to partial text rows remains intact after this block — if the 300 DPI attempt also returns 0, behavior is unchanged.
+
+---
+
+### Regression test sequence
+
+1. Typecheck — 0 errors
+2. Full test suite — **1,585 passing**
+3. Do NOT rescan until tests pass
+4. Rescan **Fox Hill** — confirm 193–215 range
+5. Rescan **Walking Court** (already uploaded, no re-upload needed) — review console logs to confirm: all 9 floor plan files processed, per-file room counts logged, floor replication firing for "Floors 3-6" labels, and sign schedule 300 DPI retry result for AA831
+6. Target: 200–400+ signs total

@@ -1,0 +1,133 @@
+App: AI-Assist Takeoffs
+
+After 5 fix attempts the same ~30 garbled rows 
+persist. Root cause confirmed: the SQL purge 
+never executed AND the Gemini vision prompt 
+has no instructions to ignore annotation callouts.
+
+DO THESE THREE THINGS IN ORDER:
+
+════════════════════════════════════════════════
+1. RUN THIS SQL RIGHT NOW — no code change needed
+   Find the file where DB migrations or seed 
+   scripts run and execute immediately:
+════════════════════════════════════════════════
+
+-- Step A: Find the Fox Hill job ID
+SELECT id, name FROM jobs WHERE name ILIKE '%fox hill%';
+
+-- Step B: Delete ALL signs for that job
+-- (clean rooms will be restored on next rescan)
+DELETE FROM signs 
+WHERE job_id IN (
+  SELECT id FROM jobs WHERE name ILIKE '%fox hill%'
+);
+
+-- Step C: Delete the sheet cache so rescan 
+-- re-extracts from scratch
+DELETE FROM sheet_cache
+WHERE job_id IN (
+  SELECT id FROM jobs WHERE name ILIKE '%fox hill%'
+);
+
+-- Verify
+SELECT COUNT(*) as remaining 
+FROM signs 
+WHERE job_id IN (
+  SELECT id FROM jobs WHERE name ILIKE '%fox hill%'
+);
+-- Must return 0
+
+If table names are different (page_cache, 
+cached_pages, job_pages etc) use the actual 
+table names. The goal: Fox Hill has ZERO signs 
+and ZERO cached sheets before next rescan.
+
+════════════════════════════════════════════════
+2. FIX THE GEMINI VISION PROMPT
+   This is why garbled rows keep coming back.
+   The vision prompt tells Gemini to find rooms
+   but does NOT tell it what to ignore.
+════════════════════════════════════════════════
+
+Find the Gemini vision call for room extraction
+(search for "extract" OR "rooms" OR "floor plan" 
+near a Gemini API call in the codebase).
+
+ADD this section to the system prompt:
+
+"""
+CRITICAL — DO NOT extract these as rooms.
+Ignore ALL of the following:
+
+DRAWING ANNOTATION CALLOUTS:
+Any alphanumeric tag ending in .1 .2 .3 etc
+Examples: W139.1, E100.2, SA01.1, WC100.3
+These are drawing reference tags, NOT room numbers.
+
+DIMENSION STRINGS:
+Any text containing feet/inch notation or 
+NxN format: 8'-0'', 6'-0'', MB 8'-0'', 
+TB 4'-0'', 60X21, 48X21, 36X24
+These are casework and marker board dimensions.
+
+DRAWING GRID REFERENCES:
+Single letters or numbers at sheet margins:
+A B C D E F G H J K L M N
+1 2 3 4 5 6 7 8 9
+Grid intersection labels: A.1, K.4, L.2
+These are column/row grid lines, NOT rooms.
+
+SIGNAGE LEGEND CODES:
+19A 19B 19C 19D 19E 19F 19G 19H 19I 19J
+1 2 3 4 5 6 7 8 9 10A 10B 10C 10D
+11A 11B 11C 11D 11E 12 13 14 15 16 16A
+These are sign type legend symbols, NOT rooms.
+
+MARKER/TACKBOARD CALLOUTS:
+MB 8'-0'', MB 6'-0'', TB 4'-0'', TB 6'-0'',
+CB 8'-0'', MIRROR 4'-0''
+These are wall-mounted board callouts.
+
+PARTIAL/SPLIT WORDS:
+KIT EN (= KITCHEN split across lines)
+CAF ERIA (= CAFETERIA split)
+MECHANI CAL, CORRI DOR
+If a word appears split, skip it entirely —
+the full room label appears elsewhere.
+
+VALID ROOM NUMBERS for Education buildings:
+Must match: W + 3 digits (W100-W999)
+            E + 3 digits (E100-E999)  
+            WC + 3 digits (WC100-WC999)
+            EC + 3 digits (EC100-EC999)
+            SA/SB/SC/SD + 2 digits
+            EV + 2 digits
+REJECT anything not matching these patterns.
+Single or double digit numbers (10, 14, 15) 
+are grid lines — NOT room numbers.
+Short codes (W1, E1, M0, V01, A19, C1) are 
+annotation fragments — NOT room numbers.
+"""
+
+════════════════════════════════════════════════
+3. RESCAN FOX HILL WITH FORCE FULL RE-PROCESS
+════════════════════════════════════════════════
+
+After steps 1 and 2:
+- Check "Force full re-process" checkbox
+- Click Rescan
+- Pipeline log must show 0 cached sheets reused
+- Review tab must show ZERO garbled rows
+- Expected clean count: 100-120 readable rooms
+
+ACCEPTANCE CRITERIA:
+✓ Zero rows with names containing: 
+  .1 .1, X21, '-0'', RY CT, KIT EN, CAF ERIA,
+  19A/19B/19C, MB TB CB
+✓ Zero room numbers: 10, 13, 14, 15, 16, 17, 
+  18, 21, 24, 27, 35, 37, 45, W1, W2, W11, 
+  W12, W13, W23, A19, C1, E1, E10, E11, 
+  M0, U16, V01, Y12
+✓ All 1,430 tests pass
+✓ Gleason Lib rescan unchanged

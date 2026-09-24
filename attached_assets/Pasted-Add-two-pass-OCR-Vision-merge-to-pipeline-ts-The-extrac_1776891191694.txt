@@ -1,0 +1,107 @@
+Add two-pass OCR + Vision merge to pipeline.ts. The extractWords function is already imported from ./sidecar-client — use it directly.
+Change 1 — Add feature flag at the top of processJob function:
+tsconst ENABLE_TWO_PASS = process.env.ENABLE_TWO_PASS !== "false";
+Change 2 — Add merge block after Step 6 vision loop completes (after step6SheetResults is fully populated, before Step 7 occupant loads). Insert:
+ts// ── TWO-PASS MERGE: PDF text extraction + AI vision ──────────────────────
+if (ENABLE_TWO_PASS && sidecarOk) {
+  logger.log(`[pipeline] Two-pass merge: starting with ${extractedRooms.length} vision rooms`);
+  let confirmed = 0;
+  let added = 0;
+
+  for (const sheet of relevantSheets) {
+    try {
+      const file = floorPlanFiles.find(f => f.id === sheet.fileId);
+      if (!file) continue;
+
+      // Use the existing extractWords function from sidecar-client
+      const wordResult = await extractWords(
+        file.storagePath,
+        sheet.pdfPage ?? 1,
+        file.filename,
+      );
+      if (!wordResult?.words?.length) continue;
+
+      const textRooms = extractRoomsFromWords(
+        wordResult.words,
+        wordResult.pageWidth ?? 1000,
+        wordResult.pageHeight ?? 1000,
+      );
+
+      if (!textRooms.length) continue;
+
+      logger.log(
+        `[pipeline] Two-pass: ${sheet.sheetId} — ` +
+        `${textRooms.length} text rooms vs ` +
+        `${extractedRooms.filter(r => r.sheetDbId === sheet.id).length} vision rooms`
+      );
+
+      for (const textRoom of textRooms) {
+        const numLower = (textRoom.roomNumber ?? "").toLowerCase().trim();
+        const nameLower = (textRoom.roomName ?? "").toLowerCase().trim();
+        if (!numLower && nameLower.length < 3) continue;
+
+        // Find matching vision room — exact room number OR word-bag name match
+        const visionMatch = extractedRooms.find(r => {
+          const vNum = (r.roomNumber ?? "").toLowerCase().trim();
+          const vName = (r.roomName ?? "").toLowerCase().trim();
+          if (numLower && vNum && numLower === vNum) return true;
+          if (nameLower.length > 3 && vName.length > 3) {
+            const words = nameLower.split(/\s+/).filter(w => w.length > 2);
+            return words.length > 0 && words.every(w => vName.includes(w));
+          }
+          return false;
+        });
+
+        if (visionMatch) {
+          // Both passes agree — upgrade confidence
+          visionMatch.aiConfidence = "0.920";
+          (visionMatch as Record<string, unknown>).confirmedByText = true;
+          confirmed++;
+        } else {
+          // Text found a room vision missed — add it
+          extractedRooms.push({
+            roomNumber: textRoom.roomNumber,
+            roomName: textRoom.roomName,
+            level: sheet.level ?? "LEVEL 1",
+            x: textRoom.x,
+            y: textRoom.y,
+            sheetDbId: sheet.id!,
+            aiVision: false,
+            aiConfidence: "0.850",
+            aiIsRestroom: false,
+          });
+          added++;
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        `[pipeline] Two-pass failed for ${sheet.sheetId}: ` +
+        `${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  logger.log(
+    `[pipeline] Two-pass complete: ${confirmed} confirmed by both, ` +
+    `${added} text-only added, ${extractedRooms.length} total rooms`
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────
+Change 3 — Update room source tracking in Step 8.
+Find the db.insert(roomsTable) call where source: and confidence: are set. Change to:
+tssource: (r as Record<string, unknown>).confirmedByText
+  ? "confirmed"
+  : r.aiVision
+  ? "ai_vision"
+  : "pdf",
+confidence: (r as Record<string, unknown>).confirmedByText
+  ? "0.920"
+  : r.aiVision
+  ? (r.aiConfidence ?? "0.650")
+  : "1.0",
+After saving:
+
+Verify build is clean — no type errors
+Check extractRoomsFromWords signature matches — it takes (words: SidecarWord[], pageWidth: number, pageHeight: number) — verify the field names on wordResult match what extractWords actually returns (pageWidth vs page_width)
+If field name is page_width not pageWidth use: wordResult.page_width ?? 1000
+Trigger Force Fresh rescans on BA Lounge, Park Lane, Cambridge Moses

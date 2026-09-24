@@ -1,0 +1,80 @@
+While Walking Court scans, send this to Replit:
+
+Quick fix — two changes to the Handoff Report. No pipeline changes, no rescan needed.
+Files that change:
+
+artifacts/api-server/src/routes/exports.ts — landscape format + optional pricing page
+artifacts/web/src/pages/job-detail.tsx — Handoff Report button becomes a dropdown with pricing checkbox
+
+What won't be affected: All existing routes, XLSX export, pipeline, benchmark jobs, tests.
+
+Change 1 — Landscape format
+In exports.ts, in the handoff-pdf route, change the page size from portrait to landscape throughout:
+Replace PageSizes.Letter with { width: 792, height: 612 } (standard Letter landscape in pdf-lib points). Apply this to every pdfDoc.addPage() call in the route. The table column widths need to be recalculated for the wider page — use these approximate column widths for the sign summary table:
+ColumnWidth (points)Room #60Room Name130Sign Type110Qty35ADA35Notes340
+Total content width: 710 points with 40pt left margin and 42pt right margin = 792pt page width.
+
+Change 2 — Optional pricing page via query param
+In exports.ts, read a query parameter in the handoff-pdf route:
+typescriptconst includePricing = req.query.includePricing === "true";
+If includePricing is true, after the sign summary pages and before the material spec page, add a Pricing Summary page:
+
+Amber header bar same style as other pages
+Title: "Pricing Summary"
+Table columns: Sign Type | Size | Sq In | Qty | Material | Finishing | Base $/sq in | Est. Total
+Pull data from the same pricing query already used in the XLSX export for this job
+Row totals: sqInches × qty × rate
+Final row: Grand Total in bold amber text
+Same alternating row colors as sign summary pages
+
+In job-detail.tsx, replace the simple Handoff Report button with a split button or small dropdown. The simplest approach — replace the single button with two adjacent elements:
+tsx{/* Handoff Report button group */}
+<div className="flex items-center gap-0">
+  <Button
+    variant="outline"
+    className="rounded-r-none border-r-0"
+    onClick={() => {
+      window.open(`/api/jobs/${job.id}/export/handoff-pdf`, '_blank');
+    }}
+  >
+    <FileDown className="h-4 w-4 mr-2" />
+    Handoff Report
+  </Button>
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="outline" className="rounded-l-none px-2">
+        <ChevronDown className="h-4 w-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <DropdownMenuItem onClick={() => {
+        window.open(`/api/jobs/${job.id}/export/handoff-pdf`, '_blank');
+      }}>
+        Download without pricing
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => {
+        window.open(`/api/jobs/${job.id}/export/handoff-pdf?includePricing=true`, '_blank');
+      }}>
+        Download with pricing
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
+Import ChevronDown from lucide-react and DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem from @/components/ui/dropdown-menu — both already exist in the codebase.
+
+Typecheck and tests
+
+Typecheck: 0 errors
+Full test suite: 1,585 passing
+No rescans needed
+Test: click Handoff Report on Fox Hill → confirm landscape PDF downloads
+Test: click dropdown → "Download with pricing" → confirm pricing page appears at end of PDF
+
+
+Definition of done
+
+Handoff Report PDF is landscape orientation
+Notes column no longer truncates
+Dropdown shows two options — with and without pricing
+Pricing page shows sign type table with estimated totals when selected
+Typecheck 0 errors, 1,585 passing

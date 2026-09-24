@@ -1,0 +1,98 @@
+Session 10 — P1: Door Analysis (On-Demand via "Analyze Doors" Button)
+Changes across six files plus one DB migration. Typecheck must pass, 1,688 tests must stay green — new tests will be added. Do not rescan any job until tests pass.
+
+Change 1 — DB Migration: Add door fields to rooms table
+In lib/db/src/schema/rooms.ts add two new nullable text columns:
+typescriptdoorSide: text("door_side"),  // "left" | "right" | "none" | null
+doorType: text("door_type"),  // "hinged" | "sliding" | "automatic" | null
+Generate and run the Drizzle migration. Confirm existing rows are unaffected (null by default).
+
+Change 2 — New analyzeDoors() function in pipeline.ts
+Add a new exported async function analyzeDoors(jobId: string, sheetId: string, tenantId: string):
+typescriptexport async function analyzeDoors(jobId: string, sheetId: string, tenantId: string) {
+  // 1. Fetch sheet record — get rasterizedPath and dimensions
+  // 2. downloadFromStorage(sheet.rasterizedPath) → base64
+  // 3. Fetch all rooms for this job + sheetId from DB
+  // 4. Call callClaudeVision with door-detection prompt (see below)
+  // 5. Parse response JSON → array of { roomNumber, doorSide, doorType, markerOffsetX?, markerOffsetY? }
+  // 6. For each matched room, UPDATE rooms SET doorSide, doorType where roomNumber matches
+  // 7. Return { analyzed: number, cost: number }
+}
+Door detection prompt:
+You are analyzing an architectural floor plan to identify door locations and types for ADA signage placement.
+
+For each labeled room on this floor plan, identify:
+1. Whether a door is present (hinged arc swing, sliding track, or automatic sensor symbol)
+2. The door type: "hinged" | "sliding" | "automatic" | "none"
+3. The latch side of the door relative to the room entry: "left" | "right" | "none"
+   - For hinged doors: the latch side is opposite the hinge point (where the arc originates)
+   - For sliding/automatic: use "none"
+
+Return a JSON array only, no other text:
+[
+  { "roomNumber": "60.1.100", "doorType": "hinged", "doorSide": "left" },
+  { "roomNumber": "60.1.102", "doorType": "automatic", "doorSide": "none" },
+  ...
+]
+
+Only include rooms where a door is clearly visible. Omit rooms with no visible door symbol.
+Use "gemini-2.5-flash" model. Parse response with JSON.parse() wrapped in try/catch — on parse failure log a warning and return empty array (do not throw).
+
+Change 3 — New API endpoint in sheets.ts
+Add one new POST endpoint:
+typescriptrouter.post("/jobs/:jobId/sheets/:sheetId/detect-doors", requireAuth, async (req, res) => {
+  const { jobId, sheetId } = req.params;
+  // tenant isolation — verify job belongs to tenant
+  // call analyzeDoors(jobId, sheetId, tenantId)
+  // return { success: true, analyzed: n, cost: c }
+});
+
+Change 4 — Marker position offset after door analysis
+After analyzeDoors() writes doorSide to rooms, update coordX/coordY on the room to shift the marker from centroid to latch-side wall position:
+
+doorSide = "left" → subtract 15,000 units from coordX (shift marker left toward latch-side wall)
+doorSide = "right" → add 15,000 units to coordX (shift marker right)
+doorSide = "none" or null → leave coordX/coordY unchanged
+
+Apply this offset inside analyzeDoors() after the DB update. Clamp values to 0–100,000 range.
+
+Change 5 — Frontend: Enable "Analyze Doors" button in FloorPlanTab.tsx
+The button already exists in the marker popover as a disabled placeholder. Activate it:
+
+Remove the disabled attribute and "Coming in next update" tooltip
+On click: call POST /api/jobs/${jobId}/sheets/${activeSheetId}/detect-doors via authFetch
+Show a loading spinner on the button while the request is in flight
+On success: invalidate the useListRooms query so markers re-render at updated positions
+On error: show a toast "Door analysis failed — try again"
+After success: show a toast "Door analysis complete — ${n} rooms analyzed"
+The button should only be visible when the active sheet has a rasterizedPath (i.e. has been scanned)
+
+
+Change 6 — New tests
+Add to artifacts/api-server/src/routes/sheets.test.ts (or new door-analysis.test.ts):
+
+POST /sheets/:sheetId/detect-doors returns 200 with { analyzed: n } on success
+Returns 404 when sheetId does not belong to the job
+Returns 403 when job does not belong to tenant
+analyzeDoors() unit test: mock callClaudeVision to return valid JSON array → assert rooms updated with correct doorSide/doorType
+analyzeDoors() gracefully handles malformed Gemini JSON response without throwing
+Marker offset: doorSide = "left" shifts coordX down by 15,000
+Marker offset: doorSide = "right" shifts coordX up by 15,000
+Marker offset: doorSide = "none" leaves coordX unchanged
+Values clamped to 0–100,000 range
+
+
+After all changes:
+Run typecheck — 0 errors. Run full test suite — paste count. Then:
+
+Open Fox Hill job_a81ec18d15cec938 → Plans tab → click any room marker → confirm "Analyze Doors" button is now enabled
+Click "Analyze Doors" — confirm loading spinner appears, toast fires on completion
+Confirm markers visibly shift position on the sheet after analysis
+Run DB query and paste raw output:
+
+sqlSELECT room_number, door_side, door_type, coord_x, coord_y
+FROM rooms
+WHERE job_id = 'job_a81ec18d15cec938'
+AND door_side IS NOT NULL
+LIMIT 10;
+Do not rescan any job.

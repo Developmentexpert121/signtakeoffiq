@@ -1,0 +1,49 @@
+The Floor Plan tab shows "No floor plan pages detected for this job" after rescan. Run this diagnosis first, then fix:
+Step 1 — Run these SQL queries and show me the output:
+sqlSELECT j.name, js.sheet_type, js.pdf_page, js.sheet_title, js.sheet_id
+FROM job_sheets js
+JOIN jobs j ON j.id = js.job_id
+ORDER BY j.created_at DESC, js.pdf_page ASC
+LIMIT 30;
+sqlSELECT name, status, total_signs FROM jobs ORDER BY created_at DESC LIMIT 5;
+Step 2 — Fix the sheet classifier in artifacts/pdf-sidecar/main.py
+The previous update to FLOOR_PLAN_EXCLUSION_KEYWORDS is likely blocking legitimate floor plan pages. Open artifacts/pdf-sidecar/main.py and find FLOOR_PLAN_EXCLUSION_KEYWORDS.
+Replace the entire list with this safer version that only excludes clearly non-floor-plan disciplines:
+pythonFLOOR_PLAN_EXCLUSION_KEYWORDS = [
+    "plumbing", "mechanical", "electrical", "hvac",
+    "structural", "civil", "landscape", "demolition",
+    "reflected ceiling", "foundation", "framing",
+    "site plan", "roof plan",
+]
+Do NOT include "detail", "section", "elevation", "schedule", "notes", "drain", "plan" in the exclusion list — these words appear in legitimate floor plan and signage plan titles.
+Also make sure FLOOR_PLAN_KEYWORDS includes these signage plan variants used in government/military projects:
+pythonFLOOR_PLAN_KEYWORDS = [
+    "floor plan", "floorplan", "construction plan",
+    "first floor", "second floor", "third floor",
+    "level 1", "level 2", "level 3",
+    "basement plan", "ground floor plan",
+    "partial plan", "overall plan",
+    "signage plan", "partial signage plan", "overall signage plan",
+    "plan - level", "plan - area",
+]
+Also ensure the sheet ID detection for IN-series signage sheets works:
+pythonis_arch_floor_plan_series = (
+    sheet_id_lower.startswith("a-1") or
+    sheet_id_lower.startswith("a1") or
+    bool(re.match(r"in1\d\d", sheet_id_lower)) or
+    bool(re.match(r"in\d\d\d", sheet_id_lower))
+)
+Step 3 — Fix the sidebar navigation
+The sidebar is missing "New Job" and "Jobs" nav items — only showing Training, Activity, Admin. In artifacts/web/src/components/layout/Sidebar.tsx (or wherever the sidebar nav is defined), make sure mainNavItems includes:
+typescriptconst mainNavItems = [
+  { href: "/new-upload", label: "New Job", icon: FileUp },
+  { href: "/jobs", label: "Jobs", icon: FolderOpen },
+  { href: "/training", label: "Training", icon: BookOpen },
+  { href: "/activity", label: "Activity", icon: Clock },
+];
+Step 4 — Restart sidecar and rebuild
+bash# Restart the PDF Sidecar workflow in Replit (stop and start "PDF Sidecar" workflow)
+# Then rebuild the frontend:
+cd artifacts/web && pnpm run build
+Step 5 — Rescan
+After restart and rebuild, open each job in the app and click Re-Scan. The floor plan tab should now show the plan image with markers on it.

@@ -1,0 +1,103 @@
+Session 8 — Pipeline architectural cleanup: consolidate schedule arrays, golden-file tests, then plan markers
+Goal: Make the pipeline maintainable. One canonical schedule array, clear data flow, tests that catch regressions automatically. No new features until this is solid.
+Part 1 — Consolidate schedule sign arrays (pipeline.ts only)
+Right now three things hold schedule sign data:
+
+signSchedule[] — Gemini-extracted entries, populated in Step 3a
+scheduleSignRows[] — what Step 9 reads, populated inconsistently across 4 different paths
+References to sign_schedule_entries table that doesn't exist
+
+The fix: Make signSchedule[] the single source of truth. Remove scheduleSignRows[] entirely. At Step 9, read directly from signSchedule[] and convert to sign rows in one place:
+typescript// ONE place where schedule entries become sign rows
+if (pipelineStrategy === "schedule_primary" && signSchedule.length > 0) {
+  const scheduleSignInserts = signSchedule.map(entry => ({
+    id: newId("sign"),
+    jobId,
+    tenantId,
+    roomId: matchedRoomId(entry.roomNumber) ?? null,
+    sheetId: String(_3aAnchorSheetId ?? ""),
+    signType: entry.signType,
+    qty: entry.quantity ?? 1,
+    ruleRef: "schedule",
+    color: null,
+    confidence: "1.000",
+    status: "extracted",
+    source: "schedule",
+    message: [entry.roomNumber, entry.roomName, entry.signType, entry.message]
+      .filter(Boolean).join(" | ") || undefined,
+    level: entry.floor ? parseScheduleFloor(entry.floor) : null,
+  }));
+  
+  await db.insert(signsTable).values(scheduleSignInserts);
+  logger.log(`[Step 9] schedule_primary: inserted ${scheduleSignInserts.length} schedule signs`);
+}
+Delete all the scattered scheduleSignRows.push() calls across Steps 3a, 4b, 4d, 4d-2. Delete scheduleSignRows declaration. Delete dedicatedFileTypeDefMatch — it becomes unnecessary.
+Part 2 — Clear data flow documentation
+Add a comment block at the top of processJob() explaining the pipeline strategy paths:
+typescript/*
+ * PIPELINE DATA FLOW
+ * 
+ * schedule_primary (has sign schedule with 100+ entries):
+ *   Step 3a → signSchedule[] (Gemini extracts from sign schedule PDF)
+ *   Step 3  → floor plan vision runs for egress rooms + coordinates only
+ *   Step 3b → coordinate matching: schedule rooms get x,y from floor plans
+ *   Step 9  → signSchedule[] → signs table (direct, no rules engine)
+ *   Step 9  → rules engine runs R9/R11/R13/R16 only (egress)
+ * 
+ * floor_plan_primary (no sign schedule):
+ *   Step 3  → floor plan vision runs fully → extractedRooms[]
+ *   Step 9  → rules engine runs fully → signs table
+ * 
+ * hybrid (sign schedule with <100 entries):
+ *   Both paths run, results merged
+ * 
+ * egress_only (no floor plans):
+ *   Step 9  → egress rules only
+ */
+Part 3 — Golden-file benchmark tests
+Add three test assertions that run after every code change:
+typescript// tests/pipeline-benchmarks.test.ts
+
+describe("Pipeline benchmarks", () => {
+  test("Fox Hill produces 185-215 signs with floor_plan_primary strategy", async () => {
+    const result = await getJobResult("job_a81ec18d15cec894");
+    expect(result.strategy).toBe("floor_plan_primary");
+    expect(result.totalSigns).toBeGreaterThanOrEqual(185);
+    expect(result.totalSigns).toBeLessThanOrEqual(215);
+  });
+
+  test("Walking Court_2 produces 200-280 signs with schedule_primary strategy", async () => {
+    const result = await getJobResult(WALKING_COURT_2_JOB_ID);
+    expect(result.strategy).toBe("schedule_primary");
+    expect(result.totalSigns).toBeGreaterThanOrEqual(200);
+    expect(result.totalSigns).toBeLessThanOrEqual(280);
+    expect(result.scheduleSignCount).toBeGreaterThanOrEqual(150);
+    expect(result.unspecifiedFloorCount).toBe(0);
+  });
+
+  test("Gibson Lib produces exactly 16 egress signs", async () => {
+    const result = await getJobResult(GIBSON_LIB_JOB_ID);
+    expect(result.totalSigns).toBe(16);
+    expect(result.strategy).toBe("egress_only");
+  });
+});
+These tests read from the DB — no rescanning needed. If a code change breaks a benchmark, it fails in seconds.
+Part 4 — Plan markers (after Parts 1-3 pass)
+Once the pipeline is stable and tests are green, build the Plans tab marker improvements:
+
+Markers placed at door coordinates from Step 3b coordinate matching
+Sign type code label on each marker (like A10, A12, D5 from the FL1 plan)
+Color by category: amber = room ID, red = exit/egress, blue = ADA/restroom, green = specialty
+Click marker → popover shows room number, sign type, dimensions, message
+Unlocated rooms listed in sidebar
+Floor selector to switch between levels
+
+
+The sequence after the current rescan confirms the bridge fix:
+
+Rescan Walking Court_2 — confirm ~350-400 signs, schedule driving the count
+If confirmed — run Session 8 cleanup prompt
+Typecheck + golden-file tests all pass
+Then plan markers
+
+This gives you a stable foundation before adding visual complexity. Sound good?

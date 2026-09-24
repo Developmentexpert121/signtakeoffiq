@@ -1,0 +1,62 @@
+The 52 vision scans on a single-page PDF is the core problem. Here's why it's happening and how to fix it fast:
+
+Why BA Lounge is scanning 52 sheets:
+
+The drawing index times out → fallback synthesizes pages → file.pageCount is stored as a large number → pipeline scans all of them.
+
+Three optimizations — one prompt:
+
+Here's your Replit prompt:
+
+Fix three performance issues causing BA Lounge to use 52 vision scans instead of 1-2:
+
+Fix 1 — Cap synthesized sheets at actual page count:
+
+In pipeline.ts, find the synthetic sheet fallback where allSheets.length === 0. Currently it uses file.pageCount ?? 10. Change to:
+
+ts
+// Never synthesize more than the actual page count
+// and cap at 5 sheets maximum for single-building plans
+const actualPageCount = Math.min(file.pageCount ?? 1, 5);
+for (let p = 1; p <= actualPageCount; p++) {
+Fix 2 — Stop after first confirmed floor plan:
+
+In the Step 3 sheet loop, after a sheet returns isPlanView=true and extracts rooms successfully, check if we already have enough rooms. If a sheet returns 10+ rooms mark remaining synthesized sheets as skipped:
+
+ts
+// If we already found a good floor plan stop scanning synthesized sheets
+if (extractedRooms.length >= 10 && sheet.sheetId.startsWith("FP-")) {
+  logger.log(`[pipeline] Step 3: Found ${extractedRooms.length} rooms — stopping early, skipping remaining synthesized sheets`);
+  break;
+}
+Fix 3 — Reduce vision scan cap for single-file jobs:
+
+In pipeline.ts, when there is only one floor plan file AND it produced synthesized sheets (no drawing index), cap effectiveVisionCap at 3 instead of 60:
+
+ts
+// Single-file jobs with no drawing index rarely need more than 3 vision scans
+const isSingleFileSynthesized = floorPlanFiles.length === 1 && allSheets.length === 0;
+const effectiveVisionCap = isSingleFileSynthesized 
+  ? Math.min(3, rawVisionCap)
+  : Math.max(1, Math.round(rawVisionCap));
+Fix 4 — Store correct page count on Drive link uploads:
+
+In jobs.ts, when a PDF is downloaded from Google Drive and added to job_files, detect the actual page count using the sidecar before storing:
+
+ts
+// Get actual page count from PDF magic bytes
+// PDFs store page count in the cross-reference table
+// Simple approximation: count /Page occurrences
+const pdfText = buffer.slice(0, 50000).toString('binary');
+const pageMatches = pdfText.match(/\/Type\s*\/Page[^s]/g);
+const detectedPageCount = pageMatches ? pageMatches.length : 1;
+
+await db.insert(jobFilesTable).values({
+  ...
+  pageCount: detectedPageCount,
+});
+
+logger.log(`[pipeline] Drive upload: detected ${detectedPageCount} pages in ${filename}`);
+After saving, rescan BA Lounge with Force Fresh AI Scan. Expected: 2-3 vision scans instead of 52, scan completes in under 60 seconds instead of 10+ minutes.
+
+

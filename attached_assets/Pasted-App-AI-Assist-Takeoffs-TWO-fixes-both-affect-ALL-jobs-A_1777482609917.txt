@@ -1,0 +1,234 @@
+App: AI-Assist Takeoffs
+TWO fixes — both affect ALL jobs, ALL building types.
+Run in order shown.
+
+════════════════════════════════════════════════
+FIX 1 — Force rescan STILL not clearing cache
+         Confirmed broken on Fox Hill AND BA Lounge
+         AI Cost = $0.00 on both force rescans
+════════════════════════════════════════════════
+Previous fix attempts failed because the cache
+delete runs but the pipeline still reads from
+a different cache path.
+
+Find the EXACT cache read location:
+
+  grep -n "priorAiVision\|getCached\|cache\.get\
+  \|sheetCache\|cachedSheet\|fromCache\
+  \|bypassCache\|forceAiRescan" \
+    artifacts/api-server/src/pipeline.ts \
+    | grep -v "^Binary" | head -40
+
+This will show every place the pipeline reads
+from cache. There are likely 2-3 separate cache
+read points and only one is being bypassed.
+
+For EACH cache read location found, add the
+bypass guard:
+
+  // Pattern to add at EVERY cache read:
+  if (options?.forceAiRescan === true) {
+    console.log('[CACHE-BYPASS] Force active —
+      skipping cache read at line', __LINE__,
+      'for sheet', sheetKey);
+    // DO NOT read from cache — fall through
+    // to fresh AI extraction
+  } else {
+    const cached = await readFromCache(sheetKey);
+    if (cached) return cached;
+  }
+
+Also add to the rescan route handler — log
+the exact value received to confirm it arrives:
+
+  // In POST /api/jobs/:jobId/rescan handler:
+  console.log('[RESCAN-HANDLER] Received:', {
+    forceAiRescan: req.body?.forceAiRescan,
+    forceReprocess: req.body?.forceReprocess,
+    body: JSON.stringify(req.body)
+  });
+
+  // Then pass to pipeline:
+  await processJob(jobId, tenantId, {
+    forceAiRescan: req.body?.forceAiRescan === true,
+    // log it too:
+    _debug: 'force=' + req.body?.forceAiRescan
+  });
+
+And in the frontend, log what is sent:
+  // In job-detail.tsx rescan handler:
+  console.log('[RESCAN-FRONTEND] Sending:', {
+    forceAiRescan: forceChecked,
+    endpoint: \`/api/jobs/\${jobId}/rescan\`
+  });
+
+Run force rescan and check browser console +
+Replit console. The logs will show exactly
+where the force flag is lost.
+
+ACCEPTANCE: Force rescan must show AI Cost > $0.00
+and pipeline log "Force rescan — full re-extraction"
+
+════════════════════════════════════════════════
+FIX 2 — Markers stacking at (50000, 50000)
+         Confirmed: vision_estimated rooms all
+         defaulting to center of plan image
+         Affects ALL plans, ALL building types
+════════════════════════════════════════════════
+DB confirmed: coord_x=50000, coord_y=50000 on
+all vision_estimated_gemini signs. This is a
+centroid fallback that stacks all unlocated
+markers at dead center.
+
+PART A — Remove centroid fallback, use NULL:
+
+Search pipeline.ts for the fallback:
+  grep -n "50000\|centroid\|center.*fallback\
+  \|fallback.*coord\|default.*coord" \
+    artifacts/api-server/src/pipeline.ts \
+    | head -20
+
+Find and change:
+  // WRONG — stacks all unlocated at center:
+  coord_x = estimatedX ?? 50000;
+  coord_y = estimatedY ?? 50000;
+
+  // CORRECT — null means no marker placed:
+  coord_x = estimatedX ?? null;
+  coord_y = estimatedY ?? null;
+  coord_source = estimatedX 
+    ? 'vision_estimated_gemini' 
+    : 'unlocated';
+
+PART B — Clean up existing stacked markers:
+  UPDATE signs
+  SET
+    coord_x = NULL,
+    coord_y = NULL,
+    coord_source = 'unlocated'
+  WHERE coord_x = 50000
+  AND coord_y = 50000
+  AND (coord_source = 'vision_estimated_gemini'
+    OR coord_source = 'vision_estimated');
+
+  -- Log count:
+  SELECT COUNT(*) as cleared
+  FROM signs
+  WHERE coord_x = 50000
+  AND coord_y = 50000;
+
+PART C — Plans tab: skip null coord markers:
+
+In the FloorPlanViewer or marker rendering code:
+  const visibleMarkers = signs.filter(s =>
+    s.coord_x !== null &&
+    s.coord_y !== null
+  );
+  // Only render visibleMarkers
+
+PART D — Review tab: show unlocated indicator:
+
+For signs where coord_source = 'unlocated'
+OR coord_x IS NULL:
+  Show 📍? icon in the location/actions column
+  Tooltip: "Location unknown — place manually"
+  
+The existing pin icon (place marker) should
+still work to let estimator place it manually.
+
+PART E — Improve Gemini coordinate prompt:
+Replace current vision coordinate prompt with
+a grid-based approach for better accuracy:
+
+  """
+  Locate each room on this floor plan image.
+  The image is a 20×20 grid (col 1-20 left to
+  right, row 1-20 top to bottom).
+  
+  For rooms you can clearly see: give grid
+  position to nearest 0.5 units.
+  
+  For rooms you CANNOT find: return null.
+  Never guess — null is better than wrong.
+  
+  Rooms: {roomList}
+  
+  JSON only:
+  [{"room": "W119", "col": 14.5, "row": 8.0},
+   {"room": "W120", "col": null, "row": null}]
+  """
+
+  // Convert to 0-100,000 grid:
+  coord_x = col !== null ? (col/20)*100000 : null
+  coord_y = row !== null ? (row/20)*100000 : null
+
+════════════════════════════════════════════════
+FIX 3 — Normalize floor label casing
+         "Level 1" vs "LEVEL 1" duplication
+         Affects ALL plans, ALL building types
+════════════════════════════════════════════════
+Both cases exist in DB causing duplicate floor
+tabs and incorrect floor counting.
+
+Normalize to uppercase "LEVEL N" everywhere:
+
+  function normalizeFloor(label: string|null) {
+    if (!label) return null;
+    const t = label.trim();
+    // "Level 1", "level 1", "LEVEL 1" → "LEVEL 1"
+    const m = t.match(
+      /^(level|floor|fl|story|l)\s*[-–]?\s*(\w+)$/i
+    );
+    if (m) return \`LEVEL \${m[2].toUpperCase()}\`;
+    if (/^\d+$/.test(t)) return \`LEVEL \${t}\`;
+    return t.toUpperCase();
+  }
+
+Apply on INSERT to signs table.
+Apply on INSERT to sheet_cache.
+Apply in XLSX export floor column.
+Apply in Plans tab floor selector grouping.
+
+Fix existing data:
+  UPDATE signs SET floor_label =
+    UPPER(REGEXP_REPLACE(
+      floor_label,
+      '^(Level|Floor|FL)\s+',
+      'LEVEL ',
+      'i'
+    ))
+  WHERE floor_label IS NOT NULL
+  AND floor_label != UPPER(floor_label);
+
+════════════════════════════════════════════════
+VERIFY — ALL building types
+════════════════════════════════════════════════
+FORCE RESCAN TEST (Fox Hill OR BA Lounge):
+  Browser console: [RESCAN-FRONTEND] 
+    forceAiRescan: true
+  Server console: [RESCAN-HANDLER]
+    forceAiRescan: true
+  Server console: [CACHE-BYPASS] Force active
+    (appears once per sheet)
+  Overview: AI Cost > $0.00
+  Pipeline log: "Force rescan — full re-extraction"
+
+MARKER TEST (any job):
+  Plans tab: NO markers clustered at center
+  DB check:
+    SELECT COUNT(*) FROM signs
+    WHERE coord_x = 50000 AND coord_y = 50000;
+    → Must return 0
+
+FLOOR TEST (any job):
+  DB: SELECT DISTINCT floor_label FROM signs
+    → Only "LEVEL 1", "LEVEL 2" etc
+    → No "Level 1" (mixed case)
+  XLSX floor column populated for all rooms
+
+BA LOUNGE specific:
+  ENTRY and GATE 12 PIER — if no room number,
+  should be dismissed or assigned room numbers
+  before export
+
+All 1,461 tests pass.

@@ -1,0 +1,144 @@
+SOF 7087 — Add Missing Government Sign Types to Rules Engine
+The SOF 7087 job currently extracts 84 signs but the signage schedule (sheet I-601) shows 123 signs. The gap of ~39 signs comes from sign types the rules engine doesn't assign yet. This prompt adds them.
+Context — What SOF 7087 has that's missing
+From the I-601 signage schedule, the missing types are:
+
+BB3 — Stairwell sign (1 per stair per level, at the landing)
+SS1A — Stair Identification sign (1 per stair per level, at the landing)
+AA1 — Building Directory (1 total, in the main lobby/corridor)
+AA2 — Floor Directory Level 1 (1 per stair per level on Level 1)
+AA3 — Floor Directory Level 2 (1 per stair per level on Level 2)
+BB4 — Exit Door Tactile sign (at exit doors)
+BB7A — Men's Restroom (at men's restroom doors)
+BB7B — Women's Restroom (at women's restroom doors)
+DD1 — Regulatory / No Smoking sign (at exterior entry vestibules)
+LED — Programmable LED sign (at auditorium)
+BB2D — Max Occupancy sign (at auditorium)
+BB2E — Emergency Egress sign (at auditorium)
+BB5 — Exterior Building Entry sign (at main exterior entry)
+
+
+Step 1 — Find the rules engine
+find artifacts/api-server/src -name "*.ts" | xargs grep -l "rules\|signType\|sign_type\|Room ID\|assignSign" 2>/dev/null | grep -v node_modules | grep -v dist | grep -v test
+
+Show me the file that assigns sign types to rooms (likely pipeline.ts or a rules.ts / signRules.ts file).
+
+
+Step 2 — Show current sign type assignment logic
+Find where sign types like "Room ID", "Exit", "Restroom", "Stair(Corridor)", "Stair(Landing)" are assigned to rooms. Show the relevant 60 lines.
+
+
+Step 3 — Add missing sign type rules
+Based on the rules engine logic you find, add these assignments:
+Stair signs (BB3 + SS1A) — currently 0, expected ~9 each
+Every room with room_name matching STAIR should get:
+
+1 × Stair(Landing) — the SS1A stair identification sign
+1 × Stair(Corridor) — the BB3 stairwell sign
+
+// Add to stair room detection:
+
+const isStair = /\bSTAIR\b/i.test(roomName);
+
+if (isStair) {
+
+  signs.push({ signType: "Stair(Landing)", quantity: 1 });
+
+  signs.push({ signType: "Stair(Corridor)", quantity: 1 });
+
+}
+Restroom signs (BB7A + BB7B) — currently 1, expected ~4
+Rooms with MEN'S or WOMEN'S in the name:
+
+const isMensRestroom = /\bMEN'?S\b/i.test(roomName) && !/WOMEN/i.test(roomName);
+
+const isWomensRestroom = /\bWOMEN'?S\b/i.test(roomName);
+
+if (isMensRestroom) signs.push({ signType: "Restroom(Men)", quantity: 1 });
+
+if (isWomensRestroom) signs.push({ signType: "Restroom(Women)", quantity: 1 });
+Directory signs (AA1, AA2, AA3) — currently 0, expected ~6
+AA1 = Building Directory — 1 per building, placed at the main corridor/lobby:
+
+const isMainCorridor = /\bCORRIDOR\b/i.test(roomName) && roomNumber === "1100";
+
+if (isMainCorridor) signs.push({ signType: "Directory(Building)", quantity: 1 });
+
+AA2 = Floor Directory Level 1 — 1 per stair on Level 1 (rooms 1200, 1213, 1176):
+
+const isLevel1Stair = isStair && /^1\d{3}/.test(roomNumber);
+
+if (isLevel1Stair) signs.push({ signType: "Directory(Floor-L1)", quantity: 1 });
+
+AA3 = Floor Directory Level 2 — 1 per stair on Level 2 (rooms 2100, 2116, 2129):
+
+const isLevel2Stair = isStair && /^2\d{3}/.test(roomNumber);
+
+if (isLevel2Stair) signs.push({ signType: "Directory(Floor-L2)", quantity: 1 });
+Exit Door Tactile (BB4) — currently 0, expected ~5
+At lobby exits and stair exits:
+
+const isLobby = /\bLOBBY\b/i.test(roomName);
+
+const isVestibule = /\bVEST\b/i.test(roomName);
+
+if (isLobby || isVestibule) signs.push({ signType: "Exit(Tactile)", quantity: 1 });
+
+// Also add at stair rooms (each stair has an exit door)
+
+if (isStair) signs.push({ signType: "Exit(Tactile)", quantity: 1 });
+Assembly room signs (BB2D + BB2E + LED) — at AUDITORIUM only
+const isAuditorium = /\bAUDITORIUM\b/i.test(roomName);
+
+if (isAuditorium) {
+
+  signs.push({ signType: "Occupancy(MaxCapacity)", quantity: 2 }); // BB2D ×2
+
+  signs.push({ signType: "Egress(Emergency)", quantity: 2 });      // BB2E ×2
+
+  signs.push({ signType: "LED(Programmable)", quantity: 2 });       // LED ×2
+
+}
+Regulatory / No Smoking (DD1) — at vestibule/exterior
+if (isVestibule) signs.push({ signType: "Regulatory(NoSmoking)", quantity: 1 });
+
+// Also at main exterior corridor entry
+
+if (isMainCorridor) signs.push({ signType: "Regulatory(NoSmoking)", quantity: 2 });
+Exterior Building Entry (BB5) — 1 total at main corridor
+if (isMainCorridor) signs.push({ signType: "Entry(Building)", quantity: 1 });
+
+
+Step 4 — Match exact sign type names used in DB
+Before adding the new rules, check what sign type strings are currently used:
+
+SELECT DISTINCT sign_type FROM signs 
+
+WHERE job_id = (SELECT id FROM jobs WHERE name ILIKE '%test 2%' OR name ILIKE '%SOF%' 
+
+ORDER BY updated_at DESC LIMIT 1);
+
+Use the same naming convention (e.g. if existing types use "Stair(Corridor)" keep that exact format for new types).
+
+
+Step 5 — Build, test, rescan
+cd artifacts/api-server && pnpm run build
+
+Run all tests:
+
+pnpm --filter @workspace/api-server test
+
+Then rescan the SOF 7087 job and show:
+
+SELECT sign_type, COUNT(*) as count
+
+FROM signs
+
+WHERE job_id = (SELECT id FROM jobs WHERE name ILIKE '%test 2%' OR name ILIKE '%SOF%'
+
+ORDER BY updated_at DESC LIMIT 1)
+
+GROUP BY sign_type ORDER BY count DESC;
+
+Expected total: ~115-123 signs
+

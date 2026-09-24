@@ -1,0 +1,109 @@
+App: AI-Assist Takeoffs
+TWO fixes needed before speed optimization.
+Applies to ALL building types, ALL jobs.
+
+════════════════════════════════════════════════
+FIX 1 — Pipeline must ALWAYS run room extraction
+         regardless of what other files exist
+════════════════════════════════════════════════
+Current behavior: when a sign schedule file is
+uploaded, the pipeline switches to schedule-import
+mode and skips room extraction entirely.
+
+This is wrong. Both must always run:
+  1. Room extraction from floor plans (always)
+  2. Schedule import (if schedule file exists)
+     → used to supplement, not replace rooms
+
+Fix in pipeline.ts — remove the mode switch:
+
+  // WRONG — current behavior:
+  if (hasSignScheduleFile) {
+    return runScheduleImportMode(job);
+    // ← skips room extraction entirely
+  }
+
+  // CORRECT — always run both:
+  // Step 1: Always extract rooms from floor plans
+  const rooms = await extractRoomsFromPlans(job);
+  
+  // Step 2: If schedule file exists, use it to
+  // supplement/validate room extraction
+  if (hasSignScheduleFile) {
+    const scheduleItems = await importSchedule(job);
+    // Merge: schedule items take priority for
+    // sign types/sizes, rooms provide coordinates
+    await mergeScheduleWithRooms(
+      rooms, scheduleItems, jobId
+    );
+  } else {
+    await saveRooms(jobId, rooms);
+  }
+
+Result: room extraction ALWAYS runs.
+Schedule file supplements it, never replaces it.
+
+════════════════════════════════════════════════
+FIX 2 — Speed optimization (safe changes only)
+         Do NOT change Step 6 model
+════════════════════════════════════════════════
+Only change models for non-accuracy-critical steps.
+Step 6 room extraction MUST stay on Gemini 2.5 Pro.
+
+Change these steps to Gemini 2.0 Flash:
+
+  const STEP_MODELS = {
+    drawingIndex:      'gemini-2.0-flash',  // Step 2
+    sheetClassify:     'gemini-2.0-flash',  // Step 4b
+    plaqueSchedule:    'gemini-2.0-flash',  // Step 4
+    signDictionary:    'gemini-2.0-flash',  // Step B
+    specialtySigns:    'gemini-2.0-flash',  // Step 9.2
+    roomExtraction:    'gemini-2.5-pro',    // Step 6 ← KEEP
+    buildingDetect:    'gemini-2.0-flash',  // Auto-detect
+  };
+
+Add Step 2 timeout (biggest single time saving):
+  const INDEX_TIMEOUT_MS = 8000;
+  const index = await Promise.race([
+    parseDrawingIndex(pdf),
+    new Promise((_,reject) => setTimeout(
+      () => reject(new Error('TIMEOUT')),
+      INDEX_TIMEOUT_MS
+    ))
+  ]).catch(() => null);  // timeout → skip to Pass 2
+
+Parallelize Step 6 floor plan sheets:
+  // Run all floor plan sheets simultaneously
+  // instead of one at a time
+  const roomResults = await Promise.all(
+    floorPlanSheets.map(sheet => 
+      extractRoomsFromSheet(sheet, job)
+    )
+  );
+  const allRooms = roomResults.flat();
+
+This alone saves: 4 sheets × 30s = 90s saved
+(runs in 30s instead of 120s for Fox Hill)
+
+════════════════════════════════════════════════
+EXPECTED RESULTS after both fixes
+════════════════════════════════════════════════
+Fox Hill with sign schedule file uploaded:
+  Takeoff tab: 100-120 room signs (room extraction)
+  Specialty tab: 21+ specialty items (from schedule)
+  BOTH present in same job
+
+Fox Hill without sign schedule file:
+  Takeoff tab: 100-120 room signs
+  Specialty tab: items from detail sheets
+
+Scan time:
+  Current:  10-15 minutes
+  Target:   2-4 minutes
+
+Cost per scan:
+  Current:  ~$0.15-0.25 (all 2.5 Pro)
+  Target:   ~$0.08-0.12 (Flash for simple steps,
+             2.5 Pro only for room extraction)
+
+All 1,461 tests pass.

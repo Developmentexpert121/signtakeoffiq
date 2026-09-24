@@ -1,0 +1,44 @@
+Improve the vision prompt to extract the architectural floor level from the title block explicitly.
+Find buildRoomExtractionPrompt() in pipeline.ts and add an explicit instruction to extract the floor level from the drawing title block:
+Find the section where Claude is asked to extract room data and add this instruction:
+tsCRITICAL: Identify the architectural floor level from the drawing title block, legend, or sheet notes.
+Look for text like "BASEMENT PLAN", "LEVEL 1 FLOOR PLAN", "GROUND FLOOR", "2ND FLOOR PLAN" etc.
+Return the canonical floor level in the "floorLevel" field using these exact values:
+- "Basement" for basement/lower level/sub-grade floors
+- "Level 1" for ground/first/grade level floors  
+- "Level 2" for second floor
+- "Level 3" for third floor
+- "Mezzanine" for mezzanine levels
+- "Roof" for roof level
+Do NOT use page numbers or sheet IDs as the floor level.
+If you cannot determine the floor level from the drawing, return null for floorLevel.
+Update the JSON response schema Claude is asked to return — add floorLevel as a top-level field alongside the rooms array:
+ts{
+  "floorLevel": "Basement" | "Level 1" | "Level 2" | "Level 3" | "Mezzanine" | "Roof" | null,
+  "isPlanView": true | false,
+  "rooms": [...]
+}
+In pipeline.ts Step 6, after parsing Claude's response, extract floorLevel and use it to override all rooms extracted from that sheet:
+tsconst extractedFloorLevel = parsed.floorLevel ?? null;
+
+if (extractedFloorLevel) {
+  // Override level for all rooms from this sheet with Claude's detected floor level
+  for (const room of sheetRooms) {
+    room.level = extractedFloorLevel;
+  }
+  logger.log(`[pipeline] Step 6: ${sheet.sheetId} — Claude detected floor level: ${extractedFloorLevel}`);
+} else {
+  // Fall back to parseLevelFromContext
+  const fallbackLevel = parseLevelFromContext(sheet.level ?? null, sheet.sheetTitle ?? null);
+  if (fallbackLevel) {
+    for (const room of sheetRooms) {
+      room.level = fallbackLevel;
+    }
+  }
+}
+After saving, rescan Cambridge Moses with Force Fresh AI Scan. Expected:
+
+All rooms correctly labeled Basement, Level 1, Level 2
+No more LEVEL 8/9/10 labels
+Sign count stays at 43+ (level fix doesn't change count)
+

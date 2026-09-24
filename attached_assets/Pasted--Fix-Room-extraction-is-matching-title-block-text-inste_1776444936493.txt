@@ -1,0 +1,163 @@
+# Fix: Room extraction is matching title block text instead of real rooms
+
+## What's broken
+
+In `artifacts/api-server/src/lib/pipeline.ts`, the `extractRoomsFromWords` function
+has two bugs that cause it to extract title block metadata instead of real rooms.
+
+When processing the NOVO Riverside plan, it returned 5 fake "rooms":
+- 292 "CONCORD, & COMMONS BAKER MA AVE." — the project address
+- 292 "*2 - '1 :EMAN GNIWARD INTERIOR" — reversed title block text  
+- 294 "CONCORD, & COMMONS BAKER MA AVE." — same address, second building
+- 2026 "A1-250 10 GNIWARD DRAWING DRAWING PROJECT" — reversed sheet title
+- 2026 "COPYRIGHT (C) CUBE 3 STUDIO LLC" — architect copyright notice
+
+The expected result is ~200+ rooms per building across 7 levels each, like:
+BP1-101 BIKE STORAGE, A1-103 LEASING SUPPORT, 103 UNIT B3, 204 UNIT A3, etc.
+
+## Bug 1: ROOM_NUMBER_RE regex is wrong (line ~305)
+
+The current regex:
+```typescript
+export const ROOM_NUMBER_RE = /^(\d{3,4}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+```
+
+Problems:
+- Matches "292", "294" (building addresses) — 3-digit numbers
+- Matches "2026" (the year) — 4-digit number  
+- Does NOT match "BP1-101", "A1-103", "SP1-201", "EP1-102" (service rooms with hyphens)
+
+Replace the ROOM_NUMBER_RE export (line ~305) with:
+```typescript
+// Matches residential units (103, 204A), service rooms (BP1-101, A1-103, SP1-201),
+// and simple alpha-prefix rooms (A101). Does NOT match years or building addresses.
+export const ROOM_NUMBER_RE = /^(\d{3}[A-Z]?|[A-Z]{1,2}P?\d?-\d{3}[A-Z]?|[A-Z]\d{3}[A-Z]?)$/;
+
+// Used to reject years (2026, 2024) that match the digit pattern above
+const YEAR_RE = /^(19|20)\d{2}$/;
+```
+
+## Bug 2: No title block exclusion (inside extractRoomsFromWords)
+
+The function has no check for whether a word is in the title block region.
+On architectural plans, the rightmost ~20% and bottom ~10% of every page
+contains the title block (architect name, address, sheet number, copyright).
+All text from that region must be excluded.
+
+## The complete fix
+
+Replace the entire `extractRoomsFromWords` function (from `export function extractRoomsFromWords` 
+through its closing `}`) with this corrected version:
+
+```typescript
+export function extractRoomsFromWords(
+  words: SidecarWord[],
+  pageWidth: number,
+  pageHeight: number
+): ExtractedRoom[] {
+  const rooms: ExtractedRoom[] = [];
+  const usedIndices = new Set<number>();
+
+  // Title block exclusion: rightmost 22% and bottom 12% of the page
+  // contain the title block and must be excluded entirely.
+  const titleBlockXThreshold = pageWidth * 0.78;
+  const titleBlockYThreshold = pageHeight * 0.88;
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+
+    // Must match the room number pattern
+    if (!ROOM_NUMBER_RE.test(word.text)) continue;
+
+    // Reject years (2026, 2024, 2023, etc.)
+    if (YEAR_RE.test(word.text)) continue;
+
+    if (usedIndices.has(i)) continue;
+
+    const rx = word.x0;
+    const ry = word.y0;
+
+    // Skip words in the title block region
+    if (rx > titleBlockXThreshold || ry > titleBlockYThreshold) continue;
+
+    const roomNumber = word.text;
+
+    // Collect nearby words that form the room name label
+    const nearby: Array<{ text: string; x: number }> = [];
+    for (let j = 0; j < words.length; j++) {
+      if (j === i || usedIndices.has(j)) continue;
+      const w2 = words[j];
+      const dy = Math.abs(w2.y0 - ry);
+      const dx = Math.abs(w2.x0 - rx);
+
+      if (dy < 35 && dx < 320 && !ROOM_NUMBER_RE.test(w2.text)) {
+        const upper = w2.text.toUpperCase();
+        if (
+          !IGNORE_WORDS.has(upper) &&
+          !YEAR_RE.test(w2.text) &&
+          w2.text.length <= 30 &&
+          !/^\d+['"\-\/]/.test(w2.text) // skip dimension annotations like 8'-0"
+        ) {
+          nearby.push({ text: upper, x: w2.x0 });
+        }
+      }
+    }
+
+    // Sort by x position (left to right) and take up to 5 words
+    const sortedNearby = nearby
+      .sort((a, b) => a.x - b.x)
+      .map((n) => n.text);
+
+    const rawName = sortedNearby.slice(0, 5).join(" ").trim();
+
+    // Reject if name looks like a street address or copyright notice
+    const isAddressLike =
+      rawName.includes(",") ||
+      /\b(AVE|BLVD|ST\b|RD\b|DR\b|MA\b|NY\b|CA\b|COPYRIGHT|DRAWING|PROJECT)\b/.test(rawName);
+    if (isAddressLike) continue;
+
+    const roomName = rawName ? expandSynonyms(rawName) : `ROOM ${roomNumber}`;
+
+    // Normalize coordinates to 0-1000 range
+    const normX = Math.round((rx / pageWidth) * 1000);
+    const normY = Math.round((ry / pageHeight) * 1000);
+
+    usedIndices.add(i);
+    rooms.push({ roomNumber, roomName, x: normX, y: normY, pageWidth, pageHeight });
+  }
+
+  return rooms;
+}
+```
+
+## After making the fix
+
+1. Rebuild the API server:
+```bash
+cd artifacts/api-server && pnpm run build
+```
+
+2. The "Start All Services" workflow will pick up the new build automatically,
+   or restart it manually.
+
+3. In the app, go to the "Novo Riverside" job and click **Rescan** to re-run
+   the pipeline with the fixed room extraction.
+
+4. Expected result after the fix:
+   - ~200+ rooms found across 14 levels (7 levels per building)
+   - Room numbers like BP1-101, A1-103, 103, 204, SP1-201, EP1-102
+   - Room names like BIKE STORAGE, LEASING SUPPORT, UNIT B3, MECH, ELECTRICAL
+   - Total signs ~412 (198 for 292 Baker + 214 for 294 Baker)
+
+## Validation
+
+After rescanning, check the Rooms tab for the job. If the fix is working you
+should see rooms with names like:
+- BP1-101 BIKE STORAGE
+- A1-103 LEASING SUPPORT  
+- 103 UNIT B3
+- 204 UNIT A3
+- SP1-201 STAIR 1
+- EP1-101 ELEV 1
+
+NOT addresses, copyright notices, or reversed text.

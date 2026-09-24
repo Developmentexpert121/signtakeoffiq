@@ -1,0 +1,2765 @@
+Skip to content
+Shishir-Mehta
+signtakeoffiq
+Repository navigation
+Code
+Issues
+Pull requests
+1
+ (1)
+Actions
+Projects
+Wiki
+Security and quality
+Insights
+Settings
+Comparing changes
+Choose two branches to see what’s changed or to start a new pull request. If you need to, you can also  or learn more about diff comparisons.
+...
+ Can’t automatically merge. Don’t worry, you can still create the pull request.
+ Replit branch #114
+No description available
+ 5 commits
+ 59 files changed
+ 2 contributors
+Commits on Jun 3, 2026
+Add session secret to production environment to enable user logins
+
+@replit-agent
+replit-agent committed 5 days ago
+Fix prod login: clean up DO boot script (remove failing/dangerous sch… 
+
+@replit-agent
+replit-agent committed 5 days ago
+Commits on Jun 8, 2026
+Add an image to the project assets 
+
+@replit-agent
+replit-agent committed 33 minutes ago
+Merge remote replit-branch
+
+nitinexpert121 committed 8 minutes ago
+Update production startup script to prevent schema loss 
+
+@replit-agent
+replit-agent committed 1 minute ago
+ Showing  with 22,672 additions and 22,297 deletions.
+  2 changes: 1 addition & 1 deletion2  
+.agents/memory/MEMORY.md
+Original file line number	Diff line number	Diff line change
+@@ -3,4 +3,4 @@
+- [Web typecheck gap](web-typecheck-gap.md) — DO build runs root typecheck (incl @workspace/web) + builds every package; vite configs must not throw on missing PORT/BASE_PATH at build time; orval query opts require queryKey (pass getXQueryKey).
+- [DO Postgres SSL](do-postgres-ssl.md) — pg-connection-string@2.12 treats sslmode=require as verify-full; rewrite URL (drop sslmode) + explicit ssl:{rejectUnauthorized:false} for require/prefer/allow, since pg's parse overrides explicit ssl.
+- [DB URL selection](do-database-url-selection.md) — both DATABASE_URL & DO_DATABASE_URL can be set; pick by NODE_ENV (prod→DO_DATABASE_URL, dev/test→DATABASE_URL). Preferring DO unconditionally points dev/tests at prod.
+- [DO deploy entrypoint + schema](do-deploy-entrypoint-and-schema.md) — DO runs ./start-prod.sh (must export NODE_ENV=production); restored on-boot bootstrap (drizzle-kit push + idempotent dist/seed.mjs, gated by SKIP_DB_BOOTSTRAP). Push safe on FRESH DB only; never against legacy defaultdb (drops legacy cols).
+- [DO deploy entrypoint + schema](do-deploy-entrypoint-and-schema.md) — DO runs ./start-prod.sh (must export NODE_ENV=production); on-boot bootstrap = idempotent dist/seed.mjs ONLY, no drizzle-kit push (it'd drop legacy cols). Prod DB is long-lived defaultdb; sync schema additively by hand. Workspace DO_DATABASE_URL == prod defaultdb (read it from bash runtime, NOT code_execution sandbox which hides secret values).
+  23 changes: 13 additions & 10 deletions23  
+.agents/memory/do-deploy-entrypoint-and-schema.md
+Original file line number	Diff line number	Diff line change
+@@ -17,18 +17,21 @@ readiness probe on `$PORT` fails, and App Platform auto-rolls-back the deploy.
+  or failing sidecar must not delay Node or the TCP readiness probe on `$PORT`),
+  then `exec node artifacts/api-server/dist/index.mjs` in the foreground.
+
+**Deploy-time DB bootstrap (restored).** `start-prod.sh` again runs, on every boot
+(gated by `SKIP_DB_BOOTSTRAP=1`, each step `|| WARN` non-fatal): `drizzle-kit push`
+then the idempotent seeder `node artifacts/api-server/dist/seed.mjs`. The seeder is
+**Deploy-time DB bootstrap.** `start-prod.sh` runs, on every boot (gated by
+`SKIP_DB_BOOTSTRAP=1`, `|| WARN` non-fatal), ONLY the idempotent seeder
+`node artifacts/api-server/dist/seed.mjs` — it does NOT push schema. The seeder is
+the api-server esbuild entry (`src/seed.ts` → `dist/seed.mjs`): it calls
+`runSeed()` from `@workspace/db` (default tenant + admin + building-type
+profiles/lexicons + pricing + retention) then ensures a super-admin login. This
+bootstrap had been wiped by a Replit rollback ("Restored to …"), which is what left
+a fresh prod DB unmigrated/unseeded → login 500; recovered the files from git.
+**Caveat:** `drizzle-kit push` on boot is safe only against a FRESH DB (creates
+tables, drops nothing). It must NEVER run against the legacy `defaultdb`, which
+carries legacy empty columns push would DROP (see next section) — set
+`SKIP_DB_BOOTSTRAP=1` if ever pointing this entrypoint at a drifted DB.
+profiles/lexicons + pricing + retention) then ensures a super-admin login.
+**Why no push on boot:** `lib/db/drizzle.config.ts` reads raw `process.env.DATABASE_URL`
+(NOT the NODE_ENV-aware resolver in index.ts), so on DO it connected to the
+placeholder host `base` and `drizzle-kit push` failed every boot with
+`getaddrinfo ENOTFOUND base`. "Fixing" the config to reach the real DB is worse,
+not better: push would then DROP the prod DB's legacy columns (see next section) —
+the prod DB is the long-lived `defaultdb`, never fresh. So push was removed from
+the boot path entirely; schema is synced by hand (additive). Leaving drizzle.config
+pointed at the broken `base` host is an accidental safety net against a careless
+manual `drizzle-kit push` in a prod shell.
+
+# Python pdf-sidecar deps on DO
+
+ 101 changes: 51 additions & 50 deletions101  
+.gitignore
+Original file line number	Diff line number	Diff line change
+@@ -1,50 +1,51 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/
+.venv
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/
+.venv
+config.bat
+ 50 changes: 27 additions & 23 deletions50  
+artifacts/api-server/eslint.config.js
+Some generated files are not rendered by default. Learn more about how customized files appear on GitHub.
+
+ 60 changes: 32 additions & 28 deletions60  
+artifacts/web/eslint.config.js
+Some generated files are not rendered by default. Learn more about how customized files appear on GitHub.
+
+ 205 changes: 205 additions & 0 deletions205  
+...d_assets/Pasted-Jun-03-12-57-00-signtakeoffiq-34m-34m-30m-44m-git-repo-_1780491648185.txt
+Large diffs are not rendered by default.
+
+ 134 changes: 134 additions & 0 deletions134  
+...d_assets/Pasted-Jun-03-13-00-12-start-prod-sh-Pushing-Drizzle-schema-Ju_1780491744991.txt
+Original file line number	Diff line number	Diff line change
+@@ -0,0 +1,134 @@
+Jun 03 13:00:12  [start-prod.sh] Pushing Drizzle schema…
+Jun 03 13:00:13  
+Jun 03 13:00:13  > @workspace/db@0.0.0 push /workspace/lib/db
+Jun 03 13:00:13  > drizzle-kit push --config ./drizzle.config.ts
+Jun 03 13:00:13  
+Jun 03 13:00:14  Reading config file '/workspace/lib/db/drizzle.config.ts'
+Jun 03 13:00:15  Using 'pg' driver for database querying
+Jun 03 13:00:17  [⣷] Pulling schema from database...
+Jun 03 13:00:17  Error: getaddrinfo ENOTFOUND base
+Jun 03 13:00:17      at /workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+Jun 03 13:00:17      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:17      at async Object.query (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+Jun 03 13:00:17      at async fromDatabase2 (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:19276:25) {
+Jun 03 13:00:17    errno: -3008,
+Jun 03 13:00:17    code: 'ENOTFOUND',
+Jun 03 13:00:17    syscall: 'getaddrinfo',
+Jun 03 13:00:17    hostname: 'base'
+Jun 03 13:00:17  }
+Jun 03 13:00:17  [start-prod.sh] Running seeder…
+Jun 03 13:00:17  [seed] Seeding default tenant "Default Workspace" (default)…
+Jun 03 13:00:18  [seed] FAILED: _DrizzleQueryError: Failed query: insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing
+Jun 03 13:00:18  params: default,Default Workspace,default,starter,{}
+Jun 03 13:00:18      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 13:00:18      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18      at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18    query: 'insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing',
+Jun 03 13:00:18    params: [ 'default', 'Default Workspace', 'default', 'starter', '{}' ],
+Jun 03 13:00:18    cause: error: column "signsuiteiq_company_id" of relation "tenants" does not exist
+Jun 03 13:00:18        at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)
+Jun 03 13:00:18        at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:00:18        at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:149:14)
+Jun 03 13:00:18        at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)
+Jun 03 13:00:18        at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:00:18      length: 142,
+Jun 03 13:00:18      severity: 'ERROR',
+Jun 03 13:00:18      code: '42703',
+Jun 03 13:00:18      detail: undefined,
+Jun 03 13:00:18      hint: undefined,
+Jun 03 13:00:18      position: '54',
+Jun 03 13:00:18      internalPosition: undefined,
+Jun 03 13:00:18      internalQuery: undefined,
+Jun 03 13:00:18      where: undefined,
+Jun 03 13:00:18      schema: undefined,
+Jun 03 13:00:18      table: undefined,
+Jun 03 13:00:18      column: undefined,
+Jun 03 13:00:18      dataType: undefined,
+Jun 03 13:00:18      constraint: undefined,
+Jun 03 13:00:18      file: 'parse_target.c',
+Jun 03 13:00:18      line: '1068',
+Jun 03 13:00:18      routine: 'checkInsertTargets'
+Jun 03 13:00:18    }
+Jun 03 13:00:18  }
+Jun 03 13:00:18  [start-prod.sh] WARN: seed failed (continuing).
+Jun 03 13:00:18  [start-prod.sh] pdf-sidecar started (PID: 79) on 8008
+Jun 03 13:00:25  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 13:00:25  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 13:00:25  {"level":30,"time":1780491625305,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","port":8080,"msg":"Server listening"}
+Jun 03 13:00:25  {"level":30,"time":1780491625306,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 13:00:25  {"level":30,"time":1780491625307,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 13:00:25  {"level":30,"time":1780491625513,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 13:00:25  {"level":30,"time":1780491625542,"pid":1,"hostname":"signtakeoffiq-667944d4db-5sz74","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 13:00:25  INFO:     Started server process [79]
+Jun 03 13:00:25  INFO:     Waiting for application startup.
+Jun 03 13:00:25  INFO:     Application startup complete.
+Jun 03 13:00:25  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+Jun 03 13:01:19  [start-prod.sh] Pushing Drizzle schema…
+Jun 03 13:01:20  
+Jun 03 13:01:20  > @workspace/db@0.0.0 push /workspace/lib/db
+Jun 03 13:01:20  > drizzle-kit push --config ./drizzle.config.ts
+Jun 03 13:01:20  
+Jun 03 13:01:21  Reading config file '/workspace/lib/db/drizzle.config.ts'
+Jun 03 13:01:22  Using 'pg' driver for database querying
+Jun 03 13:01:24  [⣷] Pulling schema from database...
+Jun 03 13:01:24  Error: getaddrinfo ENOTFOUND base
+Jun 03 13:01:24      at /workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+Jun 03 13:01:24      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:24      at async Object.query (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:80623:26)
+Jun 03 13:01:24      at async fromDatabase2 (/workspace/node_modules/.pnpm/drizzle-kit@0.31.9/node_modules/drizzle-kit/bin.cjs:19276:25) {
+Jun 03 13:01:24    errno: -3008,
+Jun 03 13:01:24    code: 'ENOTFOUND',
+Jun 03 13:01:24    syscall: 'getaddrinfo',
+Jun 03 13:01:24    hostname: 'base'
+Jun 03 13:01:24  }
+Jun 03 13:01:24  [start-prod.sh] Running seeder…
+Jun 03 13:01:24  [seed] Seeding default tenant "Default Workspace" (default)…
+Jun 03 13:01:25  [seed] FAILED: _DrizzleQueryError: Failed query: insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing
+Jun 03 13:01:25  params: default,Default Workspace,default,starter,{}
+Jun 03 13:01:25      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 13:01:25      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:25      at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:01:25    query: 'insert into "tenants" ("id", "name", "slug", "plan", "signsuiteiq_company_id", "email", "phone", "website", "settings", "created_at", "updated_at", "last_active_at") values ($1, $2, $3, $4, default, default, default, default, $5, default, default, default) on conflict ("id") do nothing',
+Jun 03 13:01:25    params: [ 'default', 'Default Workspace', 'default', 'starter', '{}' ],
+Jun 03 13:01:25    cause: error: column "signsuiteiq_company_id" of relation "tenants" does not exist
+Jun 03 13:01:25        at <anonymous> (/workspace/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11)
+Jun 03 13:01:25        at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 13:01:25        at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:149:14)
+Jun 03 13:01:25        at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)
+Jun 03 13:01:25        at async runSeed (/workspace/lib/db/src/seed.ts:182:3) {
+Jun 03 13:01:25      length: 142,
+Jun 03 13:01:25      severity: 'ERROR',
+Jun 03 13:01:25      code: '42703',
+Jun 03 13:01:25      detail: undefined,
+Jun 03 13:01:25      hint: undefined,
+Jun 03 13:01:25      position: '54',
+Jun 03 13:01:25      internalPosition: undefined,
+Jun 03 13:01:25      internalQuery: undefined,
+Jun 03 13:01:25      where: undefined,
+Jun 03 13:01:25      schema: undefined,
+Jun 03 13:01:25      table: undefined,
+Jun 03 13:01:25      column: undefined,
+Jun 03 13:01:25      dataType: undefined,
+Jun 03 13:01:25      constraint: undefined,
+Jun 03 13:01:25      file: 'parse_target.c',
+Jun 03 13:01:25      line: '1068',
+Jun 03 13:01:25      routine: 'checkInsertTargets'
+Jun 03 13:01:25    }
+Jun 03 13:01:25  }
+Jun 03 13:01:25  [start-prod.sh] WARN: seed failed (continuing).
+Jun 03 13:01:25  [start-prod.sh] pdf-sidecar started (PID: 79) on 8008
+Jun 03 13:01:31  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 13:01:31  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 13:01:31  {"level":30,"time":1780491691683,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","port":8080,"msg":"Server listening"}
+Jun 03 13:01:31  {"level":30,"time":1780491691686,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 13:01:31  {"level":30,"time":1780491691686,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 13:01:31  {"level":30,"time":1780491691809,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 13:01:31  {"level":30,"time":1780491691829,"pid":1,"hostname":"signtakeoffiq-667944d4db-wsjc7","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 13:01:32  INFO:     Started server process [79]
+Jun 03 13:01:32  INFO:     Waiting for application startup.
+Jun 03 13:01:32  INFO:     Application startup complete.
+Jun 03 13:01:32  INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+ Binary file addedBIN +63 KB 
+attached_assets/image_1780655232575.png
+Loading
+ Binary file addedBIN +77.6 KB 
+attached_assets/image_1780898511495.png
+Loading
+ 50 changes: 27 additions & 23 deletions50  
+lib/api-client-react/eslint.config.js
+ 784 changes: 392 additions & 392 deletions784  
+lib/api-client-react/src/custom-fetch.ts
+Large diffs are not rendered by default.
+
+ 1,466 changes: 733 additions & 733 deletions1,466  
+lib/api-client-react/src/generated/api.schemas.ts
+Large diffs are not rendered by default.
+
+ 9,980 changes: 4,990 additions & 4,990 deletions9,980  
+lib/api-client-react/src/generated/api.ts
+Large diffs are not rendered by default.
+
+ 40 changes: 20 additions & 20 deletions40  
+lib/api-client-react/src/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,20 +1,20 @@
+export * from "./generated/api";
+export * from "./generated/api.schemas";
+export {
+  setBaseUrl,
+  setAuthTokenGetter,
+  setOnGuestUnauthorized,
+  customFetch,
+  ApiError,
+} from "./custom-fetch";
+export type { AuthTokenGetter } from "./custom-fetch";
+export { useDismissRoomWarnings } from "./hooks/useDismissRoomWarnings";
+export type {
+  DismissRoomWarningsBody,
+  DismissRoomWarnings200,
+} from "./hooks/useDismissRoomWarnings";
+export {
+  useInvalidateSnapshotsCache,
+  invalidateSnapshotsCache,
+} from "./hooks/useInvalidateSnapshotsCache";
+export type { InvalidateSnapshotsCacheResponse } from "./hooks/useInvalidateSnapshotsCache";
+export * from "./generated/api";
+export * from "./generated/api.schemas";
+export {
+  setBaseUrl,
+  setAuthTokenGetter,
+  setOnGuestUnauthorized,
+  customFetch,
+  ApiError,
+} from "./custom-fetch";
+export type { AuthTokenGetter } from "./custom-fetch";
+export { useDismissRoomWarnings } from "./hooks/useDismissRoomWarnings";
+export type {
+  DismissRoomWarningsBody,
+  DismissRoomWarnings200,
+} from "./hooks/useDismissRoomWarnings";
+export {
+  useInvalidateSnapshotsCache,
+  invalidateSnapshotsCache,
+} from "./hooks/useInvalidateSnapshotsCache";
+export type { InvalidateSnapshotsCacheResponse } from "./hooks/useInvalidateSnapshotsCache";
+ 38 changes: 21 additions & 17 deletions38  
+lib/api-spec/eslint.config.js
+ 4,826 changes: 2,413 additions & 2,413 deletions4,826  
+lib/api-spec/openapi.yaml
+Large diffs are not rendered by default.
+
+ 144 changes: 72 additions & 72 deletions144  
+lib/api-spec/orval.config.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,72 +1,72 @@
+import { defineConfig, InputTransformerFn } from "orval";
+import path from "path";
+
+const root = path.resolve(__dirname, "..", "..");
+const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
+const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");
+
+// Our exports make assumptions about the title of the API being "Api" (i.e. generated output is `api.ts`).
+const titleTransformer: InputTransformerFn = (config) => {
+  config.info ??= {};
+  config.info.title = "Api";
+
+  return config;
+};
+
+export default defineConfig({
+  "api-client-react": {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiClientReactSrc,
+      target: "generated",
+      client: "react-query",
+      mode: "split",
+      baseUrl: "/api",
+      clean: true,
+      prettier: true,
+      override: {
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
+        mutator: {
+          path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
+          name: "customFetch",
+        },
+      },
+    },
+  },
+  zod: {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiZodSrc,
+      client: "zod",
+      target: "generated",
+      schemas: { path: "generated/types", type: "typescript" },
+      mode: "split",
+      clean: true,
+      prettier: true,
+      override: {
+        zod: {
+          coerce: {
+            query: ['boolean', 'number', 'string'],
+            param: ['boolean', 'number', 'string'],
+            body: ['bigint', 'date'],
+            response: ['bigint', 'date'],
+          },
+        },
+        useDates: true,
+        useBigInt: true,
+      },
+    },
+  },
+});
+import { defineConfig, InputTransformerFn } from "orval";
+import path from "path";
+
+const root = path.resolve(__dirname, "..", "..");
+const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
+const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");
+
+// Our exports make assumptions about the title of the API being "Api" (i.e. generated output is `api.ts`).
+const titleTransformer: InputTransformerFn = (config) => {
+  config.info ??= {};
+  config.info.title = "Api";
+
+  return config;
+};
+
+export default defineConfig({
+  "api-client-react": {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiClientReactSrc,
+      target: "generated",
+      client: "react-query",
+      mode: "split",
+      baseUrl: "/api",
+      clean: true,
+      prettier: true,
+      override: {
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
+        mutator: {
+          path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
+          name: "customFetch",
+        },
+      },
+    },
+  },
+  zod: {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiZodSrc,
+      client: "zod",
+      target: "generated",
+      schemas: { path: "generated/types", type: "typescript" },
+      mode: "split",
+      clean: true,
+      prettier: true,
+      override: {
+        zod: {
+          coerce: {
+            query: ['boolean', 'number', 'string'],
+            param: ['boolean', 'number', 'string'],
+            body: ['bigint', 'date'],
+            response: ['bigint', 'date'],
+          },
+        },
+        useDates: true,
+        useBigInt: true,
+      },
+    },
+  },
+});
+ 50 changes: 27 additions & 23 deletions50  
+lib/api-zod/eslint.config.js
+ 2,886 changes: 1,443 additions & 1,443 deletions2,886  
+lib/api-zod/src/generated/api.ts
+Large diffs are not rendered by default.
+
+ 26 changes: 13 additions & 13 deletions26  
+lib/api-zod/src/generated/types/cancelJob200.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,13 +1,13 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type CancelJob200 = {
+  jobId?: string;
+  status?: string;
+  message?: string;
+};
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type CancelJob200 = {
+  jobId?: string;
+  status?: string;
+  message?: string;
+};
+ 48 changes: 24 additions & 24 deletions48  
+lib/api-zod/src/generated/types/createSignBody.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,24 +1,24 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface CreateSignBody {
+  roomId?: string;
+  signType: string;
+  qty?: number;
+  markerX?: number;
+  markerY?: number;
+  sheetId?: string;
+  color?: string;
+  dimensions?: string;
+  mounting?: string;
+  finishColor?: string;
+  message?: string;
+  roomNumber?: string;
+  roomName?: string;
+  reason?: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface CreateSignBody {
+  roomId?: string;
+  signType: string;
+  qty?: number;
+  markerX?: number;
+  markerY?: number;
+  sheetId?: string;
+  color?: string;
+  dimensions?: string;
+  mounting?: string;
+  finishColor?: string;
+  message?: string;
+  roomNumber?: string;
+  roomName?: string;
+  reason?: string;
+}
+ 26 changes: 13 additions & 13 deletions26  
+lib/api-zod/src/generated/types/getTrainingSnapshots200.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,13 +1,13 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { TrainingSnapshot } from "./trainingSnapshot";
+
+export type GetTrainingSnapshots200 = {
+  snapshots: TrainingSnapshot[];
+  total: number;
+};
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { TrainingSnapshot } from "./trainingSnapshot";
+
+export type GetTrainingSnapshots200 = {
+  snapshots: TrainingSnapshot[];
+  total: number;
+};
+ 164 changes: 82 additions & 82 deletions164  
+lib/api-zod/src/generated/types/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,82 +1,82 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export * from "./aiScan";
+export * from "./bulkReviewRooms200";
+export * from "./bulkReviewRoomsBody";
+export * from "./bulkReviewRoomsBodyFromStatus";
+export * from "./bulkReviewRoomsBodyReviewStatus";
+export * from "./cancelJob200";
+export * from "./cleanupRunResult";
+export * from "./confidenceBucket";
+export * from "./confidenceTrendPoint";
+export * from "./createJobBody";
+export * from "./createSavedDateRangeBody";
+export * from "./createSignBody";
+export * from "./dashboardSummary";
+export * from "./dismissRoomWarnings200";
+export * from "./dismissRoomWarningsBody";
+export * from "./getOverrideImpactParams";
+export * from "./getRecentJobsParams";
+export * from "./getTrainingSnapshots200";
+export * from "./getTrainingSnapshotsParams";
+export * from "./guestCleanupRunResult";
+export * from "./guestCleanupStats";
+export * from "./healthStatus";
+export * from "./importTrainingBody";
+export * from "./importTrainingResponse";
+export * from "./job";
+export * from "./jobFile";
+export * from "./jobMetadata";
+export * from "./jobSheet";
+export * from "./listCorrectionsParams";
+export * from "./listJobsParams";
+export * from "./listRoomsParams";
+export * from "./listSignsParams";
+export * from "./overrideImpact";
+export * from "./patchAdminConfigBody";
+export * from "./plaqueScheduleItem";
+export * from "./processJobResponse";
+export * from "./reorderSavedDateRangesBody";
+export * from "./requestUploadUrlBody";
+export * from "./requestUploadUrlResponse";
+export * from "./reRuleJob200";
+export * from "./rescanJobBody";
+export * from "./room";
+export * from "./roomReviewStatus";
+export * from "./roomWithSigns";
+export * from "./ruleOverride";
+export * from "./ruleOverrideAction";
+export * from "./ruleOverrideCondition";
+export * from "./savedDateRange";
+export * from "./serverConfig";
+export * from "./sign";
+export * from "./signTypeCount";
+export * from "./tenant";
+export * from "./tenantSettings";
+export * from "./tenantUser";
+export * from "./topCorrectionPattern";
+export * from "./trainingCorrection";
+export * from "./trainingCorrectionCorrectedValue";
+export * from "./trainingCorrectionOriginalValue";
+export * from "./trainingSnapshot";
+export * from "./updateJobBody";
+export * from "./updateJobBodyMetadata";
+export * from "./updateRoomReviewStatusBody";
+export * from "./updateRoomReviewStatusBodyReviewStatus";
+export * from "./updateRuleOverrideBody";
+export * from "./updateRuleOverrideBodyAction";
+export * from "./updateRuleOverrideBodyCondition";
+export * from "./updateSignBody";
+export * from "./updateSnapshotBody";
+export * from "./updateSnapshotResponse";
+export * from "./updateTenantBody";
+export * from "./updateTenantBodySettings";
+export * from "./updateUserRoleBody";
+export * from "./uploadJobFileBody";
+export * from "./validationResult";
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export * from "./aiScan";
+export * from "./bulkReviewRooms200";
+export * from "./bulkReviewRoomsBody";
+export * from "./bulkReviewRoomsBodyFromStatus";
+export * from "./bulkReviewRoomsBodyReviewStatus";
+export * from "./cancelJob200";
+export * from "./cleanupRunResult";
+export * from "./confidenceBucket";
+export * from "./confidenceTrendPoint";
+export * from "./createJobBody";
+export * from "./createSavedDateRangeBody";
+export * from "./createSignBody";
+export * from "./dashboardSummary";
+export * from "./dismissRoomWarnings200";
+export * from "./dismissRoomWarningsBody";
+export * from "./getOverrideImpactParams";
+export * from "./getRecentJobsParams";
+export * from "./getTrainingSnapshots200";
+export * from "./getTrainingSnapshotsParams";
+export * from "./guestCleanupRunResult";
+export * from "./guestCleanupStats";
+export * from "./healthStatus";
+export * from "./importTrainingBody";
+export * from "./importTrainingResponse";
+export * from "./job";
+export * from "./jobFile";
+export * from "./jobMetadata";
+export * from "./jobSheet";
+export * from "./listCorrectionsParams";
+export * from "./listJobsParams";
+export * from "./listRoomsParams";
+export * from "./listSignsParams";
+export * from "./overrideImpact";
+export * from "./patchAdminConfigBody";
+export * from "./plaqueScheduleItem";
+export * from "./processJobResponse";
+export * from "./reorderSavedDateRangesBody";
+export * from "./requestUploadUrlBody";
+export * from "./requestUploadUrlResponse";
+export * from "./reRuleJob200";
+export * from "./rescanJobBody";
+export * from "./room";
+export * from "./roomReviewStatus";
+export * from "./roomWithSigns";
+export * from "./ruleOverride";
+export * from "./ruleOverrideAction";
+export * from "./ruleOverrideCondition";
+export * from "./savedDateRange";
+export * from "./serverConfig";
+export * from "./sign";
+export * from "./signTypeCount";
+export * from "./tenant";
+export * from "./tenantSettings";
+export * from "./tenantUser";
+export * from "./topCorrectionPattern";
+export * from "./trainingCorrection";
+export * from "./trainingCorrectionCorrectedValue";
+export * from "./trainingCorrectionOriginalValue";
+export * from "./trainingSnapshot";
+export * from "./updateJobBody";
+export * from "./updateJobBodyMetadata";
+export * from "./updateRoomReviewStatusBody";
+export * from "./updateRoomReviewStatusBodyReviewStatus";
+export * from "./updateRuleOverrideBody";
+export * from "./updateRuleOverrideBodyAction";
+export * from "./updateRuleOverrideBodyCondition";
+export * from "./updateSignBody";
+export * from "./updateSnapshotBody";
+export * from "./updateSnapshotResponse";
+export * from "./updateTenantBody";
+export * from "./updateTenantBodySettings";
+export * from "./updateUserRoleBody";
+export * from "./uploadJobFileBody";
+export * from "./validationResult";
+ 72 changes: 36 additions & 36 deletions72  
+lib/api-zod/src/generated/types/job.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,36 +1,36 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { JobMetadata } from "./jobMetadata";
+
+export interface Job {
+  id: string;
+  tenantId: string;
+  name: string;
+  status: string;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  jurisdiction?: string | null;
+  /** @nullable */
+  buildingType?: string | null;
+  fileCount: number;
+  totalSigns: number;
+  highConfidence: number;
+  needsReview: number;
+  aiTokenCost: number;
+  /**
+   * Custom AI vision confidence threshold (0–50) for this job
+   * @nullable
+   */
+  visionThreshold?: number | null;
+  metadata?: JobMetadata;
+  /** @nullable */
+  scopeFlag?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { JobMetadata } from "./jobMetadata";
+
+export interface Job {
+  id: string;
+  tenantId: string;
+  name: string;
+  status: string;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  jurisdiction?: string | null;
+  /** @nullable */
+  buildingType?: string | null;
+  fileCount: number;
+  totalSigns: number;
+  highConfidence: number;
+  needsReview: number;
+  aiTokenCost: number;
+  /**
+   * Custom AI vision confidence threshold (0–50) for this job
+   * @nullable
+   */
+  visionThreshold?: number | null;
+  metadata?: JobMetadata;
+  /** @nullable */
+  scopeFlag?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+ 48 changes: 24 additions & 24 deletions48  
+lib/api-zod/src/generated/types/jobFile.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,24 +1,24 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface JobFile {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  filename: string;
+  storagePath: string;
+  /** @nullable */
+  pageCount?: number | null;
+  /** @nullable */
+  fileSizeBytes?: number | null;
+  /** @nullable */
+  fileCategory?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  createdAt: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface JobFile {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  filename: string;
+  storagePath: string;
+  /** @nullable */
+  pageCount?: number | null;
+  /** @nullable */
+  fileSizeBytes?: number | null;
+  /** @nullable */
+  fileCategory?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  createdAt: string;
+}
+ 24 changes: 12 additions & 12 deletions24  
+lib/api-zod/src/generated/types/patchAdminConfigBody.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,12 +1,12 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type PatchAdminConfigBody = {
+  cleanupHistoryMaxAgeDays?: number;
+  cleanupHistoryMaxRows?: number;
+};
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type PatchAdminConfigBody = {
+  cleanupHistoryMaxAgeDays?: number;
+  cleanupHistoryMaxRows?: number;
+};
+ 26 changes: 13 additions & 13 deletions26  
+lib/api-zod/src/generated/types/reRuleJob200.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,13 +1,13 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type ReRuleJob200 = {
+  jobId?: string;
+  signsUpdated?: number;
+  totalSignQty?: number;
+};
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type ReRuleJob200 = {
+  jobId?: string;
+  signsUpdated?: number;
+  totalSignQty?: number;
+};
+ 92 changes: 46 additions & 46 deletions92  
+lib/api-zod/src/generated/types/room.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,46 +1,46 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { RoomReviewStatus } from "./roomReviewStatus";
+
+export interface Room {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  /** @nullable */
+  sheetId?: string | null;
+  roomNumber: string;
+  roomName: string;
+  level: string;
+  /** @nullable */
+  coordX?: number | null;
+  /** @nullable */
+  coordY?: number | null;
+  /** @nullable */
+  occupantLoad?: number | null;
+  /** @nullable */
+  occupancyGroup?: string | null;
+  isResidentialUnit: boolean;
+  isRestroom: boolean;
+  isStair: boolean;
+  isElevator: boolean;
+  isVestibule: boolean;
+  isCorridorOrHall: boolean;
+  isVehicleBay: boolean;
+  isMepUnoccupied: boolean;
+  isVariableUse: boolean;
+  isPublicFacing: boolean;
+  isAssembly: boolean;
+  source: string;
+  /** @nullable */
+  confidence?: number | null;
+  warningDismissed?: boolean;
+  reviewStatus: RoomReviewStatus;
+  /** @nullable */
+  dismissalReason?: string | null;
+  createdAt: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+import type { RoomReviewStatus } from "./roomReviewStatus";
+
+export interface Room {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  /** @nullable */
+  sheetId?: string | null;
+  roomNumber: string;
+  roomName: string;
+  level: string;
+  /** @nullable */
+  coordX?: number | null;
+  /** @nullable */
+  coordY?: number | null;
+  /** @nullable */
+  occupantLoad?: number | null;
+  /** @nullable */
+  occupancyGroup?: string | null;
+  isResidentialUnit: boolean;
+  isRestroom: boolean;
+  isStair: boolean;
+  isElevator: boolean;
+  isVestibule: boolean;
+  isCorridorOrHall: boolean;
+  isVehicleBay: boolean;
+  isMepUnoccupied: boolean;
+  isVariableUse: boolean;
+  isPublicFacing: boolean;
+  isAssembly: boolean;
+  source: string;
+  /** @nullable */
+  confidence?: number | null;
+  warningDismissed?: boolean;
+  reviewStatus: RoomReviewStatus;
+  /** @nullable */
+  dismissalReason?: string | null;
+  createdAt: string;
+}
+ 56 changes: 28 additions & 28 deletions56  
+lib/api-zod/src/generated/types/serverConfig.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,28 +1,28 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface ServerConfig {
+  /** DPI used when rasterizing PDF pages for AI scanning (RASTERIZE_DPI) */
+  rasterizeDpi: number;
+  /** Maximum AI vision API calls allowed per pipeline run (AI_VISION_CALLS_PER_RUN) */
+  maxAiVisionCallsPerRun: number;
+  /** How many days cleanup run history is retained (CLEANUP_HISTORY_MAX_AGE_DAYS) */
+  cleanupHistoryMaxAgeDays: number;
+  /** True when CLEANUP_HISTORY_MAX_AGE_DAYS was absent or invalid and the built-in default is in use */
+  cleanupHistoryMaxAgeDaysIsDefault: boolean;
+  /** Maximum number of cleanup run rows kept in history (CLEANUP_HISTORY_MAX_ROWS) */
+  cleanupHistoryMaxRows: number;
+  /** True when CLEANUP_HISTORY_MAX_ROWS was absent or invalid and the built-in default is in use */
+  cleanupHistoryMaxRowsIsDefault: boolean;
+  /** AI model identifier used for vision scans (e.g. claude-sonnet-4-6) */
+  aiModel: string;
+  /** AI provider powering vision scans (e.g. Anthropic) */
+  aiProvider: string;
+  /** Human-readable display names for the built-in multi-entry room keyword patterns (read-only, sourced from the rules engine) */
+  builtInMultiEntryKeywords: string[];
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface ServerConfig {
+  /** DPI used when rasterizing PDF pages for AI scanning (RASTERIZE_DPI) */
+  rasterizeDpi: number;
+  /** Maximum AI vision API calls allowed per pipeline run (AI_VISION_CALLS_PER_RUN) */
+  maxAiVisionCallsPerRun: number;
+  /** How many days cleanup run history is retained (CLEANUP_HISTORY_MAX_AGE_DAYS) */
+  cleanupHistoryMaxAgeDays: number;
+  /** True when CLEANUP_HISTORY_MAX_AGE_DAYS was absent or invalid and the built-in default is in use */
+  cleanupHistoryMaxAgeDaysIsDefault: boolean;
+  /** Maximum number of cleanup run rows kept in history (CLEANUP_HISTORY_MAX_ROWS) */
+  cleanupHistoryMaxRows: number;
+  /** True when CLEANUP_HISTORY_MAX_ROWS was absent or invalid and the built-in default is in use */
+  cleanupHistoryMaxRowsIsDefault: boolean;
+  /** AI model identifier used for vision scans (e.g. claude-sonnet-4-6) */
+  aiModel: string;
+  /** AI provider powering vision scans (e.g. Anthropic) */
+  aiProvider: string;
+  /** Human-readable display names for the built-in multi-entry room keyword patterns (read-only, sourced from the rules engine) */
+  builtInMultiEntryKeywords: string[];
+}
+ 126 changes: 63 additions & 63 deletions126  
+lib/api-zod/src/generated/types/sign.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,63 +1,63 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface Sign {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  /** @nullable */
+  roomId?: string | null;
+  signType: string;
+  /** @nullable */
+  plaqueTypeId?: string | null;
+  qty: number;
+  /** @nullable */
+  markerX?: number | null;
+  /** @nullable */
+  markerY?: number | null;
+  /** @nullable */
+  sheetId?: string | null;
+  /** @nullable */
+  ruleRef?: string | null;
+  /** @nullable */
+  color?: string | null;
+  confidence: number;
+  status: string;
+  source: string;
+  /** @nullable */
+  dimensions?: string | null;
+  /** @nullable */
+  mounting?: string | null;
+  /** @nullable */
+  finishColor?: string | null;
+  /** @nullable */
+  message?: string | null;
+  /** @nullable */
+  roomNumber?: string | null;
+  /** @nullable */
+  roomName?: string | null;
+  /** @nullable */
+  level?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  /** @nullable */
+  adaRequired?: boolean | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  dimSource?: string | null;
+  /** @nullable */
+  canvasX?: number | null;
+  /** @nullable */
+  canvasY?: number | null;
+  /** @nullable */
+  markerColor?: string | null;
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface Sign {
+  id: string;
+  jobId: string;
+  tenantId: string;
+  /** @nullable */
+  roomId?: string | null;
+  signType: string;
+  /** @nullable */
+  plaqueTypeId?: string | null;
+  qty: number;
+  /** @nullable */
+  markerX?: number | null;
+  /** @nullable */
+  markerY?: number | null;
+  /** @nullable */
+  sheetId?: string | null;
+  /** @nullable */
+  ruleRef?: string | null;
+  /** @nullable */
+  color?: string | null;
+  confidence: number;
+  status: string;
+  source: string;
+  /** @nullable */
+  dimensions?: string | null;
+  /** @nullable */
+  mounting?: string | null;
+  /** @nullable */
+  finishColor?: string | null;
+  /** @nullable */
+  message?: string | null;
+  /** @nullable */
+  roomNumber?: string | null;
+  /** @nullable */
+  roomName?: string | null;
+  /** @nullable */
+  level?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  /** @nullable */
+  adaRequired?: boolean | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  dimSource?: string | null;
+  /** @nullable */
+  canvasX?: number | null;
+  /** @nullable */
+  canvasY?: number | null;
+  /** @nullable */
+  markerColor?: string | null;
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+ 60 changes: 30 additions & 30 deletions60  
+lib/api-zod/src/generated/types/trainingSnapshot.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,30 +1,30 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface TrainingSnapshot {
+  /** ID of the import snapshot record */
+  id: string;
+  /** Full ISO timestamp of the import */
+  snapshotDate: string;
+  /** Average confidence of all active overrides at the time of this import */
+  avgConfidence: number;
+  /** Number of active overrides at the time of this import */
+  activeOverrideCount: number;
+  /** Number of new rules created in this import batch */
+  newRulesCount: number;
+  /** Number of existing rules updated in this import batch */
+  updatedRulesCount: number;
+  /** Number of training corrections created during the calendar week containing this snapshot */
+  correctionCount: number;
+  /** Optional user-provided label for this import batch */
+  batchLabel?: string | null;
+  /** ID of the job linked to this import batch, if any */
+  sourceJobId?: string | null;
+  /** Name of the job linked to this import batch, if any */
+  sourceJobName?: string | null;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface TrainingSnapshot {
+  /** ID of the import snapshot record */
+  id: string;
+  /** Full ISO timestamp of the import */
+  snapshotDate: string;
+  /** Average confidence of all active overrides at the time of this import */
+  avgConfidence: number;
+  /** Number of active overrides at the time of this import */
+  activeOverrideCount: number;
+  /** Number of new rules created in this import batch */
+  newRulesCount: number;
+  /** Number of existing rules updated in this import batch */
+  updatedRulesCount: number;
+  /** Number of training corrections created during the calendar week containing this snapshot */
+  correctionCount: number;
+  /** Optional user-provided label for this import batch */
+  batchLabel?: string | null;
+  /** ID of the job linked to this import batch, if any */
+  sourceJobId?: string | null;
+  /** Name of the job linked to this import batch, if any */
+  sourceJobName?: string | null;
+}
+ 32 changes: 16 additions & 16 deletions32  
+lib/api-zod/src/generated/types/updateRoomReviewStatusBodyReviewStatus.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,16 +1,16 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type UpdateRoomReviewStatusBodyReviewStatus =
+  (typeof UpdateRoomReviewStatusBodyReviewStatus)[keyof typeof UpdateRoomReviewStatusBodyReviewStatus];
+
+export const UpdateRoomReviewStatusBodyReviewStatus = {
+  confirmed: "confirmed",
+  dismissed: "dismissed",
+  pending: "pending",
+} as const;
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export type UpdateRoomReviewStatusBodyReviewStatus =
+  (typeof UpdateRoomReviewStatusBodyReviewStatus)[keyof typeof UpdateRoomReviewStatusBodyReviewStatus];
+
+export const UpdateRoomReviewStatusBodyReviewStatus = {
+  confirmed: "confirmed",
+  dismissed: "dismissed",
+  pending: "pending",
+} as const;
+ 76 changes: 38 additions & 38 deletions76  
+lib/api-zod/src/generated/types/updateSignBody.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,38 +1,38 @@
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface UpdateSignBody {
+  signType?: string;
+  qty?: number;
+  /** @nullable */
+  markerX?: number | null;
+  /** @nullable */
+  markerY?: number | null;
+  /** @nullable */
+  canvasX?: number | null;
+  /** @nullable */
+  canvasY?: number | null;
+  /** @nullable */
+  sheetId?: string | null;
+  status?: string;
+  dimensions?: string;
+  /** @nullable */
+  dimSource?: string | null;
+  mounting?: string;
+  finishColor?: string;
+  message?: string;
+  /** @nullable */
+  markerColor?: string | null;
+  /** @nullable */
+  roomName?: string | null;
+  /** @nullable */
+  roomNumber?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  reason?: string;
+}
+/**
+ * Generated by orval v8.5.3 🍺
+ * Do not edit manually.
+ * Api
+ * Sign Takeoff IQ API
+ * OpenAPI spec version: 0.1.0
+ */
+
+export interface UpdateSignBody {
+  signType?: string;
+  qty?: number;
+  /** @nullable */
+  markerX?: number | null;
+  /** @nullable */
+  markerY?: number | null;
+  /** @nullable */
+  canvasX?: number | null;
+  /** @nullable */
+  canvasY?: number | null;
+  /** @nullable */
+  sheetId?: string | null;
+  status?: string;
+  dimensions?: string;
+  /** @nullable */
+  dimSource?: string | null;
+  mounting?: string;
+  finishColor?: string;
+  message?: string;
+  /** @nullable */
+  markerColor?: string | null;
+  /** @nullable */
+  roomName?: string | null;
+  /** @nullable */
+  roomNumber?: string | null;
+  /** @nullable */
+  floorLabel?: string | null;
+  reason?: string;
+}
+ 28 changes: 14 additions & 14 deletions28  
+lib/db/drizzle.config.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,14 +1,14 @@
+import { defineConfig } from "drizzle-kit";
+import path from "path";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+
+export default defineConfig({
+  schema: path.join(__dirname, "./src/schema/index.ts"),
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL,
+  },
+});
+import { defineConfig } from "drizzle-kit";
+import path from "path";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+
+export default defineConfig({
+  schema: path.join(__dirname, "./src/schema/index.ts"),
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL,
+  },
+});
+ 50 changes: 27 additions & 23 deletions50  
+lib/db/eslint.config.js
+ 60 changes: 30 additions & 30 deletions60  
+lib/db/package.json
+Original file line number	Diff line number	Diff line change
+@@ -1,30 +1,30 @@
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "push": "drizzle-kit push --config ./drizzle.config.ts",
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "seed": "node --experimental-strip-types ./src/seed.ts"
+  },
+  "dependencies": {
+    "drizzle-kit": "^0.31.9",
+    "drizzle-orm": "catalog:",
+    "drizzle-zod": "^0.8.3",
+    "pg": "^8.20.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
+    "eslint": "^10.2.0",
+    "typescript-eslint": "^8.58.2"
+  }
+}
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "push": "drizzle-kit push --config ./drizzle.config.ts",
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "seed": "node --experimental-strip-types ./src/seed.ts"
+  },
+  "dependencies": {
+    "drizzle-kit": "^0.31.9",
+    "drizzle-orm": "catalog:",
+    "drizzle-zod": "^0.8.3",
+    "pg": "^8.20.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
+    "eslint": "^10.2.0",
+    "typescript-eslint": "^8.58.2"
+  }
+}
+ 184 changes: 92 additions & 92 deletions184  
+lib/db/src/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,92 +1,92 @@
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import * as schema from "./schema";
+
+const { Pool } = pg;
+
+/**
+ * Resolve the database connection string from `DATABASE_URL` / `DO_DATABASE_URL`.
+ *
+ * The preference order is environment-dependent and deliberately so:
+ *
+ *  - In production (`NODE_ENV === "production"`, e.g. DigitalOcean App Platform)
+ *    `DO_DATABASE_URL` wins. DO can auto-inject a placeholder `DATABASE_URL` whose
+ *    host is `base`, which does not resolve (`getaddrinfo ENOTFOUND base`). The
+ *    operator-set `DO_DATABASE_URL` holds the real managed-DB connection string.
+ *  - Everywhere else (local dev / tests) `DATABASE_URL` wins. This environment can
+ *    have BOTH vars set — `DATABASE_URL` points at the local dev DB while
+ *    `DO_DATABASE_URL` points at production — so preferring `DO_DATABASE_URL`
+ *    unconditionally would make dev and the test suite run against production.
+ *
+ * Each branch falls back to the other var so a single-var setup still works.
+ */
+function resolveDatabaseUrl(): string | undefined {
+  const isProduction = process.env.NODE_ENV === "production";
+  const candidates = isProduction
+    ? [process.env.DO_DATABASE_URL, process.env.DATABASE_URL]
+    : [process.env.DATABASE_URL, process.env.DO_DATABASE_URL];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+const databaseUrl = resolveDatabaseUrl();
+
+if (!databaseUrl) {
+  throw new Error(
+    "DATABASE_URL (or DO_DATABASE_URL) must be set. Did you forget to provision a database?",
+  );
+}
+
+/**
+ * Build the pg Pool config from DATABASE_URL.
+ *
+ * Managed Postgres providers (e.g. DigitalOcean) require TLS but present a
+ * certificate chain that is not in Node's default trust store. As of
+ * pg-connection-string@2.12, a bare `sslmode=require` in the connection string
+ * is treated as `verify-full`, which performs full CA verification and fails
+ * against such providers with "unable to verify the first certificate".
+ *
+ * To honor libpq's `require` semantics (encrypt, but do not verify the CA), we
+ * strip `sslmode` from the URL for the relaxed modes (`require`/`prefer`/`allow`)
+ * and configure `ssl` explicitly. Note: pg parses the connection string AFTER and
+ * Object.assigns it over the passed config, so an explicit `ssl` option is only
+ * respected when the connection string itself no longer carries an `sslmode`.
+ *
+ * Strict modes (`verify-ca`/`verify-full`) and `disable` are left untouched, so an
+ * operator who explicitly opts into CA/hostname verification keeps it, and the
+ * local dev database (`sslmode=disable`) behaves exactly as before.
+ */
+const RELAXED_SSL_MODES = new Set(["require", "prefer", "allow"]);
+
+function buildPoolConfig(urlString: string): pg.PoolConfig {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    // Not a parseable URL — hand it to pg as-is.
+    return { connectionString: urlString };
+  }
+
+  const sslmode = url.searchParams.get("sslmode");
+
+  if (sslmode == null || !RELAXED_SSL_MODES.has(sslmode)) {
+    // disable / verify-ca / verify-full / unset → preserve pg's default handling.
+    return { connectionString: urlString };
+  }
+
+  url.searchParams.delete("sslmode");
+  return {
+    connectionString: url.toString(),
+    ssl: { rejectUnauthorized: false },
+  };
+}
+
+export const pool = new Pool(buildPoolConfig(databaseUrl));
+export const db = drizzle(pool, { schema });
+
+export * from "./schema";
+export { runSeed } from "./seed";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import * as schema from "./schema";
+
+const { Pool } = pg;
+
+/**
+ * Resolve the database connection string from `DATABASE_URL` / `DO_DATABASE_URL`.
+ *
+ * The preference order is environment-dependent and deliberately so:
+ *
+ *  - In production (`NODE_ENV === "production"`, e.g. DigitalOcean App Platform)
+ *    `DO_DATABASE_URL` wins. DO can auto-inject a placeholder `DATABASE_URL` whose
+ *    host is `base`, which does not resolve (`getaddrinfo ENOTFOUND base`). The
+ *    operator-set `DO_DATABASE_URL` holds the real managed-DB connection string.
+ *  - Everywhere else (local dev / tests) `DATABASE_URL` wins. This environment can
+ *    have BOTH vars set — `DATABASE_URL` points at the local dev DB while
+ *    `DO_DATABASE_URL` points at production — so preferring `DO_DATABASE_URL`
+ *    unconditionally would make dev and the test suite run against production.
+ *
+ * Each branch falls back to the other var so a single-var setup still works.
+ */
+function resolveDatabaseUrl(): string | undefined {
+  const isProduction = process.env.NODE_ENV === "production";
+  const candidates = isProduction
+    ? [process.env.DO_DATABASE_URL, process.env.DATABASE_URL]
+    : [process.env.DATABASE_URL, process.env.DO_DATABASE_URL];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+const databaseUrl = resolveDatabaseUrl();
+
+if (!databaseUrl) {
+  throw new Error(
+    "DATABASE_URL (or DO_DATABASE_URL) must be set. Did you forget to provision a database?",
+  );
+}
+
+/**
+ * Build the pg Pool config from DATABASE_URL.
+ *
+ * Managed Postgres providers (e.g. DigitalOcean) require TLS but present a
+ * certificate chain that is not in Node's default trust store. As of
+ * pg-connection-string@2.12, a bare `sslmode=require` in the connection string
+ * is treated as `verify-full`, which performs full CA verification and fails
+ * against such providers with "unable to verify the first certificate".
+ *
+ * To honor libpq's `require` semantics (encrypt, but do not verify the CA), we
+ * strip `sslmode` from the URL for the relaxed modes (`require`/`prefer`/`allow`)
+ * and configure `ssl` explicitly. Note: pg parses the connection string AFTER and
+ * Object.assigns it over the passed config, so an explicit `ssl` option is only
+ * respected when the connection string itself no longer carries an `sslmode`.
+ *
+ * Strict modes (`verify-ca`/`verify-full`) and `disable` are left untouched, so an
+ * operator who explicitly opts into CA/hostname verification keeps it, and the
+ * local dev database (`sslmode=disable`) behaves exactly as before.
+ */
+const RELAXED_SSL_MODES = new Set(["require", "prefer", "allow"]);
+
+function buildPoolConfig(urlString: string): pg.PoolConfig {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    // Not a parseable URL — hand it to pg as-is.
+    return { connectionString: urlString };
+  }
+
+  const sslmode = url.searchParams.get("sslmode");
+
+  if (sslmode == null || !RELAXED_SSL_MODES.has(sslmode)) {
+    // disable / verify-ca / verify-full / unset → preserve pg's default handling.
+    return { connectionString: urlString };
+  }
+
+  url.searchParams.delete("sslmode");
+  return {
+    connectionString: url.toString(),
+    ssl: { rejectUnauthorized: false },
+  };
+}
+
+export const pool = new Pool(buildPoolConfig(databaseUrl));
+export const db = drizzle(pool, { schema });
+
+export * from "./schema";
+export { runSeed } from "./seed";
+ 32 changes: 16 additions & 16 deletions32  
+lib/db/src/schema/authCredentials.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,16 +1,16 @@
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const authCredentialsTable = pgTable("auth_credentials", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export type AuthCredential = typeof authCredentialsTable.$inferSelect;
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const authCredentialsTable = pgTable("auth_credentials", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export type AuthCredential = typeof authCredentialsTable.$inferSelect;
+ 54 changes: 27 additions & 27 deletions54  
+lib/db/src/schema/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,27 +1,27 @@
+export * from "./tenants";
+export * from "./users";
+export * from "./authCredentials";
+export * from "./passwordResetTokens";
+export * from "./invitations";
+export * from "./jobs";
+export * from "./jobFiles";
+export * from "./jobSheets";
+export * from "./rooms";
+export * from "./signs";
+export * from "./plaqueSchedule";
+export * from "./validationResults";
+export * from "./trainingCorrections";
+export * from "./ruleOverrides";
+export * from "./aiScans";
+export * from "./importSnapshots";
+export * from "./systemSettings";
+export * from "./savedDateRanges";
+export * from "./guestCleanupRuns";
+export * from "./cleanupRuns";
+export * from "./cacheEntries";
+export * from "./trainingPatterns";
+export * from "./importHistory";
+export * from "./pricingSettings";
+export * from "./buildingTypeLexicons";
+export * from "./buildingTypeProfiles";
+export * from "./specialtySigns";
+export * from "./tenants";
+export * from "./users";
+export * from "./authCredentials";
+export * from "./passwordResetTokens";
+export * from "./invitations";
+export * from "./jobs";
+export * from "./jobFiles";
+export * from "./jobSheets";
+export * from "./rooms";
+export * from "./signs";
+export * from "./plaqueSchedule";
+export * from "./validationResults";
+export * from "./trainingCorrections";
+export * from "./ruleOverrides";
+export * from "./aiScans";
+export * from "./importSnapshots";
+export * from "./systemSettings";
+export * from "./savedDateRanges";
+export * from "./guestCleanupRuns";
+export * from "./cleanupRuns";
+export * from "./cacheEntries";
+export * from "./trainingPatterns";
+export * from "./importHistory";
+export * from "./pricingSettings";
+export * from "./buildingTypeLexicons";
+export * from "./buildingTypeProfiles";
+export * from "./specialtySigns";
+ 44 changes: 22 additions & 22 deletions44  
+lib/db/src/schema/invitations.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,22 +1,22 @@
+import { pgTable, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { tenantsTable } from "./tenants";
+
+export const invitationsTable = pgTable("invitations", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdByUserId: text("created_by_user_id").notNull(),
+  createdByName: text("created_by_name"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  tokenHashIdx: uniqueIndex("invitations_token_hash_idx").on(t.tokenHash),
+  emailIdx: index("invitations_email_idx").on(t.email),
+  tenantIdx: index("invitations_tenant_idx").on(t.tenantId),
+}));
+
+export type Invitation = typeof invitationsTable.$inferSelect;
+import { pgTable, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { tenantsTable } from "./tenants";
+
+export const invitationsTable = pgTable("invitations", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdByUserId: text("created_by_user_id").notNull(),
+  createdByName: text("created_by_name"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  tokenHashIdx: uniqueIndex("invitations_token_hash_idx").on(t.tokenHash),
+  emailIdx: index("invitations_email_idx").on(t.email),
+  tenantIdx: index("invitations_tenant_idx").on(t.tenantId),
+}));
+
+export type Invitation = typeof invitationsTable.$inferSelect;
+ 44 changes: 22 additions & 22 deletions44  
+lib/db/src/schema/passwordResetTokens.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,22 +1,22 @@
+import { pgTable, text, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const passwordResetTokensTable = pgTable(
+  "password_reset_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_idx").on(t.tokenHash),
+    userIdx: index("password_reset_tokens_user_idx").on(t.userId),
+  }),
+);
+
+export type PasswordResetToken = typeof passwordResetTokensTable.$inferSelect;
+import { pgTable, text, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
+
+export const passwordResetTokensTable = pgTable(
+  "password_reset_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenHashIdx: uniqueIndex("password_reset_tokens_token_hash_idx").on(t.tokenHash),
+    userIdx: index("password_reset_tokens_user_idx").on(t.userId),
+  }),
+);
+
+export type PasswordResetToken = typeof passwordResetTokensTable.$inferSelect;
+ 50 changes: 25 additions & 25 deletions50  
+lib/db/src/schema/tenants.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,25 +1,25 @@
+import { pgTable, text, integer, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const tenantsTable = pgTable("tenants", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  plan: text("plan").notNull().default("starter"),
+  // SignSuiteIQ business_details.id — set when the tenant is provisioned via the SignSuite webhook.
+  signsuiteiqCompanyId: integer("signsuiteiq_company_id"),
+  email: text("email"),
+  phone: text("phone"),
+  website: text("website"),
+  settings: jsonb("settings").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+}, (t) => ({
+  signsuiteiqCompanyIdx: index("tenants_signsuiteiq_company_id_idx").on(t.signsuiteiqCompanyId),
+}));
+
+export const insertTenantSchema = createInsertSchema(tenantsTable).omit({ createdAt: true, updatedAt: true });
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenantsTable.$inferSelect;
+import { pgTable, text, integer, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const tenantsTable = pgTable("tenants", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  plan: text("plan").notNull().default("starter"),
+  // SignSuiteIQ business_details.id — set when the tenant is provisioned via the SignSuite webhook.
+  signsuiteiqCompanyId: integer("signsuiteiq_company_id"),
+  email: text("email"),
+  phone: text("phone"),
+  website: text("website"),
+  settings: jsonb("settings").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
+}, (t) => ({
+  signsuiteiqCompanyIdx: index("tenants_signsuiteiq_company_id_idx").on(t.signsuiteiqCompanyId),
+}));
+
+export const insertTenantSchema = createInsertSchema(tenantsTable).omit({ createdAt: true, updatedAt: true });
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type Tenant = typeof tenantsTable.$inferSelect;
+ 62 changes: 31 additions & 31 deletions62  
+lib/db/src/schema/users.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,31 +1,31 @@
+import { pgTable, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { tenantsTable } from "./tenants";
+
+export const usersTable = pgTable("users", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  username: text("username"),
+  fullName: text("full_name"),
+  role: text("role").notNull().default("user"),
+  ownerId: text("owner_id"),
+  phone: text("phone"),
+  jobTitle: text("job_title"),
+  location: text("location"),
+  // SignSuiteIQ users.id — set when the row is provisioned via the SignSuite webhook.
+  signsuiteiqUserId: integer("signsuiteiq_user_id"),
+  // Soft-delete marker. A non-null value means the user is archived and cannot log in.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => ({
+  emailIdx: index("users_email_idx").on(t.email),
+  ownerIdx: index("users_owner_id_idx").on(t.ownerId),
+  signsuiteiqUserIdx: index("users_signsuiteiq_user_id_idx").on(t.signsuiteiqUserId),
+}));
+
+export const insertUserSchema = createInsertSchema(usersTable).omit({ createdAt: true, updatedAt: true });
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof usersTable.$inferSelect;
+import { pgTable, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { tenantsTable } from "./tenants";
+
+export const usersTable = pgTable("users", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenantsTable.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  username: text("username"),
+  fullName: text("full_name"),
+  role: text("role").notNull().default("user"),
+  ownerId: text("owner_id"),
+  phone: text("phone"),
+  jobTitle: text("job_title"),
+  location: text("location"),
+  // SignSuiteIQ users.id — set when the row is provisioned via the SignSuite webhook.
+  signsuiteiqUserId: integer("signsuiteiq_user_id"),
+  // Soft-delete marker. A non-null value means the user is archived and cannot log in.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => ({
+  emailIdx: index("users_email_idx").on(t.email),
+  ownerIdx: index("users_owner_id_idx").on(t.ownerId),
+  signsuiteiqUserIdx: index("users_signsuiteiq_user_id_idx").on(t.signsuiteiqUserId),
+}));
+
+export const insertUserSchema = createInsertSchema(usersTable).omit({ createdAt: true, updatedAt: true });
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof usersTable.$inferSelect;
+ 478 changes: 239 additions & 239 deletions478  
+lib/db/src/seed.ts
+Large diffs are not rendered by default.
+
+ 50 changes: 27 additions & 23 deletions50  
+lib/integrations-anthropic-ai/eslint.config.js
+ 48 changes: 24 additions & 24 deletions48  
+lib/integrations-anthropic-ai/package.json
+Original file line number	Diff line number	Diff line change
+@@ -1,24 +1,24 @@
+{
+  "name": "@workspace/integrations-anthropic-ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./batch": "./src/batch/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "^10.2.0",
+    "typescript-eslint": "^8.58.2"
+  }
+}
+{
+  "name": "@workspace/integrations-anthropic-ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./batch": "./src/batch/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "^10.2.0",
+    "typescript-eslint": "^8.58.2"
+  }
+}
+ 12 changes: 6 additions & 6 deletions12  
+lib/integrations-anthropic-ai/src/batch/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,6 +1,6 @@
+export {
+  batchProcess,
+  batchProcessWithSSE,
+  isRateLimitError,
+  type BatchOptions,
+} from "./utils";
+export {
+  batchProcess,
+  batchProcessWithSSE,
+  isRateLimitError,
+  type BatchOptions,
+} from "./utils";
+ 280 changes: 140 additions & 140 deletions280  
+lib/integrations-anthropic-ai/src/batch/utils.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,140 +1,140 @@
+import pLimit from "p-limit";
+import pRetry, { AbortError } from "p-retry";
+
+/**
+ * Batch Processing Utilities
+ *
+ * Generic batch processing with built-in rate limiting and automatic retries.
+ * Use for any task that requires processing multiple items through an LLM or external API.
+ *
+ * USAGE:
+ * ```typescript
+ * import { batchProcess } from "@workspace/integrations-anthropic-ai/batch";
+ * import { anthropic } from "@workspace/integrations-anthropic-ai";
+ *
+ * const results = await batchProcess(
+ *   artworks,
+ *   async (artwork) => {
+ *     const message = await anthropic.messages.create({
+ *       model: "claude-sonnet-4-6",
+ *       max_tokens: 8192,
+ *       messages: [{ role: "user", content: `Categorize: ${artwork.name}` }],
+ *     });
+ *     const block = message.content[0];
+ *     return block.type === "text" ? block.text : "";
+ *   },
+ *   { concurrency: 2, retries: 5 }
+ * );
+ * ```
+ */
+
+export interface BatchOptions {
+  concurrency?: number;
+  retries?: number;
+  minTimeout?: number;
+  maxTimeout?: number;
+  onProgress?: (completed: number, total: number, item: unknown) => void;
+}
+
+export function isRateLimitError(error: unknown): boolean {
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  return (
+    errorMsg.includes("429") ||
+    errorMsg.includes("RATELIMIT_EXCEEDED") ||
+    errorMsg.toLowerCase().includes("quota") ||
+    errorMsg.toLowerCase().includes("rate limit")
+  );
+}
+
+export async function batchProcess<T, R>(
+  items: T[],
+  processor: (item: T, index: number) => Promise<R>,
+  options: BatchOptions = {}
+): Promise<R[]> {
+  const {
+    concurrency = 2,
+    retries = 7,
+    minTimeout = 2000,
+    maxTimeout = 128000,
+    onProgress,
+  } = options;
+
+  const limit = pLimit(concurrency);
+  let completed = 0;
+
+  const promises = items.map((item, index) =>
+    limit(() =>
+      pRetry(
+        async () => {
+          try {
+            const result = await processor(item, index);
+            completed++;
+            onProgress?.(completed, items.length, item);
+            return result;
+          } catch (error: unknown) {
+            if (isRateLimitError(error)) {
+              throw error;
+            }
+            throw new AbortError(
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
+        },
+        { retries, minTimeout, maxTimeout, factor: 2 }
+      )
+    )
+  );
+
+  return Promise.all(promises);
+}
+
+export async function batchProcessWithSSE<T, R>(
+  items: T[],
+  processor: (item: T, index: number) => Promise<R>,
+  sendEvent: (event: { type: string; [key: string]: unknown }) => void,
+  options: Omit<BatchOptions, "concurrency" | "onProgress"> = {}
+): Promise<R[]> {
+  const { retries = 5, minTimeout = 1000, maxTimeout = 15000 } = options;
+
+  sendEvent({ type: "started", total: items.length });
+
+  const results: R[] = [];
+  let errors = 0;
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    sendEvent({ type: "processing", index, item });
+
+    try {
+      const result = await pRetry(
+        () => processor(item, index),
+        {
+          retries,
+          minTimeout,
+          maxTimeout,
+          factor: 2,
+          onFailedAttempt: (error) => {
+            if (!isRateLimitError(error)) {
+              throw new AbortError(
+                error instanceof Error ? error : new Error(String(error))
+              );
+            }
+          },
+        }
+      );
+      results.push(result);
+      sendEvent({ type: "progress", index, result });
+    } catch (error) {
+      errors++;
+      results.push(undefined as R);
+      sendEvent({
+        type: "progress",
+        index,
+        error: error instanceof Error ? error.message : "Processing failed",
+      });
+    }
+  }
+
+  sendEvent({ type: "complete", processed: items.length, errors });
+  return results;
+}
+import pLimit from "p-limit";
+import pRetry, { AbortError } from "p-retry";
+
+/**
+ * Batch Processing Utilities
+ *
+ * Generic batch processing with built-in rate limiting and automatic retries.
+ * Use for any task that requires processing multiple items through an LLM or external API.
+ *
+ * USAGE:
+ * ```typescript
+ * import { batchProcess } from "@workspace/integrations-anthropic-ai/batch";
+ * import { anthropic } from "@workspace/integrations-anthropic-ai";
+ *
+ * const results = await batchProcess(
+ *   artworks,
+ *   async (artwork) => {
+ *     const message = await anthropic.messages.create({
+ *       model: "claude-sonnet-4-6",
+ *       max_tokens: 8192,
+ *       messages: [{ role: "user", content: `Categorize: ${artwork.name}` }],
+ *     });
+ *     const block = message.content[0];
+ *     return block.type === "text" ? block.text : "";
+ *   },
+ *   { concurrency: 2, retries: 5 }
+ * );
+ * ```
+ */
+
+export interface BatchOptions {
+  concurrency?: number;
+  retries?: number;
+  minTimeout?: number;
+  maxTimeout?: number;
+  onProgress?: (completed: number, total: number, item: unknown) => void;
+}
+
+export function isRateLimitError(error: unknown): boolean {
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  return (
+    errorMsg.includes("429") ||
+    errorMsg.includes("RATELIMIT_EXCEEDED") ||
+    errorMsg.toLowerCase().includes("quota") ||
+    errorMsg.toLowerCase().includes("rate limit")
+  );
+}
+
+export async function batchProcess<T, R>(
+  items: T[],
+  processor: (item: T, index: number) => Promise<R>,
+  options: BatchOptions = {}
+): Promise<R[]> {
+  const {
+    concurrency = 2,
+    retries = 7,
+    minTimeout = 2000,
+    maxTimeout = 128000,
+    onProgress,
+  } = options;
+
+  const limit = pLimit(concurrency);
+  let completed = 0;
+
+  const promises = items.map((item, index) =>
+    limit(() =>
+      pRetry(
+        async () => {
+          try {
+            const result = await processor(item, index);
+            completed++;
+            onProgress?.(completed, items.length, item);
+            return result;
+          } catch (error: unknown) {
+            if (isRateLimitError(error)) {
+              throw error;
+            }
+            throw new AbortError(
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
+        },
+        { retries, minTimeout, maxTimeout, factor: 2 }
+      )
+    )
+  );
+
+  return Promise.all(promises);
+}
+
+export async function batchProcessWithSSE<T, R>(
+  items: T[],
+  processor: (item: T, index: number) => Promise<R>,
+  sendEvent: (event: { type: string; [key: string]: unknown }) => void,
+  options: Omit<BatchOptions, "concurrency" | "onProgress"> = {}
+): Promise<R[]> {
+  const { retries = 5, minTimeout = 1000, maxTimeout = 15000 } = options;
+
+  sendEvent({ type: "started", total: items.length });
+
+  const results: R[] = [];
+  let errors = 0;
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    sendEvent({ type: "processing", index, item });
+
+    try {
+      const result = await pRetry(
+        () => processor(item, index),
+        {
+          retries,
+          minTimeout,
+          maxTimeout,
+          factor: 2,
+          onFailedAttempt: (error) => {
+            if (!isRateLimitError(error)) {
+              throw new AbortError(
+                error instanceof Error ? error : new Error(String(error))
+              );
+            }
+          },
+        }
+      );
+      results.push(result);
+      sendEvent({ type: "progress", index, result });
+    } catch (error) {
+      errors++;
+      results.push(undefined as R);
+      sendEvent({
+        type: "progress",
+        index,
+        error: error instanceof Error ? error.message : "Processing failed",
+      });
+    }
+  }
+
+  sendEvent({ type: "complete", processed: items.length, errors });
+  return results;
+}
+ 36 changes: 18 additions & 18 deletions36  
+lib/integrations-anthropic-ai/src/client.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,18 +1,18 @@
+import Anthropic from "@anthropic-ai/sdk";
+
+if (!process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL) {
+  throw new Error(
+    "AI_INTEGRATIONS_ANTHROPIC_BASE_URL must be set. Did you forget to provision the Anthropic AI integration?",
+  );
+}
+
+if (!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY) {
+  throw new Error(
+    "AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. Did you forget to provision the Anthropic AI integration?",
+  );
+}
+
+export const anthropic = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
+import Anthropic from "@anthropic-ai/sdk";
+
+if (!process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL) {
+  throw new Error(
+    "AI_INTEGRATIONS_ANTHROPIC_BASE_URL must be set. Did you forget to provision the Anthropic AI integration?",
+  );
+}
+
+if (!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY) {
+  throw new Error(
+    "AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. Did you forget to provision the Anthropic AI integration?",
+  );
+}
+
+export const anthropic = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
+ 4 changes: 2 additions & 2 deletions4  
+lib/integrations-anthropic-ai/src/index.ts
+Original file line number	Diff line number	Diff line change
+@@ -1,2 +1,2 @@
+export { anthropic } from "./client";
+export { batchProcess, batchProcessWithSSE, isRateLimitError, type BatchOptions } from "./batch";
+export { anthropic } from "./client";
+export { batchProcess, batchProcessWithSSE, isRateLimitError, type BatchOptions } from "./batch";
+ 24 changes: 12 additions & 12 deletions24  
+lib/integrations-anthropic-ai/tsconfig.json
+Original file line number	Diff line number	Diff line change
+@@ -1,12 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+ 50 changes: 27 additions & 23 deletions50  
+lib/object-storage-web/eslint.config.js
+ 54 changes: 27 additions & 27 deletions54  
+package.json
+Original file line number	Diff line number	Diff line change
+@@ -1,27 +1,27 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "packageManager": "pnpm@10.26.1",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "prettier": "^3.8.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "esbuild",
+      "protobufjs"
+    ]
+  }
+}
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "packageManager": "pnpm@10.26.1",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "prettier": "^3.8.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "esbuild",
+      "protobufjs"
+    ]
+  }
+}
+ 19,444 changes: 9,722 additions & 9,722 deletions19,444  
+pnpm-lock.yaml
+Large diffs are not rendered by default.
+
+ 28 changes: 14 additions & 14 deletions28  
+pyproject.toml
+Original file line number	Diff line number	Diff line change
+@@ -1,14 +1,14 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pdfplumber>=0.11.0",
+    "pdf2image>=1.17.0",
+    "pillow>=10.0.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.12",
+]
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pdfplumber>=0.11.0",
+    "pdf2image>=1.17.0",
+    "pillow>=10.0.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.12",
+]
+ 10 changes: 5 additions & 5 deletions10  
+replit.nix
+Original file line number	Diff line number	Diff line change
+@@ -1,5 +1,5 @@
+{pkgs}: {
+  deps = [
+    pkgs.poppler
+  ];
+}
+{pkgs}: {
+  deps = [
+    pkgs.poppler
+  ];
+}
+  28 changes: 14 additions & 14 deletions28  
+start-prod.sh
+Original file line number	Diff line number	Diff line change
+@@ -2,36 +2,36 @@
+# Production start script for DigitalOcean App Platform.
+#
+# On every boot:
+#   1. Push the Drizzle schema to the database (creates any missing tables;
+#      destructive renames are blocked because we never use --force).
+#   2. Run the idempotent seeder (default tenant, admin user, building-type
+#      profiles + lexicons, default pricing row, retention settings).
+#   3. Launch the Python pdf-sidecar in the background on port 8008.
+#   4. Exec the Node.js API server in the foreground on $PORT (default DO
+#   1. Run the idempotent seeder (default tenant, super-admin user,
+#      building-type profiles + lexicons, default pricing row, retention
+#      settings).
+#   2. Launch the Python pdf-sidecar in the background on port 8008.
+#   3. Exec the Node.js API server in the foreground on $PORT (default DO
+#      health-check port 8080). It also serves the built web frontend.
+#
+# Skip schema push + seed by setting SKIP_DB_BOOTSTRAP=1.
+# Schema is intentionally NOT pushed here. The managed prod DB carries legacy
+# columns the current schema no longer defines (e.g. tenants.external_company_id,
+# users.password_hash), and `drizzle-kit push` would DROP them. Schema changes
+# are applied to prod additively by hand (ALTER TABLE ... ADD COLUMN IF NOT
+# EXISTS). The seeder only depends on columns that already exist.
+#
+# Skip the seeder by setting SKIP_DB_BOOTSTRAP=1.
+
+set -e
+
+# Force production mode for every step below. The DB resolver in
+# lib/db/src/index.ts only prefers DO_DATABASE_URL (the real managed-DB string)
+# over DATABASE_URL when NODE_ENV=production; otherwise it can pick DO's broken
+# placeholder DATABASE_URL (host "base"), breaking schema push, seed, and login.
+# placeholder DATABASE_URL (host "base"), breaking the seeder and login.
+export NODE_ENV=production
+
+if [ "${SKIP_DB_BOOTSTRAP:-0}" != "1" ]; then
+  echo "[start-prod.sh] Pushing Drizzle schema…"
+  pnpm --filter @workspace/db run push || {
+    echo "[start-prod.sh] WARN: drizzle-kit push failed (continuing)."
+  }
+
+  echo "[start-prod.sh] Running seeder…"
+  node --enable-source-maps artifacts/api-server/dist/seed.mjs || {
+    echo "[start-prod.sh] WARN: seed failed (continuing)."
+  }
+else
+  echo "[start-prod.sh] SKIP_DB_BOOTSTRAP=1 — skipping schema push + seed."
+  echo "[start-prod.sh] SKIP_DB_BOOTSTRAP=1 — skipping seeder."
+fi
+
+# Start pdf-sidecar in the background on a fixed internal port
+ 50 changes: 25 additions & 25 deletions50  
+tsconfig.json
+Original file line number	Diff line number	Diff line change
+@@ -1,25 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./lib/db"
+    },
+    {
+      "path": "./lib/api-client-react"
+    },
+    {
+      "path": "./lib/api-zod"
+    },
+    {
+      "path": "./lib/integrations-anthropic-ai"
+    },
+    {
+      "path": "./lib/integrations-gemini-ai"
+    },
+    {
+      "path": "./lib/object-storage-web"
+    }
+  ]
+}
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./lib/db"
+    },
+    {
+      "path": "./lib/api-client-react"
+    },
+    {
+      "path": "./lib/api-zod"
+    },
+    {
+      "path": "./lib/integrations-anthropic-ai"
+    },
+    {
+      "path": "./lib/integrations-gemini-ai"
+    },
+    {
+      "path": "./lib/object-storage-web"
+    }
+  ]
+}
+ 2,050 changes: 1,025 additions & 1,025 deletions2,050  
+uv.lock
+Large diffs are not rendered by default.
+
+Footer
+© 2026 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Community
+Docs
+Contact
+Manage cookies
+Do not share my personal information

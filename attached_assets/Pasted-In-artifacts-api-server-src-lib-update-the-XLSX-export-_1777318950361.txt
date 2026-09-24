@@ -1,0 +1,95 @@
+In artifacts/api-server/src/lib/ update the XLSX 
+export to be clean and simple with 3 tabs only.
+
+FILE NAME: [JobName]_Takeoff_[YYYY-MM-DD].xlsx
+Example: Gleason_Library_Takeoff_2026-04-27.xlsx
+
+════════════════════════════════
+TAB 1 — "Takeoff" (PRIMARY TAB)
+════════════════════════════════
+Simple, clean. This is what the estimator uses.
+
+Columns:
+A: Floor          (Ground Floor, Level 1, Level 2)
+B: Room #         (103, ST-1, EL-1)
+C: Room Name      (DIRECTOR OFFICE, STAIR 1)
+D: Sign Type      (Room ID, Restroom, Exit)
+E: Size           (6 × 6, 6 × 8, 6 × 12)
+F: Qty            (1, 2, 3)
+G: ADA            (✓ or —)
+H: Notes          (blank — estimator fills)
+
+Formatting:
+- Row 1: "Project: [Job Name] | [Building Type] | 
+  [Date] | Total Signs: [N]"
+  Merged across all columns, amber background, 
+  white bold text
+- Row 2: Column headers, dark background, white bold
+- Group by floor — floor header row spans all columns:
+  dark gray background, white bold, e.g. "LEVEL 1"
+- Alternating white/light gray data rows
+- Subtotal per floor: "Level 1 Subtotal: N signs"
+  light blue background, bold
+- Grand Total row: amber background, white bold
+- Auto-fit column widths
+- Freeze rows 1+2
+- Font: Calibri 11pt
+
+DO NOT include: Sign ID, Confidence, Source, 
+Room Status, Message, internal fields
+
+════════════════════════════════
+TAB 2 — "Summary" (QUICK REFERENCE)
+════════════════════════════════
+One row per sign type. Estimator sees totals fast.
+
+Columns:
+A: Sign Type      (Room ID, Restroom, etc)
+B: Standard Size  (6 × 6, 6 × 8, etc)
+C: Total Qty      (17, 3, 2)
+D: ADA Required   (Yes / No)
+E: Unit Price     (from tenant pricing settings)
+F: Extended Price (= C × E, formula)
+
+Last rows:
+  Subtotal:      SUM of column F
+  Rush Fee:      blank (estimator adds if needed)
+  Shipping:      blank
+  GRAND TOTAL:   bold amber, SUM formula
+
+Note at bottom: 
+"Pricing based on tenant default settings.
+ Adjust unit prices in column E as needed."
+
+════════════════════════════════
+TAB 3 — "Pricing Detail"
+════════════════════════════════
+Only shows if tenant has pricing configured.
+Detailed breakdown per sign using tenant settings.
+
+Header row (merged, amber):
+"Suggested Bid Pricing | [Material Name] | 
+ Min. Sign Price: $XX | [Date]"
+
+Columns:
+A: Sign Type
+B: Size  
+C: Sq Inches
+D: Qty
+E: Material
+F: Finishing
+G: $/sq in
+H: Unit Price (MAX of min price, sq in × rate)
+I: Total (D × H)
+
+Subtotal, Grand Total rows at bottom.
+Currency format on H, I ($0.00)
+
+DOWNLOAD BUTTON:
+In job-detail.tsx, simplify the download area:
+- One amber "Download XLSX" button (prominent)
+- One secondary "Download PDF" button (outline)
+- Remove all other export options
+- Show file name preview: 
+  "Gleason_Library_Takeoff_2026-04-27.xlsx"
+- No checkboxes, no options — just download

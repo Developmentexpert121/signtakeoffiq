@@ -1,0 +1,93 @@
+Add two-pass OCR + Vision merge to pipeline.ts. Wrap everything in a feature flag so it can be disabled instantly.
+Step 1 — Add feature flag at top of processJob function:
+tsconst ENABLE_TWO_PASS = process.env.ENABLE_TWO_PASS !== "false";
+Step 2 — Find Step 5 in pipeline.ts where sidecar /extract-words is already being called. Copy the exact fetch pattern already used there — do not change Step 5 at all. Just replicate the same call pattern in the new merge block.
+Step 3 — Add merge block immediately after the Step 6 vision loop completes (after step6SheetResults is fully populated). Insert:
+ts// ── TWO-PASS MERGE ────────────────────────────────────────────────────────
+if (ENABLE_TWO_PASS && sidecarOk) {
+  logger.log(`[pipeline] Two-pass merge: starting with ${extractedRooms.length} vision rooms`);
+  let confirmed = 0;
+  let added = 0;
+
+  for (const sheet of relevantSheets) {
+    try {
+      const file = floorPlanFiles.find(f => f.id === sheet.fileId);
+      if (!file) continue;
+
+      // Reuse the EXACT same sidecar call pattern already used in Step 5
+      // Copy the working fetch call from Step 5 — do not invent a new pattern
+      const existingWordResult = sheetWordMap?.get(sheet.id ?? "");
+      if (!existingWordResult?.words?.length) continue;
+
+      const textRooms = extractRoomsFromWords(
+        existingWordResult.words,
+        existingWordResult.pageWidth ?? existingWordResult.page_width ?? 1000,
+        existingWordResult.pageHeight ?? existingWordResult.page_height ?? 1000,
+      );
+
+      if (!textRooms.length) continue;
+
+      logger.log(`[pipeline] Two-pass: ${sheet.sheetId} — ${textRooms.length} text rooms vs ${extractedRooms.filter(r => r.sheetDbId === sheet.id).length} vision rooms`);
+
+      for (const textRoom of textRooms) {
+        const numLower = textRoom.roomNumber.toLowerCase().trim();
+        const nameLower = textRoom.roomName.toLowerCase().trim();
+        if (!numLower && nameLower.length < 3) continue;
+
+        // Find matching vision room
+        const visionMatch = extractedRooms.find(r => {
+          const vNum = (r.roomNumber ?? "").toLowerCase().trim();
+          const vName = (r.roomName ?? "").toLowerCase().trim();
+          if (numLower && vNum && numLower === vNum) return true;
+          if (nameLower.length > 3 && vName.length > 3) {
+            const words = nameLower.split(/\s+/).filter(w => w.length > 2);
+            return words.length > 0 && words.every(w => vName.includes(w));
+          }
+          return false;
+        });
+
+        if (visionMatch) {
+          visionMatch.aiConfidence = "0.920";
+          (visionMatch as Record<string, unknown>).confirmedByText = true;
+          confirmed++;
+        } else {
+          extractedRooms.push({
+            roomNumber: textRoom.roomNumber,
+            roomName: textRoom.roomName,
+            level: sheet.level ?? "LEVEL 1",
+            x: textRoom.x,
+            y: textRoom.y,
+            sheetDbId: sheet.id!,
+            aiVision: false,
+            aiConfidence: "0.850",
+            aiIsRestroom: false,
+          });
+          added++;
+        }
+      }
+    } catch (err) {
+      logger.warn(`[pipeline] Two-pass failed for sheet ${sheet.sheetId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  logger.log(`[pipeline] Two-pass complete: ${confirmed} confirmed by both passes, ${added} text-only rooms added, ${extractedRooms.length} total`);
+}
+// ─────────────────────────────────────────────────────────────────────────
+Step 4 — Update room insert in Step 8 to track confirmed source. Find the source: field in db.insert(roomsTable) and change to:
+tssource: (r as Record<string, unknown>).confirmedByText
+  ? "confirmed"
+  : r.aiVision
+  ? "ai_vision"
+  : "pdf",
+confidence: (r as Record<string, unknown>).confirmedByText
+  ? "0.920"
+  : r.aiVision
+  ? (r.aiConfidence ?? "0.650")
+  : "1.0",
+Critical instruction to Replit: Before writing any new fetch code, find the variable name used in Step 5 to store the sidecar word extraction results (look for sheetWordMap, wordResults, or similar). Use that existing cached data instead of making new sidecar calls. The words are already extracted in Step 5 — we just need to reuse them in the merge.
+After saving:
+
+Check build is clean
+Trigger Force Fresh rescans on BA Lounge, Park Lane, Cambridge Moses
+Let run overnight
+Check logs tomorrow for [pipeline] Two-pass complete lines

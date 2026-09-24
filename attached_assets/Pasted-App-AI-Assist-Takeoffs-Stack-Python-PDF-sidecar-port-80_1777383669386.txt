@@ -1,0 +1,111 @@
+App: AI-Assist Takeoffs
+Stack: Python PDF sidecar (port 8008)
+
+CRITICAL: The same 21 garbled rows have 
+appeared across 3 consecutive fix attempts. 
+The database-level filter is not working. 
+The fix must happen in the PDF sidecar 
+BEFORE data reaches the API.
+
+══════════════════════════════════════════════════
+ROOT CAUSE — Legend area being read as rooms
+══════════════════════════════════════════════════
+All 21 garbled rows contain text fragments from 
+the INTERIOR SIGNAGE LEGEND box printed at the 
+bottom-left of each Fox Hill plan sheet:
+- "MB 8'-0''" → marker board callouts
+- "60X21 36X24" → casework dimensions  
+- "19A 19B 19E" → LEED sign type codes
+- "E119C.1 TO E119C.2" → drawing reference ranges
+- "TB 4'-0''" → tackboard callouts
+
+This legend box appears at approximately:
+- Y position: bottom 15% of each page
+- X position: left 35% of each page
+
+══════════════════════════════════════════════════
+FIX — Exclude legend/title block zones from 
+room label extraction
+══════════════════════════════════════════════════
+In the Python PDF sidecar, in the pdfplumber 
+room extraction step:
+
+1. Define EXCLUSION ZONES for each page 
+   as a fraction of page dimensions:
+
+   BOTTOM_STRIP = bottom 18% of page height
+   RIGHT_STRIP  = right 20% of page width
+   
+   These zones contain:
+   - Bottom strip: legend box, north arrow, 
+     scale bar, sheet notes
+   - Right strip: title block, firm logos, 
+     revision table, stamp
+
+2. When extracting words with pdfplumber:
+   SKIP any word whose bounding box 
+   center falls within either exclusion zone:
+   
+   page_height = page.height
+   page_width  = page.width
+   
+   for word in page.extract_words():
+       y_center = (word['top'] + word['bottom']) / 2
+       x_center = (word['x0'] + word['x1']) / 2
+       
+       if y_center > page_height * 0.82:
+           continue  # bottom strip — legend/notes
+       if x_center > page_width * 0.80:
+           continue  # right strip — title block
+       
+       # proceed with room label extraction
+
+3. Also exclude the INTERIOR SIGNAGE LEGEND 
+   box specifically — it appears as a bordered 
+   rectangle. After extracting words, filter 
+   out any word that appears in a cluster 
+   where >30% of nearby words are sign type 
+   codes matching: 
+   r'^(MB|TB|CB|SA|SB|SC|SD|19[A-Z]|\d+[AB]?)$'
+
+4. Add a log line per page processed:
+   "Page [n]: excluded [x] words in legend/title 
+   zones, retained [y] words for room extraction"
+
+══════════════════════════════════════════════════
+ALSO: Hard reject these room numbers in the 
+API layer as a safety net
+══════════════════════════════════════════════════
+In the Node API, before inserting any room 
+into the database, reject rooms where:
+
+room_number matches any of these patterns:
+  /^\d{1,2}$/          → pure 1-2 digit numbers
+  /^[A-Z]\d{1,2}$/     → single letter + 1-2 digits  
+  /^[A-Z]{1,2}\d{1,2}$/ → 1-2 letters + 1-2 digits
+
+AND room_name contains any of:
+  /\d+X\d+/            → dimension like 60X21
+  /\d+'-\d/            → dimension like 8'-0
+  /^[\s\.\-\'"]+$/     → only punctuation
+  /TO [EW]\d/          → callout range ref
+  
+Log rejected rooms as: 
+"REJECTED invalid room [number]: [name reason]"
+
+══════════════════════════════════════════════════
+DO NOT TOUCH
+══════════════════════════════════════════════════
+- The 93 clean rooms already in the database
+- Any room with number format W1XX, E1XX, WC1XX
+- The XLSX export, Summary, or Pricing logic
+- All 1,430 tests
+
+══════════════════════════════════════════════════
+EXPECTED RESULT
+══════════════════════════════════════════════════
+- 0 garbled rows in Review tab
+- Pipeline log shows legend zone exclusion counts
+- Force rescan Fox Hill → clean room names only
+- Same fix applies to ALL future plan uploads
+  (legend zones are standard on all AIA sheets)

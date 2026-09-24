@@ -1,0 +1,49 @@
+Two clear bugs, both fixable now. Send this to Replit:
+
+What's broken in two sentences:
+Bug 1: The egress filter uses startsWith("R1") which matches R10/R11/R12/R13/R14/R15/R16, letting 93 rules-engine signs through instead of ~24. Bug 2: Gemini is extracting 397 schedule entries from AA831 instead of 163 because it's reading the same rows across 27 table instances found on the sheet.
+File that changes:
+
+artifacts/api-server/src/lib/pipeline.ts — two targeted fixes only
+
+
+Fix 1 — Exact match on egress rule refs (line ~7555)
+Change:
+typescriptEGRESS_RULES.some(r => s.ruleRef?.startsWith(r))
+To:
+typescriptEGRESS_RULES.some(r => s.ruleRef === r)
+This ensures only exact R1, R2, R3, R4 matches pass — not R10, R11, R12, R13, R16 etc.
+
+Fix 2 — Deduplicate schedule entries by room number + sign type
+After Gemini extracts schedule entries from AA831, the pipeline finds 27 tables on the sheet and reads the same rows multiple times. Add a deduplication step immediately after extraction:
+typescript// Deduplicate schedule entries — same room number + sign type = same sign
+const seenScheduleKeys = new Set<string>();
+const deduplicatedSchedule = signSchedule.filter(entry => {
+  const key = `${entry.roomNumber?.trim().toLowerCase()}|${entry.signType?.trim().toLowerCase()}`;
+  if (seenScheduleKeys.has(key)) return false;
+  seenScheduleKeys.add(key);
+  return true;
+});
+
+logger.log(
+  `[Step 3a] Schedule dedup: ${signSchedule.length} raw entries → ` +
+  `${deduplicatedSchedule.length} unique (removed ${signSchedule.length - deduplicatedSchedule.length} duplicates)`
+);
+
+// Replace signSchedule with deduplicated version
+signSchedule.length = 0;
+signSchedule.push(...deduplicatedSchedule);
+Place this immediately after the Step 3a summary log line, before hasScheduleImport is set.
+
+After fixes
+
+Typecheck 0 errors, tests 1,461 passing
+Rescan Walking Court_2 — no force needed
+Watch for:
+
+[Step 3a] Schedule dedup: 397 raw entries → ~163 unique
+[Step 9] schedule_primary — rules engine filtered from N to ~24 egress signs
+Total signs: ~163 schedule + ~24 egress = ~187 total
+
+
+Fox Hill does NOT need rescan — neither fix touches non-schedule_primary paths

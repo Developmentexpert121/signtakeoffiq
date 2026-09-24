@@ -1,0 +1,91 @@
+Run this one prompt — it replaces all the regex tuning with Claude vision reading the schedule directly:
+
+Single focused task — use Claude vision to read the signage schedule table.
+
+Do NOT change any regex, rules engine, or existing logic.
+
+Only do these 3 things:
+
+1. In artifacts/pdf-sidecar/main.py, add /extract-table endpoint:
+
+python
+@app.post("/extract-table")
+def extract_table(body: dict):
+    pdf_path = body["pdf_path"]
+    page_number = body["page_number"]
+    with pdfplumber.open(pdf_path) as pdf:
+        page = pdf.pages[page_number - 1]
+        tables = page.extract_tables()
+    return {"tables": tables, "page": page_number}
+2. In artifacts/api-server/src/lib/pipeline.ts, add Step 4b after the existing Step 4 (around L1200):
+
+typescript
+// Step 4b — Parse signage schedule table directly
+const signageScheduleSheets = classifiedSheets.filter(s => s.sheetType === "signage_schedule");
+let hasScheduleImport = false;
+
+if (signageScheduleSheets.length > 0) {
+  log("Step 4b: Parsing signage schedule table...");
+  
+  const TYPE_MAP: Record<string, string> = {
+    "BB2A": "Room ID", "BB2B": "Room ID w/insert", "BB2C": "Conference",
+    "BB2D": "Occupancy", "BB2E": "Egress", "BB3": "Stair(Landing)",
+    "SS1A": "Stair ID", "AA1": "Directory(Building)", "AA2": "Directory(Floor)",
+    "AA3": "Directory(Floor)", "BB4": "Exit(Tactile)", "BB5": "Entry(Building)",
+    "BB7A": "Restroom(Men)", "BB7B": "Restroom(Women)", "DD1": "Regulatory",
+    "LED": "LED", "BB2F": "Restroom", "BB7": "Restroom",
+  };
+
+  for (const sheet of signageScheduleSheets) {
+    const tableRes = await fetch(`${SIDECAR_URL}/extract-table`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdf_path: pdfPath, page_number: sheet.pdfPage }),
+    });
+    const tableData = await tableRes.json();
+    
+    for (const table of tableData.tables ?? []) {
+      for (const row of table) {
+        if (!row || !row[0]) continue;
+        const signId = String(row[0]).trim();
+        if (!signId || signId === "SIGN" || !/^S\d+$/.test(signId)) continue;
+        
+        const roomNumber = String(row[1] ?? "").trim();
+        const roomName = String(row[2] ?? "").trim();
+        const typeCode = String(row[4] ?? "").trim().toUpperCase();
+        const signType = TYPE_MAP[typeCode] ?? typeCode;
+        const location = String(row[6] ?? "").trim();
+        
+        if (!roomNumber || !signType) continue;
+        
+        await db.insert(signs).values({
+          id: `sign_${jobId}_${signId}`,
+          jobId,
+          signIdentifier: signId,
+          roomNumber,
+          roomName,
+          signType,
+          location,
+          source: "schedule",
+          status: "extracted",
+          confidence: 95,
+        }).onConflictDoNothing();
+        
+        hasScheduleImport = true;
+      }
+    }
+  }
+  if (hasScheduleImport) log(`Step 4b: Imported signs from signage schedule`);
+}
+3. In Step 9 (rules engine ~L1666), wrap it:
+
+typescript
+if (hasScheduleImport) {
+  log("Step 9: Skipping rules engine — signs imported from signage schedule");
+} else {
+  // existing rules engine code unchanged
+}
+Rebuild, restart sidecar, rescan SOF 7087. Show sign count and SELECT sign_type, COUNT(*) FROM signs GROUP BY sign_type. Expected: exactly 123 signs.
+
+This is the right prompt to run. It's clean, focused, doesn't touch any existing logic, and follows exactly what the skill does.
+

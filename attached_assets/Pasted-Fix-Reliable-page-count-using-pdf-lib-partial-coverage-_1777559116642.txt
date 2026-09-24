@@ -1,0 +1,77 @@
+Fix — Reliable page count using pdf-lib + partial coverage synthesis. files.ts and pipeline.ts only. No rescans. Typecheck + full test suite after.
+Fix 1 — Replace regex page count with pdf-lib in files.ts
+Find lines 103–118 where the /Type\/Page regex runs on the first 500KB. Replace entirely:
+typescript// Replace the regex approach with pdf-lib for reliable page counting
+import { PDFDocument } from 'pdf-lib';
+
+let detectedPageCount: number | null = null;
+try {
+  const pdfDoc = await PDFDocument.load(buffer, { 
+    ignoreEncryption: true,
+    updateMetadata: false 
+  });
+  detectedPageCount = pdfDoc.getPageCount();
+} catch {
+  // Fallback: regex on full buffer if pdf-lib fails
+  const fullPdfStr = buffer.toString("binary");
+  const pageMatches = fullPdfStr.match(/\/Type\s*\/Page[^s]/g);
+  detectedPageCount = (pageMatches && pageMatches.length > 0) 
+    ? pageMatches.length 
+    : null;
+}
+Fix 2 — Persist total_pages back to DB after sidecar parse in pipeline.ts
+Find line 2352 where (file as any).pageCount = indexResult.total_pages is set in memory. After that line, add a DB write to persist it:
+typescript(file as any).pageCount = indexResult.total_pages;
+// Persist to DB so partial synthesis and future runs have reliable page count
+if (indexResult.total_pages && !file.pageCount) {
+  await db.update(jobFilesTable)
+    .set({ pageCount: indexResult.total_pages })
+    .where(eq(jobFilesTable.id, file.id));
+}
+Fix 3 — Partial coverage synthesis in pipeline.ts
+After the existing if (allSheets.length === 0) { ... } synthesis block closes, add:
+typescript// Partial coverage synthesis — synthesize pages the sidecar missed.
+for (const file of planFiles) {
+  const totalPages = (file as any).pageCount as number | null;
+  if (!totalPages || totalPages <= 1) continue;
+
+  const coveredPages = new Set(
+    allSheets
+      .filter(s => s.fileId === file.id)
+      .map(s => s.pdfPage ?? 1)
+  );
+
+  if (coveredPages.size >= totalPages) continue;
+
+  logger.log(
+    `[pipeline] Partial coverage: ${file.filename} ` +
+    `${coveredPages.size}/${totalPages} pages covered — ` +
+    `synthesizing ${totalPages - coveredPages.size} missing page(s).`
+  );
+
+  for (let page = 1; page <= totalPages; page++) {
+    if (coveredPages.has(page)) continue;
+    const syntheticSheetId = `PLAN-${file.id.slice(-6)}-P${page}`;
+    allSheets.push({
+      id: `sheet_synth_${file.id}_p${page}`,
+      jobId,
+      tenantId,
+      fileId: file.id,
+      sheetId: syntheticSheetId,
+      sheetTitle: `Floor Plan (Page ${page})`,
+      sheetType: "floor_plan" as const,
+      pdfPage: page,
+      pageWidth: null,
+      pageHeight: null,
+      rasterizedPath: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+}
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing

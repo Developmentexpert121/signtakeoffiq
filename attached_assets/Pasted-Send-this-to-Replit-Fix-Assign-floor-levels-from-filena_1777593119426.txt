@@ -1,0 +1,54 @@
+Send this to Replit:
+
+Fix — Assign floor levels from filename for multi-file jobs where sheet level is null. pipeline.ts only. No rescans. Typecheck + full test suite after.
+The problem: Tower District has 4 separate PDFs (1st Floor, 2nd Floor, 3rd Floor, 4th Floor). The sidecar detects them as sheets A1.1-A1.4 but only assigns LEVEL 2 to A1.2. The other 3 get NULL level.
+Find where sheet levels are assigned after the sidecar returns sheet data. After sheets are inserted into the DB, add a filename-based level assignment for any sheet with a null level:
+typescript// After sheets are inserted — fix null levels using filename hints
+for (const sheet of allSheets) {
+  if (sheet.level) continue; // already has a level
+  
+  const file = planFiles.find(f => f.id === sheet.fileId);
+  if (!file) continue;
+  
+  const fname = file.filename.toUpperCase();
+  const level = 
+    fname.includes('1ST') || fname.includes('FIRST') ? 'LEVEL 1' :
+    fname.includes('2ND') || fname.includes('SECOND') ? 'LEVEL 2' :
+    fname.includes('3RD') || fname.includes('THIRD') ? 'LEVEL 3' :
+    fname.includes('4TH') || fname.includes('FOURTH') ? 'LEVEL 4' :
+    fname.includes('5TH') || fname.includes('FIFTH') ? 'LEVEL 5' :
+    fname.includes('BASEMENT') || fname.includes('B1') ? 'LEVEL B1' :
+    fname.includes('GROUND') ? 'LEVEL 1' :
+    null;
+    
+  if (level) {
+    logger.log(
+      `[pipeline] Assigned ${level} to sheet ${sheet.sheetId} ` +
+      `from filename ${file.filename}`
+    );
+    // Update in DB
+    await db.update(jobSheetsTable)
+      .set({ level })
+      .where(eq(jobSheetsTable.id, sheet.id));
+    sheet.level = level;
+  }
+}
+Also fix the 77 missing markers on A1.2 — these are rules-engine signs (stairs, exits, egress) that have no room coordinates. For rules-engine signs with null markers, assign them to the center of their floor's sheet as a default placement:
+typescript// For signs with null markers on a known sheet — place at sheet center
+// This ensures they appear on the plan even if position is estimated
+const CENTER_X = 50_000;
+const CENTER_Y = 50_000;
+
+// In Step 10b backfill — after existing matching logic:
+// If sign still has no marker and has a sheetId, place at center
+if (!sign.markerX && sign.sheetId) {
+  await db.update(signsTable)
+    .set({ markerX: CENTER_X, markerY: CENTER_Y })
+    .where(eq(signsTable.id, sign.id));
+}
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing

@@ -1,0 +1,71 @@
+Fix — Use PDF text coordinates for marker placement instead of Gemini estimates. pipeline.ts only. Targeted change. Typecheck + full test suite after.
+What's broken: Room marker positions come from Gemini vision estimates (±5,000 units accuracy). pdfplumber already extracts exact PDF text coordinates for every room label but these aren't being used for marker placement.
+The fix: After extractRoomsFromWords returns textRooms[] at line 5286, build a coordinate map from the exact word positions and update each room's coordX/coordY in the DB with the precise PDF coordinates.
+Find the merge loop at line 5300 (for (const textRoom of textRooms)). After that loop completes, add:
+typescript// Build precise coordinate map from PDF text word positions
+// wordResult.words[] contains exact x0/y0 for every text element
+// This gives pixel-perfect marker placement vs Gemini's estimates
+const pdfCoordMap = new Map<string, { coordX: number; coordY: number }>();
+
+for (const word of (wordResult.words ?? [])) {
+  const text = word.text?.trim().toUpperCase();
+  if (!text) continue;
+  
+  // Match room number patterns: 101A, 103B, E119, A1-100 etc.
+  if (!/^[A-Z]?\d{2,4}[A-Z]?$|^[A-Z]{1,3}-?\d{2,4}$/.test(text)) continue;
+  
+  const pw = wordResult.page_width ?? 1000;
+  const ph = wordResult.page_height ?? 1000;
+  
+  // Convert PDF points to 0-100,000 coordinate space
+  const coordX = Math.round(((word.x0 + word.x1) / 2 / pw) * 100_000);
+  const coordY = Math.round(((word.y0 + word.y1) / 2 / ph) * 100_000);
+  
+  // Clamp to valid range
+  const clampedX = Math.max(1_000, Math.min(99_000, coordX));
+  const clampedY = Math.max(1_000, Math.min(99_000, coordY));
+  
+  pdfCoordMap.set(text, { coordX: clampedX, coordY: clampedY });
+}
+
+// Update rooms with exact PDF coordinates where available
+// Only overwrites when PDF coordinate exists — never clears existing coords
+for (const textRoom of textRooms) {
+  const key = textRoom.roomNumber?.trim().toUpperCase();
+  if (!key) continue;
+  
+  const pdfCoord = pdfCoordMap.get(key);
+  if (!pdfCoord) continue;
+  
+  // Update in DB — replaces Gemini estimate with exact PDF coordinate
+  await db.update(roomsTable)
+    .set({ 
+      coordX: pdfCoord.coordX, 
+      coordY: pdfCoord.coordY,
+    })
+    .where(
+      and(
+        eq(roomsTable.jobId, jobId),
+        eq(roomsTable.roomNumber, textRoom.roomNumber ?? '')
+      )
+    );
+    
+  logger.log(
+    `[pipeline] PDF coords: ${key} → (${pdfCoord.coordX}, ${pdfCoord.coordY})`
+  );
+}
+What this does NOT change:
+
+Room identification logic
+Vision extraction
+Sign counts or rules engine
+Step 10b — it already uses coordX/coordY, just gets better data now
+Any job without a PDF text layer — pdfCoordMap will be empty, no updates run
+
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing
+Do NOT rescan any job yet — report clean tests and stop

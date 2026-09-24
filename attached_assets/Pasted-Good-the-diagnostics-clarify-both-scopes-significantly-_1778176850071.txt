@@ -1,0 +1,108 @@
+Good — the diagnostics clarify both scopes significantly. Here's what's actually needed vs what was originally assumed:
+P2 reality: Room name inline edit already exists. Flag overrides already have a popover. The real gap is a qty override on the Signs cell — click the number, type a new count, saves via PATCH. Type editing is already covered by the flag override popover.
+P3 reality: projectSignDictionary with typeCode, size, material is already extracted and cached in job.metadata. The gap is purely wiring it into exports.ts — when building Takeoff rows, look up the sign's type code in the dictionary and use its size/material instead of DEFAULT_SIGN_PRICING defaults.
+Both are smaller than originally scoped. Here are the prompts:
+
+Session 10 — P2: Review Tab Qty Inline Edit
+Changes across two files. No schema changes — qty is already on signs rows. Typecheck must pass, 1,704 tests must stay green. Do not rescan any job.
+
+Change 1 — artifacts/api-server/src/routes/rooms.ts
+Add qtyOverride?: number to the PATCH body destructure alongside existing fields. When present:
+
+Validate: must be integer ≥ 0, return 400 if not
+Update all non-deleted signs for this room: set qty = qtyOverride where roomId = room.id
+Do not trigger regenSignsForRoom — this is a manual override, not a rules re-run
+Add qtyOverride to the hasUpdate gate so the 400 "nothing to update" guard works correctly
+
+
+Change 2 — artifacts/web/src/pages/job-detail.tsx
+2a — New state:
+typescriptconst [editingQtyRoomId, setEditingQtyRoomId] = useState<string | null>(null);
+const [editingQtyValue, setEditingQtyValue] = useState<string>("");
+2b — Signs cell inline edit — replace the plain {roomSignCount > 0 ? roomSignCount : "—"} span with:
+tsx{editingQtyRoomId === room.id ? (
+  <div className="flex items-center gap-1">
+    <Input
+      type="number"
+      min={0}
+      className="w-16 h-7 text-sm px-2"
+      value={editingQtyValue}
+      autoFocus
+      onChange={e => setEditingQtyValue(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === "Enter") handleSaveQty(room.id);
+        if (e.key === "Escape") setEditingQtyRoomId(null);
+      }}
+      onBlur={() => handleSaveQty(room.id)}
+    />
+  </div>
+) : (
+  <span
+    className="cursor-pointer hover:underline hover:text-amber-400 transition-colors"
+    title="Click to override quantity"
+    onClick={() => {
+      setEditingQtyRoomId(room.id);
+      setEditingQtyValue(String(roomSignCount));
+    }}
+  >
+    {roomSignCount > 0 ? roomSignCount : "—"}
+  </span>
+)}
+2c — handleSaveQty handler:
+typescriptconst handleSaveQty = async (roomId: string) => {
+  const parsed = parseInt(editingQtyValue, 10);
+  setEditingQtyRoomId(null);
+  if (isNaN(parsed) || parsed < 0) return;
+  await authFetch(`/api/jobs/${jobId}/rooms/${roomId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qtyOverride: parsed }),
+  });
+  queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/signs`] });
+  queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/rooms`] });
+};
+2d — Dirty indicator — after a successful qty save, call onDirtyChange?.(true) to light the dirty dot on the Review tab trigger.
+
+After P2 changes: Run typecheck, confirm 1,704 tests passing. Open Fox Hill Review tab — click a sign count, change the number, confirm it saves and the count updates without a full reload. Do not rescan.
+
+Session 10 — P3: Per-Sign-Type XLSX Pricing from Project Sign Dictionary
+Changes in one file only: artifacts/api-server/src/routes/exports.ts. No pipeline changes — projectSignDictionary is already extracted and cached in job.metadata. Typecheck must pass, tests must stay green. Do not rescan any job.
+
+Change 1 — Load projectSignDictionary alongside materialSpec in the export handler
+At the top of the XLSX export handler where getJobMaterialSpec is already called, also load the job metadata:
+typescriptconst job = await db.query.jobsTable.findFirst({
+  where: eq(jobsTable.id, jobId),
+  columns: { metadata: true }
+});
+const signDictionary = (job?.metadata as any)?.projectSignDictionary?.signTypes ?? [];
+// Build lookup: typeCode → { size, material, description }
+const dictByCode = new Map(
+  signDictionary.map((e: any) => [e.typeCode?.toUpperCase(), e])
+);
+
+Change 2 — Wire dictionary into Takeoff row pricing
+In the Takeoff row builder where getPriceForSignType(signType, pricingConfig) is currently called, add a dictionary lookup first:
+typescriptconst dictCode = signType?.toUpperCase();
+const dictEntry = dictByCode.get(dictCode);
+
+// Use dictionary size if available, fall back to pricing defaults
+const resolvedSize = dictEntry?.size ?? null;
+const resolvedMaterial = dictEntry?.material ?? spec.materialName;
+
+// Parse size string "6x6" or "6 x 6" → width/height for pricing
+let resolvedWidth = spec.width;
+let resolvedHeight = spec.height;
+if (resolvedSize) {
+  const match = resolvedSize.match(/(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)/);
+  if (match) {
+    resolvedWidth = parseFloat(match[1]);
+    resolvedHeight = parseFloat(match[2]);
+  }
+}
+Use resolvedMaterial for the Material column and resolvedWidth/resolvedHeight for the unit price calculation instead of the defaults. Dictionary entries take precedence; jobs without a sign dictionary fall back to existing DEFAULT_SIGN_PRICING behavior unchanged.
+
+Change 3 — Add Description column from dictionary
+Add a 13th column Description (width 30) after Material, populated from dictEntry?.description ?? "". Update COLS = 13. Update all merge spans accordingly.
+ColHeaderSource9DescriptiondictEntry.description or blank10MaterialdictEntry.material or default11Finishspec.finishingName12Unit Pricecomputed13ExtendedUnit Price × Qty
+
+After P3 changes: Run typecheck, confirm test count. Download XLSX for Fox Hill — verify 13 columns on Takeoff sheet, Description column present, Material/size falls back to defaults (Fox Hill has no sign dictionary). If Walking Court_2 has a sign dictionary in metadata, verify its rows show dictionary-sourced sizes. Do not rescan any job.

@@ -1,0 +1,49 @@
+Fix — Write PDF-native coordinates to roomsTable during Step 2 merge. pipeline.ts only. Typecheck + full test suite after.
+Context: extractRoomsFromWords already returns rooms with coordSource: "pdf_native" and exact x/y coordinates normalized to 0-100,000. These are pixel-perfect PDF text positions. Currently these coordinates are not written to roomsTable.coordX/coordY — only Gemini's imprecise estimates are stored.
+Find the merge loop at line 5300:
+typescriptfor (const textRoom of textRooms) { ...merge loop...
+Inside this loop, find where rooms are inserted or updated in the DB. After each room is written, add:
+typescript// If this room has PDF-native coordinates, update coordX/coordY
+// PDF-native coords are pixel-perfect vs Gemini's ±5000 unit estimates
+if (textRoom.coordSource === "pdf_native" && 
+    textRoom.x > 0 && textRoom.y > 0) {
+  await db.update(roomsTable)
+    .set({
+      coordX: textRoom.x,
+      coordY: textRoom.y,
+    })
+    .where(
+      and(
+        eq(roomsTable.jobId, jobId),
+        eq(roomsTable.roomNumber, textRoom.roomNumber)
+      )
+    );
+}
+If rooms are inserted not updated — add coordX: textRoom.x, coordY: textRoom.y directly to the insert values when textRoom.coordSource === "pdf_native".
+Also update the sign marker directly in the same loop — don't wait for Step 10b:
+typescript// Also update markerX/markerY on any sign for this room
+// This bypasses Step 10b's imprecise Gemini lookup
+if (textRoom.coordSource === "pdf_native") {
+  await db.update(signsTable)
+    .set({
+      markerX: textRoom.x,
+      markerY: textRoom.y,
+    })
+    .where(
+      and(
+        eq(signsTable.jobId, jobId),
+        eq(signsTable.roomNumber, textRoom.roomNumber),
+        isNull(signsTable.markerX) // only update if not already placed
+      )
+    );
+}
+Show the merge loop context first before implementing — run:
+sed -n '5295,5340p' artifacts/api-server/src/lib/pipeline.ts
+Then implement after showing the output.
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing
+Do NOT rescan — report clean tests and stop

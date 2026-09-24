@@ -1,0 +1,63 @@
+Here's your Replit prompt:
+
+---
+
+Add Google Drive link support to the Job upload zones so users can process large PDFs without browser upload limits.
+
+**Change 1 — Find the Job upload UI:**
+
+In the job detail page (look for the file upload component in `artifacts/web/src/pages/` — likely `job.tsx` or similar), find the Construction Plans and Sign Schedule upload zones.
+
+Add a "Google Drive Link" toggle to both upload zones — identical to what was built in the Training Import tab. Reuse the same `FileOrDriveInput` component pattern already built in `training.tsx`.
+
+**Change 2 — Add Drive download to job file upload API:**
+
+Find the job file upload route in the API server (likely `POST /jobs/:jobId/files` or similar). Add handling for a `driveUrl` parameter alongside the existing file upload path.
+
+When `driveUrl` is provided:
+1. Call `downloadFromGoogleDrive(driveUrl)` from `lib/googleDriveDownload.ts`
+2. Upload the downloaded buffer to GCS using the existing `uploadToStorage` function
+3. Insert into `job_files` table exactly as a normal upload would
+4. Return the same response shape as a normal file upload
+
+**Change 3 — UI wiring on job page:**
+
+When user pastes a Drive link and clicks a "Download & Add" button:
+1. Show spinner: "Downloading from Google Drive..."
+2. On success: show file listed in the uploaded files section with size
+3. On error: show clear error message with fix instructions
+
+The Drive link input should appear below the existing upload zone with a divider:
+```
+[Drop PDFs here or browse]
+─── or ───
+[Paste Google Drive link...] [Add]
+```
+
+File size limits:
+- Construction Plans: 200MB max via Drive (larger than direct upload since server handles it)
+- Sign Schedule: 50MB max via Drive
+
+**Change 4 — "Train from this job" button:**
+
+On any completed job detail page, add a "Train" button next to the existing Rescan button.
+
+Clicking it opens a modal with:
+- Job name pre-filled as batch label
+- Job already linked in sourceJobId
+- PDF already referenced (no re-upload needed)
+- Just needs the Takeoff XLSX uploaded
+- "Analyze & Review" button goes straight to Training diff review
+
+The modal reuses the existing training import flow but pre-filled. When confirmed it redirects to Training tab showing the import result.
+
+After saving, test by:
+1. Creating a new job called "Cambridge Moses Youth Center"
+2. Pasting the Drive link in the Construction Plans zone
+3. Confirming the PDF downloads and shows in the files list
+4. Processing the job
+5. Clicking "Train" button → uploading Cambridge XLSX → running diff
+
+Share a screenshot of the job page with the Drive link zone visible.
+
+---

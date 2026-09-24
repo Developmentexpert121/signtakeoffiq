@@ -1,0 +1,35 @@
+Now we have the full picture. The data is actually in good shape:
+
+- ✅ **158 signs extracted** — all with `status = 'extracted'`
+- ✅ **120 signs have coordinates** — these should be showing on the plan
+- ⚠️ **38 signs have NULL coordinates** — stairs, corridors, things without room labels
+
+So the markers **should** be visible for the 120 signs that have coordinates. The problem is likely the **status filter** in the viewer — it's showing "Extracted: 0" even though 158 signs have `status = 'extracted'`.
+
+This is a **case mismatch or filter bug**. The DB has `extracted` (lowercase) but the UI filter might be checking for `"Extracted"` (capital E) or `"EXTRACTED"`.
+
+**Paste this into Replit Agent when you're ready (finish your UI edits first):**
+
+> The database has 158 signs with `status = 'extracted'` (lowercase) and 120 of them have marker coordinates. But the Floor Plan viewer filter bar shows "Extracted: 0" — no markers are visible.
+>
+> The bug is a status value mismatch. Find where the Floor Plan viewer filters signs by status and fix the comparison to be case-insensitive:
+>
+> In `artifacts/web/src/pages/FloorPlanTab.tsx`, find the status filter logic. It will look something like:
+> ```typescript
+> signs.filter(s => s.status === "Extracted")
+> // or
+> signs.filter(s => s.status === selectedStatus)
+> ```
+>
+> Fix it to be case-insensitive:
+> ```typescript
+> signs.filter(s => s.status?.toLowerCase() === selectedStatus.toLowerCase())
+> ```
+>
+> Also find where the status filter buttons are defined — the button labels like "Extracted", "Confirmed", "Needs Review", "Rejected" — and make sure the values they filter on match the actual DB values (`extracted`, `confirmed`, `needs_review`, `rejected` — all lowercase).
+>
+> Also check the "All statuses" filter — it should show ALL signs regardless of status, including null status. Make sure it's not accidentally filtering out signs with lowercase status values.
+>
+> After fixing, rebuild: `cd artifacts/web && pnpm run build`
+>
+> Expected result: Floor Plan viewer shows 120 markers on the plan (the 38 NULL-coordinate signs for stairs/corridors correctly won't show until coordinates are assigned).

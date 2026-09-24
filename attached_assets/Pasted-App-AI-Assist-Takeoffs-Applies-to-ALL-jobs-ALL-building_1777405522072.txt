@@ -1,0 +1,112 @@
+App: AI-Assist Takeoffs
+Applies to ALL jobs, ALL building types.
+
+════════════════════════════════════════════════
+FIX — Force checkbox must clear cache completely
+════════════════════════════════════════════════
+The "Force full re-process" checkbox is checked
+but cache is not being cleared. Find exactly
+why and fix it.
+
+STEP 1 — Add diagnostic logging first:
+In the rescan API handler, add these logs
+BEFORE any existing force logic:
+
+  console.log('[RESCAN] force flag received:',
+    req.body.force,
+    req.body.forceReprocess, 
+    req.query.force,
+    JSON.stringify(req.body)
+  );
+
+This tells us exactly what value the frontend
+is sending. Check Replit console after clicking
+Rescan with checkbox checked.
+
+STEP 2 — Find the cache table:
+Run this query and log the result at startup:
+
+  SELECT table_name, column_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+  AND table_name ILIKE ANY(
+    ARRAY['%cache%','%sheet%','%page%','%chunk%']
+  )
+  ORDER BY table_name;
+
+  console.log('[CACHE TABLE]', result.rows);
+
+STEP 3 — Fix the force handler using exact names:
+Once you have the real table name and job_id
+column name from Step 2, update the handler:
+
+  // Read force flag — check ALL possible field names
+  const isForce = 
+    req.body.force === true ||
+    req.body.force === 'true' ||
+    req.body.forceReprocess === true ||
+    req.body.forceReprocess === 'true' ||
+    req.query.force === 'true';
+
+  if (isForce) {
+    console.log('[FORCE] Clearing cache for job:', jobId);
+
+    // Use EXACT table and column names from Step 2
+    const cacheDelete = await db.query(
+      'DELETE FROM <exact_table> WHERE <exact_col> = $1',
+      [jobId]
+    );
+    console.log('[FORCE] Cache rows deleted:', 
+      cacheDelete.rowCount);
+
+    const signsDelete = await db.query(
+      'DELETE FROM signs WHERE job_id = $1',
+      [jobId]
+    );
+    console.log('[FORCE] Sign rows deleted:',
+      signsDelete.rowCount);
+
+    await db.query(
+      \`UPDATE jobs SET
+        total_signs = 0,
+        high_confidence_signs = 0,
+        needs_review = 0,
+        ai_cost = 0
+       WHERE id = $1\`,
+      [jobId]
+    );
+
+    if (cacheDelete.rowCount === 0) {
+      console.error('[FORCE] WARNING: 0 cache rows',
+        'deleted — wrong table or column name.',
+        'Check Step 2 output.');
+    }
+  }
+
+STEP 4 — Fix the pipeline log message:
+Only show "saved by reusing N cached sheets"
+when cache was actually used (isForce = false).
+
+  if (isForce) {
+    pipelineLog('Force rescan — full re-extraction');
+  } else if (cacheHits > 0) {
+    pipelineLog(\`~$\${savings} saved by reusing 
+                 \${cacheHits} cached sheets\`);
+  }
+
+════════════════════════════════════════════════
+VERIFY
+════════════════════════════════════════════════
+1. Check "Force full re-process" checkbox
+2. Click Rescan
+3. Replit console must show:
+   [RESCAN] force flag received: true ...
+   [FORCE] Clearing cache for job: <id>
+   [FORCE] Cache rows deleted: 4
+   [FORCE] Sign rows deleted: 215
+4. UI pipeline log shows:
+   "Force rescan — full re-extraction"
+   NOT "saved by reusing cached sheets"
+5. AI Cost > $0.00
+6. No garbled room names
+7. All 1,461 tests pass

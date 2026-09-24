@@ -1,0 +1,65 @@
+App: AI-Assist Takeoffs
+TWO targeted fixes only. No rescans during work.
+
+════════════════════════════════════════════════
+FIX 1 — Overview shows 0 after pipeline completes
+════════════════════════════════════════════════
+203 signs exist in DB but Overview shows 0.
+syncJobSignCounts() is not being called after
+the pipeline finishes, or it's being called
+before egress signs are inserted.
+
+Find the end of processJob() in pipeline.ts.
+It should call syncJobSignCounts() as the 
+very last operation before returning.
+
+Check current pipeline end:
+  grep -n "syncJobSignCounts\|updateJobCounts\
+  \|totalSigns.*=\|job.*total" \
+    artifacts/api-server/src/lib/pipeline.ts \
+    | tail -20
+
+Fix: ensure syncJobSignCounts is called AFTER
+all sign inserts complete including egress:
+
+  // At the very end of processJob(), 
+  // after all steps complete:
+  await syncJobSignCounts(jobId, db);
+  logger.log('[pipeline] Final sign counts synced');
+
+Also check: the /counts endpoint may be reading
+from job.total_signs (stale) instead of live query.
+In jobs.ts GET /jobs/:jobId/counts:
+  Must call computeLiveSignCounts(jobId, db)
+  NOT read from job.total_signs
+
+════════════════════════════════════════════════
+FIX 2 — Floor field blank in XLSX
+         Level populated in Review but not XLSX
+════════════════════════════════════════════════
+Review tab shows LEVEL 1 correctly but XLSX
+floor column is blank. The sign rows have
+floor_label set but the XLSX export isn't
+reading it.
+
+In the XLSX export file, find where the floor
+column is written:
+  grep -n "floor\|level\|LEVEL" \
+    artifacts/api-server/src/lib/xlsx-export.ts \
+    | head -20
+
+The export likely reads sign.floor or sign.level
+but the DB column is floor_label.
+
+Fix: use the correct column name:
+  // In xlsx export row builder:
+  floor: sign.floor_label  // not sign.floor
+       ?? sign.level       // fallback
+       ?? ''
+
+════════════════════════════════════════════════
+VERIFY — typecheck only, no rescan
+════════════════════════════════════════════════
+Typecheck must pass.
+I will manually trigger one rescan to verify.
+All 1,461 tests pass.

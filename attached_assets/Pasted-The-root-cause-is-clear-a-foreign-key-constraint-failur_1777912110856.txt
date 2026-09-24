@@ -1,0 +1,35 @@
+The root cause is clear — a foreign-key constraint failure in the FORCE FRESH delete block. specialty_signs references signs, and deleting signs before specialty_signs causes a constraint violation. It happened at 16:12:24 and silently left the job stuck in processing.
+Send this fix to Replit before the next rescan:
+
+What's broken in one sentence:
+The FORCE FRESH block fails with a foreign-key constraint error because signs is deleted before specialty_signs, leaving the job permanently stuck in processing status.
+File that changes:
+
+artifacts/api-server/src/lib/pipeline.ts — delete order in FORCE FRESH block only
+
+
+Find the FORCE FRESH block (around line 2101, inside if (options?.forceAiRescan)). It contains a Promise.all or sequential set of DELETE statements. Find where signs is deleted and where specialty_signs is deleted. Ensure specialty_signs is deleted before signs — not after, not in parallel via Promise.all.
+The correct order for all deletes in the FORCE FRESH block must respect foreign-key dependencies:
+
+specialty_signs (references signs)
+schedule_sign_rows / sign_schedule_entries (if they reference signs)
+signs
+extracted_rooms
+job_sheets
+sheet_text
+ai_scan_records
+
+If any of these are currently inside a Promise.all([...]), pull specialty_signs out and run it first as a standalone await before the Promise.all fires.
+Also add a safety net — wrap the entire FORCE FRESH delete block in a try/catch that resets job status to idle if any delete fails, so the job never gets permanently stuck in processing:
+typescripttry {
+  // all FORCE FRESH deletes here
+} catch (clearErr) {
+  logger.error(`[pipeline] FORCE FRESH failed — resetting job to idle: ${clearErr}`);
+  await db.update(jobsTable)
+    .set({ status: "idle" })
+    .where(eq(jobsTable.id, jobId));
+  throw clearErr;
+}
+After the fix, manually reset Walking Court's status in the DB:
+sqlUPDATE jobs SET status = 'idle' WHERE id = 'job_975ef357b2a67c3a';
+Then: typecheck 0 errors, tests 1,461 passing, and trigger Force Full Re-process on Walking Court.

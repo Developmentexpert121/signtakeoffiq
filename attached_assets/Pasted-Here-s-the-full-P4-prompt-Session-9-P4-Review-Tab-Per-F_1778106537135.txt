@@ -1,0 +1,70 @@
+Here's the full P4 prompt:
+
+Session 9 — P4: Review Tab Per-Floor Accept All
+Changes across four files. No pipeline, no schema, no exports touched. Typecheck must pass, 1,501 API + 124 web tests must stay green — one new test will be added bringing the total to 1,502. Do not rescan any job.
+
+Change 1 — artifacts/api-server/src/routes/rooms.ts
+At line 78, add level to the body destructure:
+typescriptconst { reviewStatus, dismissalReason, fromStatus, level } =
+  req.body as { reviewStatus: string; dismissalReason?: string; fromStatus?: string; level?: string };
+After the existing conditions block (around line 108), add:
+typescriptif (level !== undefined) {
+  conditions.push(eq(roomsTable.level, level));
+}
+
+Change 2 — lib/api-client-react/src/generated/api.schemas.ts
+Add level to BulkReviewRoomsBody:
+typescriptexport interface BulkReviewRoomsBody {
+  reviewStatus: BulkReviewRoomsBodyReviewStatus;
+  dismissalReason?: string | null;
+  fromStatus?: BulkReviewRoomsBodyFromStatus;
+  level?: string;  // ← add this
+}
+
+Change 3 — artifacts/api-server/src/routes/rooms.test.ts
+Add one new test in the bulk-review describe block:
+
+POST /jobs/:jobId/rooms/bulk-review with level filter — confirms only rooms on that level, leaves rooms on other levels unchanged
+
+Seed two rooms with different level values, call bulk-review with { reviewStatus: "confirmed", level: "1" }, assert only the level 1 room is confirmed.
+
+Change 4 — artifacts/web/src/pages/job-detail.tsx
+Four targeted changes:
+4a — State type — add level?: string to bulkConfirmDialog:
+typescriptconst [bulkConfirmDialog, setBulkConfirmDialog] = useState
+  { action: "confirmed" | "pending"; count: number; level?: string } | null
+>(null);
+4b — Per-floor Accept All button in headerRow JSX — add immediately after the existing "N AI pending" amber span, only when pendingAiInGroup > 0 && hasAiVisionRows:
+tsx<button
+  className="ml-2 text-xs px-2 py-0.5 rounded border border-amber-400 text-amber-600 hover:bg-amber-50 transition-colors"
+  onClick={(e) => {
+    e.stopPropagation();
+    setBulkConfirmDialog({
+      action: "confirmed",
+      count: pendingAiInGroup,
+      level: levelKey,
+    });
+  }}
+>
+  Accept All Level {levelKey}
+</button>
+4c — handleBulkRoomAction handler — add optional level?: string param, thread it into the mutate call:
+typescriptconst handleBulkRoomAction = (
+  reviewStatus: "confirmed" | "dismissed" | "pending",
+  fromStatus?: "confirmed" | "dismissed",
+  level?: string,
+) => {
+  bulkReviewRooms.mutate(
+    { jobId, data: { reviewStatus, ...(fromStatus ? { fromStatus } : {}), ...(level ? { level } : {}) } },
+    { onSuccess: (data) => { /* existing toast/invalidate logic unchanged */ } }
+  );
+};
+4d — AlertDialog description — update the body text to be level-aware:
+tsx{bulkConfirmDialog.level
+  ? `Accept ${bulkConfirmDialog.count} pending AI rooms on Level ${bulkConfirmDialog.level}? This action cannot be undone.`
+  : `This will accept ${bulkConfirmDialog.count} pending AI rooms. This action cannot be undone.`
+}
+Update the AlertDialog confirm button to pass level through:
+typescripthandleBulkRoomAction(bulkConfirmDialog.action, undefined, bulkConfirmDialog.level)
+
+After all changes: Run typecheck, confirm 1,502 API + 124 web tests passing. Open Fox Hill job_a81ec18d15cec938 on the Review tab — confirm per-floor Accept All button appears in floor headers with pending AI rooms, clicking it opens the level-specific dialog, confirming updates only that floor's rooms. Global Accept All button must still work unchanged. Do not rescan any job.

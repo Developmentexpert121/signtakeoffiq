@@ -1,0 +1,50 @@
+Good instinct. Before writing a crop-based fix that's hardcoded to "left 40%", let's think about whether that assumption holds across different plan types.
+AA831 is a specific layout — three schedule columns on the left, sign detail drawings on the right. But other sign schedule sheets look completely different:
+
+Standard schedule sheets (like Gibson, Example 8) — full-page table, no drawings, text-extractable. These never hit the 300 DPI retry at all because pdfplumber returns rows successfully. No impact.
+Single-table image sheets — table centered or full-width, no drawings. A left-40% crop would cut the table in half and break extraction.
+Multi-page schedules — each page is just table rows, full width. Same problem.
+Hybrid sheets like AA831 — table on left, drawings on right. Left crop works perfectly.
+
+A hardcoded left-40% crop only helps AA831-style sheets and actively hurts center or full-width tables.
+The right approach is to let Gemini find the table region itself rather than pre-cropping. Send this to Replit instead:
+
+What's broken in one sentence:
+The Step 3a 300 DPI retry sends the full page to Gemini including sign detail drawings and title blocks that overwhelm the schedule table extraction, but a hardcoded crop would break plans where the table spans the full page width.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — Step 3a 300 DPI retry prompt only
+No other files, no image processing changes
+
+
+Fix — Two-pass extraction for image-based schedule sheets
+Replace the single Gemini call in the 300 DPI retry with a two-pass approach:
+Pass 1 — Table location pass (fast, cheap):
+Send the full page image with a short prompt asking Gemini to identify where the schedule table is and whether it spans the full page or occupies a sub-region:
+"This is an architectural drawing sheet. Does it contain a signage schedule table (a table with columns like Room Number, Room Name, Sign Text)? If yes, answer with JSON: { \"hasTable\": true, \"tableRegion\": \"full\" | \"left\" | \"right\" | \"top\" | \"bottom\", \"estimatedRows\": number }. If no table is found: { \"hasTable\": false }. JSON only, no preamble."
+Pass 2 — Extraction pass:
+Use the tableRegion from Pass 1 to decide what to send:
+
+"full" → send the full 300 DPI image with the extraction prompt
+"left" → crop to left 45% and send cropped image
+"right" → crop to right 45%
+"top" / "bottom" → crop accordingly
+
+For the extraction prompt in Pass 2, use:
+"This image contains a signage schedule table with columns for Room Number, Room Name, and Sign Text. Extract every row as a JSON array: [{ \"roomNumber\": string, \"roomName\": string, \"signType\": string, \"quantity\": number }]. Include ALL rows — there may be 200–400 entries across multiple columns or table sections. If a room has multiple sign types, create one entry per sign type. Return JSON array only. No markdown. No preamble."
+If Pass 1 returns hasTable: false, skip Pass 2 entirely and log:
+[Step 3a] ${sigSheet.sheetId}: Pass 1 found no table — skipping extraction
+Log the region detected:
+[Step 3a] ${sigSheet.sheetId}: Pass 1 — tableRegion="${region}", estimatedRows=${n}
+This works for any sheet layout — full-width tables, left-side tables, right-side tables — without any hardcoded geometry assumptions.
+
+Regression + test sequence
+
+Typecheck — 0 errors
+Tests — 1,461 passing
+Force Full Re-process Fox Hill first — Step 3a should not fire (sign details are text-extractable), confirm 193–215 signs
+Force Full Re-process Walking Court — watch for:
+
+[Step 3a] Pass 1 — tableRegion="left", estimatedRows=~300
+[Step 3a] 300 DPI retry extracted N entries where N is 200+
+Levels 3–6 in the XLSX if floor replication also fires this run

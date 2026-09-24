@@ -1,0 +1,121 @@
+Jun 03 06:55:48  [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Jun 03 06:55:48  [34m│[0m [34m › fetching app source code[0m
+Jun 03 06:55:48  [34m│[0m => Selecting branch "dev-work"
+Jun 03 06:55:55  [34m│[0m => Checking out commit "55e7dbb4be57ac1fd85fce28e3e42088c7109fe8"
+Jun 03 06:55:55  [34m│[0m 
+Jun 03 06:55:55  [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Jun 03 06:55:55  [34m╰────────────────────────────────────────╼[0m
+Jun 03 06:55:55  
+Jun 03 06:55:55  [34m › configuring build-time app environment variables:[0m
+Jun 03 06:55:55       SMTP_HOST CLERK_PUBLISHABLE_KEY DEV_BYPASS_AUTH VITE_CLERK_PUBLISHABLE_KEY PRIVATE_OBJECT_DIR SMTP_PORT AI_INTEGRATIONS_ANTHROPIC_BASE_URL AI_INTEGRATIONS_GEMINI_BASE_URL SMTP_USER PUBLIC_OBJECT_SEARCH_PATHS AI_INTEGRATIONS_ANTHROPIC_API_KEY PIPELINE_CACHE_ENABLED SPACES_ACCESS_KEY_ID SPACES_REGION GUEST_JWT_SECRET SPACES_SECRET_ACCESS_KEY SMTP_PASS SESSION_SECRET AI_INTEGRATIONS_GEMINI_API_KEY RASTERIZE_DPI DO_DATABASE_URL CLERK_SECRET_KEY SPACES_ENDPOINT SMTP_FROM DEFAULT_OBJECT_STORAGE_BUCKET_ID
+Jun 03 06:55:55  
+Jun 03 06:55:56  [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Jun 03 06:55:56  [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Jun 03 06:55:57  [34m│[0m Detected the following buildpacks suitable to build your app:
+Jun 03 06:55:57  [34m│[0m 
+Jun 03 06:55:57  [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Jun 03 06:55:57  [34m│[0m    heroku/nodejs                  v0.341.5  (Node.js)
+Jun 03 06:55:57  [34m│[0m    digitalocean/python-appdetect  v0.1.2    
+Jun 03 06:55:57  [34m│[0m    heroku/python                  v5.339.5  (Python)
+Jun 03 06:55:57  [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Jun 03 06:55:57  [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Jun 03 06:55:57  [34m│[0m 
+Jun 03 06:55:57  [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 06:55:57  [34m│[0m 
+Jun 03 06:55:57  [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 06:55:57  [34m╰─────────────────────────────────────────────╼[0m
+Jun 03 06:55:57  
+Jun 03 06:55:57  [34m╭────────────[34m[30m[44m build caching [0m[0m[34m───────────╼[0m
+Jun 03 06:55:57  [34m│[0m [34m › checking for cache from a previous build[0m
+Jun 03 06:55:57  [34m│[0m Timer: Analyzer started at 2026-06-03T06:55:57Z
+Jun 03 06:55:57  [34m│[0m Restoring metadata for "heroku/nodejs:shim" from cache
+Jun 03 06:55:57  [34m│[0m Timer: Analyzer ran for 539.239536ms and ended at 2026-06-03T06:55:57Z
+Jun 03 06:55:58  [34m│[0m Timer: Restorer started at 2026-06-03T06:55:58Z
+Jun 03 06:55:58  [34m│[0m Restoring data for "heroku/nodejs:shim" from cache
+Jun 03 06:56:08  [34m│[0m Timer: Restorer ran for 10.915620841s and ended at 2026-06-03T06:56:08Z
+Jun 03 06:56:08  [34m╰───────────────────────────────────────╼[0m
+Jun 03 06:56:08  
+Jun 03 06:56:08  [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Jun 03 06:56:09  [34m│[0m Timer: Builder started at 2026-06-03T06:56:08Z
+Jun 03 06:56:09  [34m│[0m Project contains pnpm-lock.yaml, using pnpm
+Jun 03 06:56:09  [34m│[0m        
+Jun 03 06:56:09  [34m│[0m -----> Creating runtime environment
+Jun 03 06:56:09  [34m│[0m        
+Jun 03 06:56:09  [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Jun 03 06:56:09  [34m│[0m        NODE_VERBOSE=false
+Jun 03 06:56:09  [34m│[0m        NODE_ENV=
+Jun 03 06:56:09  [34m│[0m        NODE_MODULES_CACHE=true
+Jun 03 06:56:09  [34m│[0m        
+Jun 03 06:56:09  [34m│[0m -----> Installing binaries
+Jun 03 06:56:09  [34m│[0m        engines.node (package.json):   unspecified
+Jun 03 06:56:09  [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Jun 03 06:56:09  [34m│[0m        engines.pnpm (package.json):   unspecified (use default)
+Jun 03 06:56:09  [34m│[0m        
+Jun 03 06:56:10  [34m│[0m        Resolving node version 22.x...
+Jun 03 06:56:10  [34m│[0m        Downloading and installing node 22.22.2...
+Jun 03 06:56:10  [34m│[0m        Validating checksum
+Jun 03 06:56:13  [34m│[0m        Using default npm version: 10.9.7
+Jun 03 06:56:13  [34m│[0m        Downloading and installing pnpm (latest)
+Jun 03 06:56:16  [34m│[0m        Using pnpm 11.5.1
+Jun 03 06:56:17  [34m│[0m         !     Default pnpm version used
+Jun 03 06:56:17  [34m│[0m        
+Jun 03 06:56:17  [34m│[0m               A pnpm lockfile (pnpm-lock.yaml) was detected but no specific version of pnpm was defined in package.json in either of the following fields:
+Jun 03 06:56:17  [34m│[0m               - "packageManager"
+Jun 03 06:56:17  [34m│[0m               - "engines.pnpm"
+Jun 03 06:56:17  [34m│[0m        
+Jun 03 06:56:17  [34m│[0m               Without a specific version defined, this build will use "pnpm@latest" by default. We highly recommend setting an explicit version
+Jun 03 06:56:17  [34m│[0m               of pnpm to improve the reliability of your builds.
+Jun 03 06:56:17  [34m│[0m               https://devcenter.heroku.com/articles/nodejs-support
+Jun 03 06:56:17  [34m│[0m        
+Jun 03 06:56:19  [34m│[0m        
+Jun 03 06:56:19  [34m│[0m -----> Restoring cache
+Jun 03 06:56:19  [34m│[0m        - pnpm cache
+Jun 03 06:56:19  [34m│[0m        
+Jun 03 06:56:19  [34m│[0m -----> Installing dependencies
+Jun 03 06:56:19  [34m│[0m        Running 'pnpm install' with pnpm-lock.yaml
+Jun 03 06:56:19  [34m│[0m        Scope: all 12 workspace projects
+Jun 03 06:56:20  [34m│[0m        ? Verifying lockfile against supply-chain policies (907 entries)...
+Jun 03 06:56:26  [34m│[0m        ✓ Lockfile passes supply-chain policies (907 entries in 6.9s)
+Jun 03 06:56:27  [34m│[0m        Lockfile is up to date, resolution step is skipped
+Jun 03 06:56:27  [34m│[0m        Progress: resolved 1, reused 0, downloaded 0, added 0
+Jun 03 06:56:27  [34m│[0m        Packages: +905
+Jun 03 06:56:27  [34m│[0m        ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Jun 03 06:56:28  [34m│[0m        Progress: resolved 905, reused 0, downloaded 111, added 32
+Jun 03 06:56:29  [34m│[0m        Progress: resolved 905, reused 0, downloaded 448, added 238
+Jun 03 06:56:30  [34m│[0m        Progress: resolved 905, reused 0, downloaded 732, added 551
+Jun 03 06:56:31  [34m│[0m        Progress: resolved 905, reused 0, downloaded 900, added 765
+Jun 03 06:56:32  [34m│[0m        Progress: resolved 905, reused 0, downloaded 904, added 904
+Jun 03 06:56:32  [34m│[0m        Progress: resolved 905, reused 0, downloaded 905, added 905, done
+Jun 03 06:56:33  [34m│[0m        
+Jun 03 06:56:33  [34m│[0m        devDependencies:
+Jun 03 06:56:33  [34m│[0m        + prettier 3.8.1
+Jun 03 06:56:33  [34m│[0m        + typescript 5.9.3
+Jun 03 06:56:33  [34m│[0m        
+Jun 03 06:56:33  [34m│[0m        . preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+Jun 03 06:56:33  [34m│[0m        . preinstall: Done
+Jun 03 06:56:34  [34m│[0m        [ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: argon2@0.44.0, esbuild@0.27.3, protobufjs@7.5.5
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m        Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+Jun 03 06:56:34  [34m│[0m 
+Jun 03 06:56:34  [34m│[0m -----> Build failed
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m        We're sorry this build is failing! You can troubleshoot common issues here:
+Jun 03 06:56:34  [34m│[0m        https://devcenter.heroku.com/articles/troubleshooting-node-deploys
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m        Some possible problems:
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m        - Node version not specified in package.json
+Jun 03 06:56:34  [34m│[0m          https://devcenter.heroku.com/articles/nodejs-support#specifying-a-node-js-version
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m        Love,
+Jun 03 06:56:34  [34m│[0m        Heroku
+Jun 03 06:56:34  [34m│[0m        
+Jun 03 06:56:34  [34m│[0m Timer: Builder ran for 25.305571873s and ended at 2026-06-03T06:56:34Z
+Jun 03 06:56:34  [34m│[0m [31;1mERROR: [0mfailed to build: exit status 1
+Jun 03 06:56:34  [34m│[0m 
+Jun 03 06:56:34  [34m│[0m 
+Jun 03 06:56:34  [34m│[0m For documentation on the buildpacks used to build your app, please see:
+Jun 03 06:56:34  [34m│[0m 
+Jun 03 06:56:34  [34m│[0m    Python  v5.339.5  https://do.co/apps-buildpack-python
+Jun 03 06:56:34  [34m│[0m 
+Jun 03 06:56:34  [34m│[0m [31m ✘ build failed[0m

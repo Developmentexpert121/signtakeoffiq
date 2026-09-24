@@ -1,0 +1,190 @@
+Here's the clean, complete prompt:
+
+Session 7 — Final pipeline accuracy fixes: egress rules, floor assignment, corridor exclusion, and schedule consistency
+What's broken:
+
+Egress filter uses wrong rule refs (R1-R4) — should be R9/R11/R13/R16, dropping all egress signs to 0
+Schedule rooms all land on Unspecified Floor — Step 3b level assignment not working
+Corridors are included in schedule sign count — should be excluded (handled by rules engine instead)
+Schedule entry count is nondeterministic (203 vs 397 across runs) — Gemini re-reads same rows from 27 table instances
+
+File that changes:
+
+artifacts/api-server/src/lib/pipeline.ts only
+
+Do not change:
+
+exports.ts, UI components, schema, sidecar
+
+Regression jobs:
+
+Fox Hill job_a81ec18d15cec894 — must stay 185-215, strategy=floor_plan_primary, no behavior change
+Walking Court_2 — must produce 220-260 signs, strategy=schedule_primary, floor distribution correct across Levels 1-6 and B1
+
+
+Fix 1 — Correct EGRESS_RULES array
+Find the schedule_primary egress filter in Step 9 (~line 7555). Replace the wrong rule refs:
+typescript// WRONG — R1-R4 are Room ID rules, not egress
+const EGRESS_RULES = ["R1", "R2", "R3", "R4"];
+
+// CORRECT — actual egress rule refs in this codebase
+const EGRESS_RULES = ["R9", "R11", "R13", "R16"];
+// R9  = Exit signs
+// R11 = Stair signs (corridor + landing)
+// R13 = Evacuation Map
+// R16 = Area of Rescue / Sign at Corridor (directional)
+Also ensure training corrections pass through unconditionally:
+typescriptsignRows.splice(0, signRows.length, ...signRows.filter(s =>
+  s.source === "training_correction" ||
+  s.ruleRef === "training_correction" ||
+  s.ruleRef?.startsWith("training_correction:") ||
+  EGRESS_RULES.some(r => s.ruleRef === r)
+));
+
+logger.log(
+  `[Step 9] schedule_primary — egress filter: ` +
+  `${beforeCount} → ${signRows.length} sign(s) kept (R9/R11/R13/R16 + training corrections)`
+);
+
+Fix 2 — Level assignment for Step 3b schedule rooms
+Find the Step 3b coordinate matching loop. When creating extracted_rooms entries:
+For coordinate-matched rooms — level comes from the matched floor plan sheet:
+typescriptlevel: coordMatch.level ?? null,
+For unlocated rooms — level parsed from the schedule entry's floor field:
+typescriptfunction parseScheduleFloor(floor: string | null | undefined): string | null {
+  if (!floor) return null;
+  const f = floor.trim().toUpperCase();
+  
+  // Handle basement variants
+  if (f.includes("B") && f.includes("1")) return "LEVEL B1";
+  if (f === "B" || f === "BASEMENT") return "LEVEL B1";
+  
+  // Extract number: "LEVEL 2", "Floor 2", "2", "02" → "LEVEL 2"
+  const num = f.match(/\d+/)?.[0];
+  if (num) return `LEVEL ${parseInt(num, 10)}`;
+  
+  return null;
+}
+Apply to unlocated rooms:
+typescriptlevel: parseScheduleFloor(scheduleRoom.floor),
+Log level distribution after Step 3b completes:
+typescriptconst levelCounts = new Map<string, number>();
+for (const r of step3bRooms) {
+  const l = r.level ?? "Unspecified";
+  levelCounts.set(l, (levelCounts.get(l) ?? 0) + 1);
+}
+logger.log(
+  `[Step 3b] Level distribution: ` +
+  [...levelCounts.entries()].map(([l, c]) => `${l}=${c}`).join(", ")
+);
+
+Fix 3 — Exclude corridors from schedule sign count
+After the dedup step in Step 3a, add a corridor filter. Corridors in the schedule get directional signs from the rules engine (R16) — they should not also get a room ID sign from the schedule:
+typescriptconst CORRIDOR_PATTERNS = [
+  /^corridor$/i,
+  /^hallway$/i,
+  /^hall$/i,
+  /^circulation$/i,
+  /^common\s+corridor$/i,
+  /^public\s+corridor$/i,
+];
+
+const preCorridorCount = signSchedule.length;
+const filtered = signSchedule.filter(entry => {
+  const name = (entry.roomName ?? "").trim();
+  
+  // Always keep entries with explicit sign text — directional corridor signs
+  // with specific content (e.g. "FITNESS CENTER LAUNDRY ROOM 101-108") count
+  if (entry.signText?.trim() || entry.message?.trim()) return true;
+  
+  // Exclude generic corridor entries
+  const isCorridor = CORRIDOR_PATTERNS.some(p => p.test(name));
+  if (isCorridor) {
+    logger.log(`[Step 3a] Corridor excluded: ${entry.roomNumber} "${entry.roomName}"`);
+  }
+  return !isCorridor;
+});
+
+signSchedule.length = 0;
+signSchedule.push(...filtered);
+
+logger.log(
+  `[Step 3a] Corridor filter: ${preCorridorCount} → ${signSchedule.length} entries ` +
+  `(removed ${preCorridorCount - signSchedule.length} corridor entries)`
+);
+
+Fix 4 — Stable schedule entry count across runs
+The schedule count varies (203 vs 397) because Gemini re-reads the same rows from 27 table instances on AA831. The dedup step handles this when duplicates exist, but doesn't prevent Gemini from reading the sheet multiple times.
+In Step 3a, after processing all signage sheets for a job, add a final global dedup across all sheets combined:
+typescript// Global dedup across all signage sheets — prevents same room appearing 
+// from multiple table instances on the same physical sheet
+const globalSeen = new Set<string>();
+const globalDeduped = signSchedule.filter(entry => {
+  const key = [
+    entry.roomNumber?.trim().toLowerCase(),
+    entry.roomName?.trim().toLowerCase(),
+    entry.signType?.trim().toLowerCase(),
+  ].filter(Boolean).join("|");
+  
+  if (!key || globalSeen.has(key)) return false;
+  globalSeen.add(key);
+  return true;
+});
+
+if (globalDeduped.length !== signSchedule.length) {
+  logger.log(
+    `[Step 3a] Global dedup: ${signSchedule.length} → ${globalDeduped.length} entries ` +
+    `(removed ${signSchedule.length - globalDeduped.length} cross-sheet duplicates)`
+  );
+  signSchedule.length = 0;
+  signSchedule.push(...globalDeduped);
+}
+This runs after the per-sheet dedup and catches any remaining duplicates from multi-table sheets.
+
+Fix 5 — Corridor rooms excluded from floor plan extraction in schedule_primary mode
+When pipelineStrategy === "schedule_primary", the egress room filter in Step 3 keeps stair/exit/elevator rooms. Add corridors to the excluded list — they don't need room records since their directional signs come from R16:
+typescriptconst EGRESS_ROOM_PATTERNS = [
+  /stair/i, /exit/i, /elevator/i, /elev/i,
+  /lobby/i, /vestibule/i,
+  /mechanical/i, /electrical/i, /fire/i,
+  // Explicitly exclude corridors — R16 handles them, no room record needed
+  // DO NOT add /corridor/i here — corridors should be filtered OUT
+];
+
+// After filtering:
+const nonCorridorEgressRooms = egressRooms.filter(r =>
+  !/corridor/i.test(r.roomName) &&
+  !/hallway/i.test(r.roomName)
+);
+
+Typecheck + regression sequence
+
+Typecheck — 0 errors
+Tests — 1,461 passing
+Rescan Fox Hill job_a81ec18d15cec894:
+
+Confirm floor_plan_primary strategy — none of these fixes affect floor_plan_primary path
+Confirm 185-215 signs
+No rescan needed if Fox Hill was clean on last run — skip if confident
+
+
+Rescan Walking Court_2:
+
+Confirm [Step 3a] Corridor filter: N → M entries
+Confirm [Step 3a] Global dedup: N → M entries
+Confirm [Step 3b] Level distribution: LEVEL 1=X, LEVEL 2=X, LEVEL 3=X...
+Confirm [Step 9] egress filter: N → M sign(s) kept (R9/R11/R13/R16)
+Confirm total signs 220-260
+Confirm XLSX floor distribution — all 7 levels populated, no Unspecified Floor
+Confirm 0 needs review
+
+
+
+Expected final result:
+
+Schedule signs: ~180-200 (after corridor exclusion and global dedup)
+Egress signs: ~40-50 (R9/R11/R13/R16)
+Total: ~220-260 signs
+Floor distribution: Level B1, Level 1, Level 2, Level 3, Level 4, Level 5, Level 6
+Unspecified Floor: 0 or near 0
+Needs Review: 0

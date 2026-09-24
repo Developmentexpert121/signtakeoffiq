@@ -1,0 +1,40 @@
+There's the problem. 20 synthesized sheets is too many — Cambridge Moses PDF has the floor plan starting at page 8, but the pipeline is generating pages 1-20 and the vision cap (3 scans for single-file jobs) only reaches page 8 by luck.
+The real issue is Fix 4 widened the range to 20 pages for large files but that's too aggressive. Most large PDFs have floor plans in the first 5-10 pages.
+Here's your Replit prompt:
+
+Fix synthesized sheet count for large PDFs in pipeline.ts.
+Find the synthesized sheet fallback where allSheets.length === 0. Currently Fix 4 widened the range to 20 pages for large files. Change the logic to:
+ts// Cap synthesized sheets based on file size
+// Small files (<20MB): 3 pages max
+// Medium files (20-100MB): 5 pages max  
+// Large files (>100MB): 8 pages max
+// Never exceed actual page count
+const fileSizeMB = (file.sizeBytes ?? 0) / 1024 / 1024;
+const sizeCap = fileSizeMB > 100 ? 8 : fileSizeMB > 20 ? 5 : 3;
+const actualPageCount = Math.max(3, Math.min(file.pageCount ?? 3, sizeCap));
+Also fix the vision scan cap for synthesized jobs — currently capped at 3 which is too low for large files. Change to:
+ts// Vision scan cap for synthesized jobs
+// Allow enough scans to find the floor plan regardless of which page it's on
+const effectiveVisionCap = isSingleFileSynthesized
+  ? Math.min(sizeCap, rawVisionCap)  // match the page cap
+  : Math.max(1, Math.round(rawVisionCap));
+Also fix the early exit logic — currently breaks after finding 10+ rooms on any sheet. For synthesized jobs this is correct but the break should only fire after at least 2 sheets have been scanned (to avoid breaking on a partial result):
+ts// Only break early after scanning at least 2 sheets
+// and finding 10+ rooms on the current sheet
+const sheetsScannedSoFar = step6SheetResults.filter(
+  r => r.status === "fresh_scan"
+).length;
+
+if (roomsFromThisSheet >= 10 && sheetsScannedSoFar >= 2) {
+  logger.log(`[pipeline] Step 3: Found ${roomsFromThisSheet} rooms on ${sheet.sheetId} after ${sheetsScannedSoFar} scans — stopping early`);
+  break;
+}
+After saving, rescan Cambridge Moses with Force Fresh AI Scan. Expected:
+
+Synthesizes 8 pages (large file >100MB)
+Scans up to 8 pages until floor plan found
+Finds floor plan on page 8
+Extracts 30+ rooms
+Total signs improves toward 63
+
+Share Overview screenshot when complete.

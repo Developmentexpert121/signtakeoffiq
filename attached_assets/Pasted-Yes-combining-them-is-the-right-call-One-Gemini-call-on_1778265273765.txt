@@ -1,0 +1,57 @@
+Yes — combining them is the right call. One Gemini call, one function, one button. And yes, placing the label next to the door of each room is exactly the right behavior — that's what makes it useful to an estimator. The label should sit at the door position, not the room centroid.
+So the merged analyzeSheet() prompt to Gemini should ask for:
+For each room on this floor plan, return:
+- room_number: exactly as printed (A420, B209, CORRIDOR)
+- door_x_pct, door_y_pct: position of the door opening (0.0–1.0)
+  NOT the room center — the actual door location on the wall
+- door_side: which side the latch is on (left/right/none)  
+- door_type: hinged/sliding/automatic/none
+- confidence: 0.0–1.0
+Door position as the coordinate means the marker sits right at the door — exactly like the reference floor plan you showed earlier with A10-18, D5-15 printed at each door.
+Here's the fix prompt:
+
+Two things to fix in one pass:
+Fix 1 — 404 on analyze-sheet route. The POST /api/jobs/:jobId/sheets/:sheetId/analyze-sheet endpoint returns 404. Verify the route is registered on the correct Express router — check that it's added to the same router instance as detect-doors in sheets.ts and uses the identical middleware chain. Restart the server after confirming.
+Fix 2 — Merge analyzeDoors() into analyzeSheet().
+Remove analyzeDoors() entirely. Remove the detect-doors route. Remove the "Analyze Doors" button from FloorPlanTab.tsx.
+Update analyzeSheet() to do both jobs in one Gemini call. New Gemini system prompt:
+You are analyzing a floor plan image. For each visible room, identify 
+the door position — not the room center, but the actual door opening 
+on the wall. Return a JSON array only, no markdown:
+
+[
+  {
+    "roomNumber": "A420",
+    "door_x_pct": 0.623,
+    "door_y_pct": 0.441,
+    "door_side": "left",
+    "door_type": "hinged",
+    "confidence": 0.92
+  }
+]
+
+Rules:
+- roomNumber exactly as printed on the plan
+- door_x_pct / door_y_pct are 0.0–1.0 fractions of image width/height
+  positioned at the door opening, not room center
+- door_side: left | right | none (which side the latch is on)
+- door_type: hinged | sliding | automatic | none
+- confidence 0.0–1.0 — omit rooms below 0.7
+- Only include rooms with clearly readable labels and visible doors
+Write-back after parsing response:
+
+marker_x = Math.round(door_x_pct * 100000) — replaces sentinel on matching sign
+marker_y = Math.round(door_y_pct * 100000) — replaces sentinel on matching sign
+door_side + door_type → written to rooms table where room_number matches
+Match signs by sign.signType === result.roomNumber OR sign.roomNumber === result.roomNumber
+Only write if confidence >= 0.7
+
+What changes:
+
+pipeline.ts — remove analyzeDoors(), update analyzeSheet() with merged prompt and dual write-back
+sheets.ts — remove detect-doors route, fix analyze-sheet route registration
+FloorPlanTab.tsx — remove "Analyze Doors" button, keep "Analyze Sheet" only
+
+What doesn't change: pipeline extraction, signs table schema, rooms table schema, any other route, Fox Hill regression behavior (early exit still fires — 0 sentinel signs = 0 Gemini calls).
+Regression test: Fox Hill Plans tab loads clean, sign count 185–215. Click "Analyze Sheet" on Fox Hill — toast shows "0 signs placed". Walking Court PLAN-3-P1 — click "Analyze Sheet" — expect N > 0 signs placed at door positions.
+1,571 API + 156 web tests must pass. Typecheck 0 errors.

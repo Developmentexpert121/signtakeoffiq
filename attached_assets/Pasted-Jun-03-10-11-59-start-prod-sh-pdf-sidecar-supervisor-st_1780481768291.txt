@@ -1,0 +1,463 @@
+Jun 03 10:11:59  [start-prod.sh] pdf-sidecar supervisor started (PID: 27) on 8008 (not waited on)
+Jun 03 10:10:53  [start-prod.sh] pdf-sidecar supervisor started (PID: 25) on 8008 (not waited on)
+Jun 03 10:10:53  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:10:53  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 10:10:58  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 10:10:58  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 10:10:58  {"level":30,"time":1780481458528,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","port":8080,"msg":"Server listening"}
+Jun 03 10:10:58  {"level":30,"time":1780481458529,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 10:10:58  {"level":30,"time":1780481458529,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 10:10:58  {"level":30,"time":1780481458629,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 10:10:58  {"level":30,"time":1780481458629,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 10:10:58  {"level":30,"time":1780481458629,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 10:10:58  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:10:58  {"level":30,"time":1780481458647,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 10:10:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:02  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:02  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:04  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:05  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:08  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:12  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:14  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:15  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:15  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:17  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:18  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:20  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:21  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:22  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:24  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:25  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:25  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:27  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:28  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:31  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:32  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:34  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:35  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:35  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:37  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:38  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:38  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:42  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:42  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:44  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:45  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:45  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:48  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:50  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:51  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:51  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:53  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:55  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:11:58  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:11:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:01  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:01  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:03  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:05  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:08  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:11  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:11  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:13  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:15  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:15  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:17  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:18  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:20  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:21  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:21  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:24  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:25  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:25  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:27  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:28  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:31  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:31  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:33  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:35  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:35  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:37  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:38  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:38  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:11:59  [start-prod.sh] starting API server (NODE_ENV=production) on $PORT=8080
+Jun 03 10:11:59  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:06  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Jun 03 10:12:06  (Use `node --trace-deprecation ...` to show where the warning was created)
+Jun 03 10:12:06  {"level":30,"time":1780481526953,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","port":8080,"msg":"Server listening"}
+Jun 03 10:12:06  {"level":30,"time":1780481526954,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","rasterizeDpi":250,"msg":"AI scan rasterization DPI"}
+Jun 03 10:12:06  {"level":30,"time":1780481526954,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","maxAiVisionCallsPerRun":10,"msg":"AI vision call cap per run"}
+Jun 03 10:12:07  {"level":30,"time":1780481527084,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","cleanupHistoryMaxAgeDays":30,"msg":"Loaded cleanup retention max-age-days from DB"}
+Jun 03 10:12:07  {"level":30,"time":1780481527085,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","cleanupHistoryMaxRows":500,"msg":"Loaded cleanup retention max-rows from DB"}
+Jun 03 10:12:07  {"level":30,"time":1780481527085,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","maxAgeDays":30,"maxRows":500,"msg":"Guest cleanup job starting — retention configuration"}
+Jun 03 10:12:07  {"level":30,"time":1780481527147,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","ageDeleted":0,"capDeleted":1,"msg":"Pruned old guest_cleanup_runs records"}
+Jun 03 10:12:07  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:07  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:09  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:41  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:41  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:43  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:45  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:45  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:48  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:50  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:52  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:52  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:54  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:55  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:11  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:11  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:13  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:15  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:15  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:17  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:19  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:19  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:21  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:23  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:23  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:26  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:27  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:32  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:32  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:34  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:36  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:36  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:38  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:40  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:40  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:42  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:44  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:44  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:46  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:48  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:50  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:52  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:52  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:54  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:57  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:01  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:02  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:04  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:06  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:06  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:08  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:08  {"level":30,"time":1780481588350,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":1,"method":"GET","url":"/assets/vendor-query-BdJSxRcl.js"},"res":{"statusCode":200},"responseTime":16,"msg":"request completed"}
+Jun 03 10:13:08  {"level":30,"time":1780481588359,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":2,"method":"GET","url":"/assets/vendor-radix-DWFa0Tef.js"},"res":{"statusCode":200},"responseTime":6,"msg":"request completed"}
+Jun 03 10:13:08  {"level":30,"time":1780481588364,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":3,"method":"GET","url":"/assets/vendor-CRuwvqMi.js"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}
+Jun 03 10:13:09  {"level":30,"time":1780481589560,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":4,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:09  {"level":30,"time":1780481589574,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":5,"method":"GET","url":"/favicon.svg"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:10  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:10  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:12  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:14  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:14  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:12:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:12:58  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:12:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:02  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:02  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:04  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:05  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:07  {"level":30,"time":1780481587383,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":1,"method":"GET","url":"/"},"res":{"statusCode":200},"responseTime":10,"msg":"request completed"}
+Jun 03 10:13:15  {"level":30,"time":1780481595054,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":6,"method":"GET","url":"/logo.png"},"res":{"statusCode":200},"responseTime":4,"msg":"request completed"}
+Jun 03 10:13:16  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:18  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:20  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:22  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:22  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:24  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:26  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:26  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:28  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:30  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:30  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:32  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:34  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:35  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:37  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:37  {"level":30,"time":1780481617629,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":7,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":123,"msg":"request errored"}
+Jun 03 10:13:37  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:13:37  params: developmentexpert121@gmail.com,1
+Jun 03 10:13:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:08  {"level":30,"time":1780481588017,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":2,"method":"GET","url":"/assets/index-BB_zwMcE.js"},"res":{"statusCode":200},"responseTime":4,"msg":"request completed"}
+Jun 03 10:13:08  {"level":30,"time":1780481588027,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":3,"method":"GET","url":"/assets/vendor-react-BMDZO9NQ.js"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:08  {"level":30,"time":1780481588068,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":4,"method":"GET","url":"/assets/index-D9QNOHTK.css"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:08  {"level":30,"time":1780481588656,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":5,"method":"GET","url":"/assets/vendor-lucide-BQuQuemT.js"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:08  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:12  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:14  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:14  {"level":30,"time":1780481594419,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":6,"method":"GET","url":"/assets/sign-in-BI0SeFxL.js"},"res":{"statusCode":200},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:15  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:15  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:17  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:18  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:20  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:21  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:22  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:24  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:25  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:25  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:26  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:13:26  params: developmentexpert121@gmail.com,1
+Jun 03 10:13:26      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:13:26      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:13:26      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:13:26      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:13:37      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:13:37      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:13:37      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:13:37      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:13:39  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:39  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:39  {"level":30,"time":1780481619931,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":8,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":2,"msg":"request completed"}
+Jun 03 10:13:40  {"level":30,"time":1780481620305,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":9,"method":"GET","url":"/assets/forgot-password-B_BtoOy3.js"},"res":{"statusCode":200},"responseTime":5,"msg":"request completed"}
+Jun 03 10:13:41  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:43  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:43  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:45  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:47  {"level":30,"time":1780481627234,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":10,"method":"POST","url":"/api/auth/forgot-password"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":80,"msg":"request errored"}
+Jun 03 10:13:47  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:13:47  params: developmentexpert121@gmail.com,1
+Jun 03 10:13:47      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:13:47      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:13:47      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:13:47      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:243:18)
+Jun 03 10:13:47  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:26  {"level":30,"time":1780481606965,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":7,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":59,"msg":"request errored"}
+Jun 03 10:13:27  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:28  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:31  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:31  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:34  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:34  {"level":30,"time":1780481614614,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":8,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":76,"msg":"request errored"}
+Jun 03 10:13:34  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:13:34  params: developmentexpert121@gmail.com,1
+Jun 03 10:13:34      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:13:34      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:13:34      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:13:34      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:13:35  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:35  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:47  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:49  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:51  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:51  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:53  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:55  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:59  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:59  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:01  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:36  {"level":30,"time":1780481616462,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":9,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":43,"msg":"request errored"}
+Jun 03 10:13:36  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:13:36  params: developmentexpert121@gmail.com,1
+Jun 03 10:13:36      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:13:36      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:13:36      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:13:36      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:13:37  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:38  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:38  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:39  {"level":30,"time":1780481619629,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":10,"method":"GET","url":"/forgot-password"},"res":{"statusCode":200},"responseTime":4,"msg":"request completed"}
+Jun 03 10:13:40  {"level":30,"time":1780481620564,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":11,"method":"GET","url":"/logo.png"},"res":{"statusCode":304},"responseTime":3,"msg":"request completed"}
+Jun 03 10:13:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:41  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:41  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:43  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:45  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:45  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:47  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:48  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:03  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:03  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:06  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:07  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:11  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:14  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:15  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:16  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:18  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:19  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:20  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:22  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:24  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:24  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:26  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:28  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:32  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:32  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:34  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:36  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:36  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:38  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:40  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:40  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:42  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:44  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:44  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:46  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:48  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:50  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:52  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:50  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:51  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:52  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:54  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:55  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:52  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:54  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:56  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:56  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:58  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:58  {"level":30,"time":1780481698821,"pid":1,"hostname":"signtakeoffiq-dd585b955-bsclt","req":{"id":11,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":49,"msg":"request errored"}
+Jun 03 10:14:58  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:14:58  params: john.dowd@fastsigns.com,1
+Jun 03 10:14:58      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:14:58      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:14:58      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:14:58      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:15:00  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:00  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:02  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:04  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:04  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:09  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:09  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:11  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:55  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:13:57  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:13:58  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:13:58  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:00  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:01  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:01  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:03  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:04  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:08  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:11  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:11  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:13  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:14  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:14  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:16  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:18  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:18  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:20  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:21  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:21  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:23  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:24  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:24  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:26  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:27  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:28  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:30  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:31  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:31  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:33  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:34  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:34  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:13  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:13  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:15  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:36  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:37  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:38  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:40  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:41  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:41  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:43  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:44  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:44  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:46  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:47  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:48  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:51  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:53  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:53  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:55  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:14:57  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:14:57  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:14:59  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:01  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:01  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:02  {"level":30,"time":1780481702558,"pid":1,"hostname":"signtakeoffiq-dd585b955-58652","req":{"id":12,"method":"POST","url":"/api/auth/sign-in"},"res":{"statusCode":500},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/node_modules/.pnpm/pino-http@10.5.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:531:35)\n    at onFinish (node:_http_outgoing:1084:10)\n    at callback (node:internal/streams/writable:766:21)\n    at afterWrite (node:internal/streams/writable:710:5)\n    at afterWriteTick (node:internal/streams/writable:696:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:88:21)"},"responseTime":53,"msg":"request errored"}
+Jun 03 10:15:02  Error: Failed query: select "id", "tenant_id", "email", "username", "full_name", "role", "owner_id", "phone", "job_title", "location", "signsuiteiq_user_id", "deleted_at", "created_at", "updated_at" from "users" where "users"."email" = $1 limit $2
+Jun 03 10:15:02  params: john.dowd@fastsigns.com,1
+Jun 03 10:15:02      at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+Jun 03 10:15:02      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Jun 03 10:15:02      at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19)
+Jun 03 10:15:02      at async <anonymous> (/workspace/artifacts/api-server/src/routes/auth.ts:160:18)
+Jun 03 10:15:03  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:05  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:05  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:07  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:08  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:08  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:10  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:12  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:12  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:14  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:17  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:17  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:17  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:17  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s
+Jun 03 10:15:19  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:19  [sidecar-supervisor] starting pdf-sidecar on 8008…
+Jun 03 10:15:20  WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+Jun 03 10:15:20  [sidecar-supervisor] pdf-sidecar exited — restarting in 2s

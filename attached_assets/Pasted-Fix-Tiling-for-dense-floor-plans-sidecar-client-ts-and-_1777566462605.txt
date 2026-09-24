@@ -1,0 +1,152 @@
+Fix — Tiling for dense floor plans. sidecar-client.ts and pipeline.ts. No rescans. Typecheck + full test suite after.
+Context: Large PDFs (15MB+) timeout during rasterization at 250 DPI. The fix is to rasterize at 150 DPI (faster, reliable) then tile the resulting PNG into 4 sections before sending to Gemini. Each tile is 2× zoomed relative to the full image, giving Gemini readable text at 1/32" scale without the rasterization timeout.
+Fix 1 — Add tile splitting to sidecar (artifacts/sidecar/main.py)
+Add a new /rasterize-tiles endpoint that:
+
+Rasterizes the requested page at 150 DPI
+Splits the PNG into a 2×2 grid (4 tiles)
+Returns all 4 tiles as base64 with their offsets
+
+python@app.route('/rasterize-tiles', methods=['POST'])
+def rasterize_tiles():
+    data = request.json
+    pdf_bytes = base64.b64decode(data['pdf_base64'])
+    page_num = data.get('page', 1) - 1  # 0-indexed
+    dpi = data.get('dpi', 150)
+    
+    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    page = doc[page_num]
+    mat = fitz.Matrix(dpi/72, dpi/72)
+    pix = page.get_pixmap(matrix=mat)
+    
+    img_bytes = pix.tobytes('png')
+    from PIL import Image
+    import io
+    img = Image.open(io.BytesIO(img_bytes))
+    w, h = img.size
+    
+    # 2×2 grid with 10% overlap
+    overlap_x = int(w * 0.05)
+    overlap_y = int(h * 0.05)
+    
+    tiles = []
+    for row in range(2):
+        for col in range(2):
+            x1 = max(0, col * w//2 - overlap_x)
+            y1 = max(0, row * h//2 - overlap_y)
+            x2 = min(w, (col+1) * w//2 + overlap_x)
+            y2 = min(h, (row+1) * h//2 + overlap_y)
+            
+            tile = img.crop((x1, y1, x2, y2))
+            buf = io.BytesIO()
+            tile.save(buf, format='PNG')
+            
+            tiles.append({
+                'base64': base64.b64encode(buf.getvalue()).decode(),
+                'offset_x': x1 / w,
+                'offset_y': y1 / h,
+                'scale_x': (x2 - x1) / w,
+                'scale_y': (y2 - y1) / h,
+                'col': col,
+                'row': row,
+            })
+    
+    return jsonify({'tiles': tiles, 'width': w, 'height': h})
+Fix 2 — Add rasterizeTiles function to sidecar-client.ts
+typescriptexport interface RasterTile {
+  base64: string;
+  offsetX: number;
+  offsetY: number;
+  scaleX: number;
+  scaleY: number;
+  col: number;
+  row: number;
+}
+
+export async function rasterizeTiles(
+  pdfBuf: Buffer,
+  pageNumber: number,
+  dpi = 150
+): Promise<RasterTile[]> {
+  const response = await callSidecarWithRetry(
+    `${SIDECAR_URL}/rasterize-tiles`,
+    {
+      pdf_base64: pdfBuf.toString('base64'),
+      page: pageNumber,
+      dpi,
+    }
+  );
+  const data = await response.json() as { tiles: Array<{
+    base64: string;
+    offset_x: number;
+    offset_y: number;
+    scale_x: number;
+    scale_y: number;
+    col: number;
+    row: number;
+  }>};
+  return data.tiles.map(t => ({
+    base64: t.base64,
+    offsetX: t.offset_x,
+    offsetY: t.offset_y,
+    scaleX: t.scale_x,
+    scaleY: t.scale_y,
+    col: t.col,
+    row: t.row,
+  }));
+}
+Fix 3 — Use tiling in Step 3 for large/dense sheets (pipeline.ts)
+In Step 3 where rooms are extracted via vision, add a tiling branch:
+typescript// Detect if tiling is needed
+const fileSizeMB = (file.fileSize ?? 0) / (1024 * 1024);
+const shouldTile = fileSizeMB > 10 || 
+  (sheet.pageWidth ?? 0) > 2592; // wider than 36"
+
+if (shouldTile) {
+  logger.log(`[Step 3] Tiling sheet ${sheet.sheetId} (${fileSizeMB.toFixed(1)}MB)`);
+  
+  const tiles = await rasterizeTiles(pdfBuf, sheet.pdfPage ?? 1, 150);
+  const allTileRooms: ExtractedRoom[] = [];
+  
+  for (const tile of tiles) {
+    const tileRooms = await extractRoomsFromImage(
+      tile.base64,
+      sheet,
+      job,
+      {
+        tileOffsetX: tile.offsetX,
+        tileOffsetY: tile.offsetY,
+        tileScaleX: tile.scaleX,
+        tileScaleY: tile.scaleY,
+      }
+    );
+    allTileRooms.push(...tileRooms);
+  }
+  
+  // Dedup rooms found in overlapping tile regions
+  const seen = new Map<string, ExtractedRoom>();
+  for (const room of allTileRooms) {
+    const key = (room.roomNumber ?? room.roomName ?? '').toUpperCase().trim();
+    if (!key) continue;
+    const existing = seen.get(key);
+    if (!existing || (room.confidence ?? 0) > (existing.confidence ?? 0)) {
+      seen.set(key, room);
+    }
+  }
+  extractedRooms.push(...seen.values());
+  
+} else {
+  // Normal single-image extraction (existing code)
+  // ... existing extraction logic unchanged
+}
+Important: Only apply tiling to the vision extraction step. The rasterization for storage caching still happens normally — tiles are generated from the stored PNG, not re-rasterized.
+Check first — does extractRoomsFromImage or equivalent function exist and accept a base64 string?
+grep -n "extractRoomsFromImage\|extractRooms.*base64\|base64.*extractRooms\|gemini.*rooms\|rooms.*gemini" \
+  artifacts/api-server/src/lib/pipeline.ts | head -10
+Show the output before implementing Fix 3 — the function signature needs to match what already exists.
+Completion requirements (mandatory):
+
+Typecheck must pass — 0 errors
+Run full test suite: pnpm test
+Confirm all 1,585 tests passing
+If any tests fail — fix them before finishing

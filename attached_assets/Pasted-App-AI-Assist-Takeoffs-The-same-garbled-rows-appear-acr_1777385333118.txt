@@ -1,0 +1,75 @@
+App: AI-Assist Takeoffs
+
+The same garbled rows appear across ALL 4 scans
+because they were saved to the database on the 
+FIRST scan and are being restored from cache 
+on every subsequent rescan. The exclusion zone 
+fix is also too aggressive — it dropped 10 
+real rooms by cutting at 18% from the bottom.
+
+TWO fixes needed:
+
+══════════════════════════════════════════════════
+FIX 1 — Purge invalid rooms from cache on rescan
+══════════════════════════════════════════════════
+When a rescan runs (force OR normal), after the 
+new extraction completes, run a cleanup pass on 
+ALL rooms for that job in the database:
+
+DELETE FROM signs (or rooms table) 
+WHERE job_id = $jobId
+AND (
+  -- Invalid room numbers
+  room_number ~ '^[A-Z]?\d{1,2}$'        -- 10, 15, 21, 24
+  OR room_number ~ '^[A-Z]{1,2}\d{1,2}$' -- A19, M0, E1
+  OR (
+    -- Valid-looking number but garbled name
+    room_name ~ '\d+X\d+'         -- 60X21, 36X24
+    OR room_name ~ '\d+''-\d'     -- 8'-0''
+    OR room_name ~ 'TO [EW]\d'    -- E119C.1 TO E119C.2
+    OR room_name ~ '^[.''"\- ]+$' -- only punctuation
+    OR room_name ~ 'RY CT'        -- drawing callout fragment
+    OR room_name ~ 'KIT EN'       -- split word fragment
+    OR room_name ~ 'CAF ERIA'     -- split word fragment
+  )
+)
+
+Log: "Purged [N] invalid cached rooms for job [id]"
+
+This cleanup must run BEFORE the cache-hit 
+check — so cached garbled rooms are removed 
+even if no new extraction runs for that sheet.
+
+══════════════════════════════════════════════════
+FIX 2 — Reduce legend exclusion zone from 18% to 10%
+══════════════════════════════════════════════════
+The 18% bottom strip cutoff is too aggressive 
+and removes real rooms in the lower portion of 
+the floor plan. Fox Hill v4 lost 10 legitimate 
+rooms (W223, E103, E106A and others near the 
+bottom of the academic wing sheets).
+
+Change the exclusion zone:
+
+  BOTTOM_STRIP: bottom 18% → bottom 10%
+  (y_center > page_height * 0.90)
+
+The legend box on DiNisco/standard AIA sheets 
+sits in approximately the bottom 8-9% of the 
+page. 10% provides a safe margin without 
+cutting into the plan area.
+
+Right strip stays at 20% (title block is safe).
+
+══════════════════════════════════════════════════
+VERIFY
+══════════════════════════════════════════════════
+Force rescan Fox Hill with Force full re-process 
+checked (to bypass ALL caches):
+
+Expected:
+- 0 garbled rows in Review tab
+- Count returns to ~115-120 range (not 104/107)
+- Room names all readable English words
+- Pipeline log shows "Purged X invalid cached rooms"
+- All 1,430 tests pass

@@ -1,0 +1,53 @@
+Now I can see the exact issue. The sign type column headers contain special characters like / and - which the parser isn't recognizing. Here's the targeted fix:
+Here's your Replit prompt:
+
+Fix the spreadsheet parser for wide format files where sign type column headers contain special characters like /, -, and spaces.
+In spreadsheet-parser.ts find the section that identifies sign type columns. The current code is failing because:
+
+The room name column is just "Room" — already fixed but not deploying correctly
+Sign type columns like "Room ID/ Roof Occupancy", "Stair ID- Enclosure" contain / and - which may be getting filtered
+
+Fix 1 — Add "room" to ROOM_NAME_COL_NAMES:
+tsconst ROOM_NAME_COL_NAMES = [
+  "room name",
+  "room",          // ← add this exact single word match
+  "name",
+  "text on sign",
+  "sign text",
+  "description",
+  "space name",
+  "space",
+];
+Fix 2 — Sign type column detection should accept ANY column that isn't a room meta column:
+Find where sign type columns are identified and change the filter to be permissive — accept any non-empty column header that isn't in ROOM_META_COL_NAMES:
+ts// Sign type columns = any column after detection that isn't room metadata
+const signTypeColIndices = headers
+  .map((h, idx) => ({ h: String(h ?? "").trim(), idx }))
+  .filter(({ h, idx }) => {
+    if (!h) return false; // skip empty headers
+    if (idx === roomNameColIdx) return false; // skip room name col
+    if (idx === roomNumColIdx) return false; // skip room num col
+    const lower = h.toLowerCase();
+    // Skip known metadata columns
+    if (["level", "floor", "notes", "comments", "qty", "quantity", "total"].includes(lower)) 
+      return false;
+    return true; // everything else is a sign type
+  })
+  .map(({ h, idx }) => ({ signType: h, idx }));
+Fix 3 — Make room number column truly optional:
+When roomNumColIdx === -1, don't throw — just use empty string for room number:
+tsconst roomNum = roomNumColIdx >= 0
+  ? String(row[roomNumColIdx] ?? "").trim()
+  : ""; // no room number column — that's OK
+Fix 4 — Skip section header rows:
+Before processing each data row, check if it's a section/floor label:
+tsconst firstVal = String(row[0] ?? "").trim();
+const restEmpty = row.slice(1).every(v => v == null || v === "" || v === 0);
+if (firstVal && restEmpty) {
+  // Looks like a section header — use as level context and skip
+  if (/ground|floor|level|basement|mezzanine|roof|\d+(st|nd|rd|th)/i.test(firstVal)) {
+    currentLevel = firstVal;
+  }
+  continue;
+}
+After saving upload 51557_36_Colborne_Rd_-_Takeoff.xlsx again. Expected: 35 rows parsed, LOBBY → Room ID/Roof Occupancy, STAIR #1 → Stair ID Enclosure + Stair ID Corridor, ELEVATOR → Floor Indicator + Evacuation Map.

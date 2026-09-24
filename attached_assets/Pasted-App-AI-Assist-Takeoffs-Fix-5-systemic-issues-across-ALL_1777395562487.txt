@@ -1,0 +1,345 @@
+App: AI-Assist Takeoffs
+
+Fix 5 systemic issues across ALL 8 building types.
+These are universal rules — not Fox Hill specific.
+Update the rules engine, building_type_profiles,
+and building_type_lexicons tables together.
+
+════════════════════════════════════════════════
+FIX 1 — STAIR SIGNS (R11) — all building types
+════════════════════════════════════════════════
+Stair signs are missing across ALL building types.
+Root cause: stair rooms are being filtered out
+by room number validation before R11 runs.
+
+UNIVERSAL stair detection — a room isStair=true
+when ANY of these match:
+  room_name contains: STAIR, STAIRWAY, STAIRWELL,
+    FIRE STAIR, EXIT STAIR, STAIRS
+  OR room_number matches these per building type:
+
+  Education:   /^S[ABCD]\d{2}$/  (SA01, SB02)
+  Healthcare:  /^S[ABCDE]\d{2}$/ OR /^ST\d{2,3}$/
+  Commercial:  /^S\d{1,2}$/ OR /^STAIR-?\d+$/
+  Government:  /^S\d{1,2}$/ OR /^STAIR[A-Z]$/
+  Hotel:       /^S\d{1,2}$/ OR /^STAIR-?\d+$/
+  Residential: /^S\d{1,2}$/ OR /^STAIR-?\d+$/
+  Assembly:    /^S\d{1,2}$/ OR /^[A-Z]{1,2}-S\d+$/
+  Unknown:     any room_name containing "STAIR"
+
+NEVER filter out rooms matching stair patterns.
+Add all stair patterns to the valid_room_patterns
+allowlist for each building type.
+
+R11 sign assignment when isStair=true:
+  Per floor served by that stair:
+    +1 Stair Identification (Corridor)
+    +1 Stair Identification (Landing)
+
+  Floors served = job.floor_count (default)
+  If only 1 floor: 1 corridor + 1 landing only
+
+Stair sign content by building type:
+  Education:   "STAIR [X] — [NO/FIRE DEPT] ROOF ACCESS"
+  Healthcare:  "STAIR [X]" + smoke compartment note
+  Government:  "STAIR [X]" + Area of Rescue instruction
+  Assembly:    "STAIR [X]" + Area of Rescue instruction
+  All others:  "STAIR [X]"
+
+Store stair variant in sign notes field.
+
+Expected minimums per building type:
+  Education 2-floor:    16 stair signs (4 stairs)
+  Healthcare 4-floor:   16+ stair signs
+  Commercial 3-floor:   12+ stair signs  
+  Government 3-floor:   12+ stair signs
+  Hotel 5-floor:        20+ stair signs
+  Residential 4-floor:  16+ stair signs
+  Assembly single:      4-8 stair signs
+  Unknown:              flag count for review
+
+════════════════════════════════════════════════
+FIX 2 — ADA REQUIRED FLAG — all sign types,
+         all building types
+════════════════════════════════════════════════
+Per 2010 ADA §703 and IBC §1110:
+ALL permanently designated interior room signs
+require tactile characters + Grade 2 Braille.
+This applies in ALL jurisdictions as minimum.
+
+Update ada_required in BOTH Summary sheet and
+Pricing tab for every building type:
+
+  ada_required = YES:
+    Room ID
+    Room ID w/Insert       ← currently wrong (No)
+    Restroom (all variants)
+    Stair (Corridor)
+    Stair (Landing)
+    Exit (Tactile)
+    Area of Rescue
+    Elevator / In Case of Fire
+    Boys / Girls / Men / Women
+    Unisex Restroom
+    Family Restroom
+    BDA Location Sign
+    Unit ID (Residential)  ← centered on door
+    Patient Room ID (Healthcare)
+    Courtroom ID (Government)
+
+  ada_required = NO:
+    Max Occupancy          ← informational only
+    Evacuation Map         ← graphic/informational
+    Office Directory       ← directory, not room ID
+    Exit (illuminated)     ← electrical, not tactile
+    LEED Signs             ← decorative
+    Exterior Signs         ← different standard
+
+Note for Residential and Hotel:
+  Unit/guest room signs are ADA tactile BUT
+  mounting location = centered on door
+  (not latch side) per ADA §703.4.2 exception.
+  Store as ada_required=Yes, mount_side='center'
+
+════════════════════════════════════════════════
+FIX 3 — EXIT SIGNS (R9) — all building types
+════════════════════════════════════════════════
+Exit signs are door-based not room-based.
+Current logic misses 70%+ of required exits.
+
+Universal R9 logic:
+  Exit signs are ALWAYS derived from stair count
+  and exterior door count — never from room names.
+
+  Formula per building type:
+
+  EDUCATION (Group E):
+    (stair_count × floor_count) +
+    exterior_exit_doors (min 2 per wing per floor)
+    Minimum: 12 for 2-story, 2-wing school
+
+  HEALTHCARE (Group I-2):
+    (stair_count × floor_count) +
+    (smoke_compartment_count × 2) +
+    exterior_exit_doors
+    Minimum: 16 for 4-story hospital
+
+  COMMERCIAL (Group B):
+    (stair_count × floor_count) +
+    exterior_exit_doors (min 2 per floor)
+    Minimum: 8 for 3-story office
+
+  GOVERNMENT (Group B/A):
+    Same as Commercial +
+    secure zone exit doors
+    Minimum: 10 for 3-story courthouse
+
+  HOTEL (Group R-1):
+    (stair_count × floor_count) +
+    exterior_exit_doors
+    Minimum: 12 for 5-story hotel
+
+  RESIDENTIAL (Group R-2):
+    (stair_count × floor_count) +
+    exterior_exit_doors (min 2 per building)
+    Minimum: 8 for 4-story apartment
+
+  ASSEMBLY (Group A):
+    HIGHER multiplier — IBC 1006.3 Group A
+    (stair_count × floor_count × 1.5 rounded up) +
+    exterior_exit_doors (min 3 per assembly space)
+    Minimum: 12 for single-story arena/theater
+
+  UNKNOWN:
+    Use Commercial formula as conservative default
+
+Implementation:
+  When stair rooms are extracted (Fix 1),
+  automatically create Exit sign records:
+    For each stair × each floor:
+      { signType: 'Exit', location: 'Stair [X] 
+        door at Level [N]', rule: 'R9' }
+  
+  Plus add minimum exterior exit doors:
+    { signType: 'Exit', location: 'Exterior 
+        exit door [N]', rule: 'R9',
+        notes: 'Verify count on plans' }
+
+  Show exit signs in Review tab under a new 
+  "Egress" section, separate from room signs.
+
+════════════════════════════════════════════════
+FIX 4 — EVACUATION MAP DENSITY (R13)
+         all building types
+════════════════════════════════════════════════
+Evacuation Maps go at decision points only.
+Never one per room. Never one per alcove.
+
+Max Evacuation Maps per floor by building type:
+  Education:   2 per floor (one per wing if 2-wing)
+  Healthcare:  4 per floor (one per smoke compartment)
+  Commercial:  2 per floor
+  Government:  2 per floor
+  Hotel:       1 per floor (at elevator lobby)
+  Residential: 1 per floor (at elevator/stair lobby)
+  Assembly:    2 per floor (at main entries)
+  Unknown:     2 per floor
+
+Placement rules (all types):
+  ASSIGN to: main CORRIDOR, LOBBY, ELEVATOR LOBBY,
+    primary stair landing (one per stair)
+  DO NOT assign to: PROJECT AREA, PASSAGE, ALCOVE,
+    VESTIBULE, individual offices, classrooms,
+    storage rooms, or any non-corridor space
+
+Store evac_map_max_per_floor in 
+building_type_profiles table.
+Rules engine enforces the cap — once max is 
+reached for that floor, stop assigning.
+
+════════════════════════════════════════════════
+FIX 5 — MAX OCCUPANCY (R10) — all building types
+════════════════════════════════════════════════
+When isAssembly=true, ALWAYS create two sign
+records — Room ID AND Max Occupancy are separate
+physical signs at different locations.
+
+Assembly rooms by building type that require
+BOTH Room ID w/Insert AND Max Occupancy:
+
+  Education:
+    GYMNASIUM, GYM, CAFETERIA, AUDITORIUM,
+    MUSIC ROOM, MUSIC LOBBY, LECTURE HALL,
+    MULTIPURPOSE ROOM, ASSEMBLY HALL
+
+  Healthcare:
+    WAITING ROOM (>49 occ), CHAPEL,
+    FAMILY LOUNGE (>49 occ), CONFERENCE (>49)
+
+  Commercial:
+    CONFERENCE ROOM (>49 occ), BALLROOM,
+    TRAINING ROOM (>49 occ), BOARDROOM (>49)
+
+  Government:
+    COURTROOM, COUNCIL CHAMBER, HEARING ROOM,
+    JURY ASSEMBLY ROOM, CONFERENCE (>49)
+
+  Hotel:
+    BALLROOM, BANQUET HALL, GRAND BALLROOM,
+    RESTAURANT (>49), BAR (>49),
+    MEETING ROOM (>49), SALON, BALLROOM SECTION
+
+  Residential:
+    CLUBROOM (>49), FITNESS CENTER (>49),
+    PARTY ROOM (>49), AMENITY ROOM (>49)
+
+  Assembly (ALL primary spaces):
+    SANCTUARY, NAVE, THEATER, AUDITORIUM,
+    ARENA FLOOR, CONCERT HALL, GYMNASIUM,
+    FELLOWSHIP HALL, GALLERY (>49),
+    EXHIBITION HALL (>49)
+
+  Universal fallback (all types):
+    ANY room where occupancy_group starts with 'A'
+    ANY room where occupant_load >= 50
+
+Rules engine implementation:
+  if (room.isAssembly) {
+    signs.push({ type: 'Room ID w/Insert', rule: 'R2' })
+    signs.push({ type: 'Max Occupancy',    rule: 'R10',
+                 ada_required: false,
+                 notes: 'Post inside room at primary entrance' })
+  }
+
+════════════════════════════════════════════════
+FIX 6 — BUILDING-TYPE-SPECIFIC SPECIAL SIGNS
+════════════════════════════════════════════════
+Add these to the rules engine and lexicons:
+
+GOVERNMENT only — Area of Rescue (R16):
+  Required at EVERY stair landing in public bldgs
+  When isStair=true AND building_type='government'
+  OR building_type='assembly':
+    +1 Area of Rescue Assistance sign per landing
+    +1 Area of Rescue Instructions sign per landing
+  ada_required: Yes
+
+HOTEL + RESIDENTIAL — Accessible Unit (R17):
+  When room is a guest room/unit AND 
+  marked as accessible on plans:
+    Sign must include ISA symbol
+    mount_side = 'center' (not latch side)
+  Store as ada_required=Yes, sign_variant='accessible'
+
+ASSEMBLY — Accessible Seating (R18):
+  When isAssembly=true AND fixed_seating=true:
+    Add accessible seating location signs
+    Flag for manual count verification
+
+HEALTHCARE — Horizontal Exit (R19):
+  When room_name contains SMOKE BARRIER,
+  FIRE WALL, HORIZONTAL EXIT:
+    Add exit sign at smoke/fire door
+    Add evacuation map for that compartment
+
+════════════════════════════════════════════════
+DB CHANGES NEEDED
+════════════════════════════════════════════════
+Add to building_type_profiles table:
+  evac_map_max_per_floor  INTEGER
+  min_exits_per_floor     INTEGER  
+  ibc_occupancy_group     VARCHAR  (E, B, I-2, R-1, etc)
+  stair_sign_variant      VARCHAR  (roof_access, smoke, area_of_rescue)
+  unit_mount_side         VARCHAR  ('latch' or 'center')
+  requires_area_of_rescue BOOLEAN
+
+Seed values:
+  education:   evac=2, exits=4, group='E',    aor=false
+  healthcare:  evac=4, exits=6, group='I-2',  aor=false
+  commercial:  evac=2, exits=4, group='B',    aor=false
+  government:  evac=2, exits=4, group='B',    aor=true
+  hotel:       evac=1, exits=4, group='R-1',  aor=false, mount='center'
+  residential: evac=1, exits=3, group='R-2',  aor=false, mount='center'
+  assembly:    evac=4, exits=6, group='A',    aor=true
+  unknown:     evac=2, exits=4, group='B',    aor=false
+
+════════════════════════════════════════════════
+VERIFICATION — test all 8 building types
+════════════════════════════════════════════════
+After implementing all fixes, verify with these
+test cases:
+
+TEST 1 — Fox Hill (Education, 2 floors):
+  ✓ Stair signs: 16 (4 stairs × 2 floors × 2)
+  ✓ Exit signs: ≥12
+  ✓ Max Occupancy: ≥4 (gym, cafe, music, lobby)
+  ✓ Evac Maps: ≤4 (2 per floor)
+  ✓ Room ID w/Insert: ada_required=Yes
+  ✓ Total: 190-220 signs
+
+TEST 2 — Any Healthcare job (if exists):
+  ✓ Stair signs present
+  ✓ Evac Maps ≤ 4×floor_count
+  ✓ Patient rooms get Room ID w/Insert
+
+TEST 3 — Any Commercial job (if exists):
+  ✓ Stair signs present
+  ✓ Conference rooms >49 get Max Occupancy
+  ✓ Tenant suites get Office Directory
+
+TEST 4 — Any Government job (if exists):
+  ✓ Area of Rescue at every stair landing
+  ✓ Courtrooms get Max Occupancy
+  ✓ Stair signs present
+
+TEST 5 — Unknown building type:
+  ✓ Conservative defaults applied
+  ✓ User prompted to confirm type
+  ✓ Stair signs still appear
+
+GLOBAL CHECKS (all types):
+  ✓ ada_required=Yes on all Room ID variants
+  ✓ ada_required=No on Max Occupancy, Evac Map
+  ✓ Stair signs appear in every job with stairs
+  ✓ Exit count ≥ (stair_count × floor_count)
+  ✓ All 1,430 tests pass

@@ -1,0 +1,120 @@
+Now for the full batch prompt — here's everything in one shot:
+
+Batch UI + Pipeline update — 6 changes, one rescan at the end.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — Fixes 1, 2, 3
+artifacts/web/src/index.css or globals.css — Fix 4 (color system)
+artifacts/web/src/pages/job-detail.tsx — Fix 5 (Review tab redesign)
+artifacts/web/src/components/StructuredUploader.tsx or job creation form — Fix 6 (building type tooltip)
+
+
+Fix 1 — Step 4b skip already-typed sheets (pipeline.ts)
+Find Step 4b. Filter sheetDbRows to only sheets where sheetType is null or "unknown":
+typescriptconst sheetsNeedingClassification = sheetDbRows.filter(
+  s => !s.sheetType || s.sheetType === "unknown"
+);
+logger.log(
+  `[Step 4b] ${sheetsNeedingClassification.length} of ${sheetDbRows.length} sheet(s) need classification — ${sheetDbRows.length - sheetsNeedingClassification.length} already typed, skipping`
+);
+if (sheetsNeedingClassification.length === 0) {
+  await wp("4b", "Reclassifying signage sheets — all already typed, skipped");
+} else {
+  // use sheetsNeedingClassification instead of sheetDbRows for the rest of Step 4b
+}
+
+Fix 2 — Level replication schedule matching (pipeline.ts)
+In Step 9 schedule matching, add a unit number normalization function so replicated rooms (A407, A507, A607) match their source schedule entries (A307):
+typescriptfunction normalizeUnitNumber(roomNum: string): string {
+  const match = roomNum.match(/^([A-Z])(\d)(\d{2,})$/);
+  if (match) return `${match[1]}${match[3]}`;
+  return roomNum;
+}
+In the schedule matching loop, try exact match first, then normalized match as fallback. Log normalized matches:
+typescriptlogger.log(`[Step 9] Normalized match: "${scheduleRoom}" → "${roomNum}"`);
+
+Fix 3 — specialty_signs delete-before-insert (pipeline.ts)
+Replace onConflictDoNothing() with delete-before-insert in both the primary and fallback specialty signs insert locations:
+typescriptawait db.delete(specialtySignsTable).where(eq(specialtySignsTable.jobId, jobId));
+await db.insert(specialtySignsTable).values(specialtyRows);
+
+Fix 4 — Brand color system update (globals.css / index.css)
+Update the CSS variables to match the SignTakeoffIQ brand colors derived from the logo:
+css:root {
+  --color-bg-base: #161616;
+  --color-bg-card: #1f1f1f;
+  --color-bg-panel: #252525;
+  --color-border: #2a2a2a;
+  --color-border-subtle: #222222;
+  --color-accent: #f5a623;
+  --color-accent-hover: #e09520;
+  --color-accent-muted: #f5a62320;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #8a8a8a;
+  --color-text-muted: #555555;
+  --color-success: #22c55e;
+  --color-success-muted: #22c55e20;
+  --color-warning: #f5a623;
+  --color-error: #ef4444;
+  --color-error-muted: #ef444420;
+  --color-info: #3b82f6;
+  --color-info-muted: #3b82f620;
+  --color-navy: #0f1729;
+}
+Apply these variables throughout — replace all hardcoded color values in Tailwind classes or inline styles with these CSS variables where feasible. Priority areas: sidebar, job header, tab bar, card backgrounds, button states.
+Also update the logo in the sidebar/header to use the new SignTakeoffIQ logo (the amber square with diagonal lines icon + "SIGN TAKEOFF IQ" text + "PRECISION PORTAL" subtitle). The logo image is at the path where the current logo is stored — replace it or update the SVG/img src to point to the new asset. If the logo is an SVG inline component, rebuild it to match: amber rounded square #f5a623 with two diagonal white lines, bold white "SIGN TAKEOFF IQ" text, amber "PRECISION PORTAL" subtitle.
+
+Fix 5 — Review tab redesign (job-detail.tsx)
+Remove entirely:
+
+"AI vision only" toggle
+"Low confidence (< 75%)" toggle
+"Show dismissed" toggle
+"Show unspecified only" toggle
+Source legend row ("Verified / Trained / Rules / AI Vision")
+"Rules" source badge — replace with nothing (source column can be removed entirely from the table)
+"Origin" column (confirmed/pdf badges) — move origin info to a tooltip on hover if needed, remove from main table
+Train button — hide for non-admin users (check for admin role, show only if user.role === "admin")
+Re-apply Keywords button — same, admin only
+
+Add:
+
+Floor grouping — group rooms by level with a sticky section header per floor showing: floor name, room count, sign count, and a "Review all" button
+Section header format: LEVEL 1  •  45 rooms  •  67 signs  [Accept all] [Dismiss all]
+Collapse/expand per floor section — chevron on the left of the section header
+Progress indicator in the page header: "reviewed 12 of 165 rooms" with a thin amber progress bar
+After "Accept All AI Rooms" is clicked: change button to a green "✓ All rooms accepted" state, disable it, don't show it again until new AI rooms exist
+
+Simplify the table columns to:
+Room # | Name | Type | Signs | Level | Actions
+Remove: Doors, Origin, Dimensions, Source columns from the default view. These can go into an expandable row detail on click.
+Simplify source/confidence display:
+Instead of separate source badges, add a single status dot on the Room # column:
+
+🟢 Green dot = confirmed/high confidence
+🟡 Amber dot = needs review / AI vision
+🔴 Red dot = low confidence / flagged
+
+Keep:
+
+Accept (✓) and Dismiss (✗) per-row actions
+Edit (pencil) action
+Search room input
+
+
+Fix 6 — Building type (i) tooltip on job setup
+In the new job creation form and the job detail building type selector, add a small (i) icon button next to the building type dropdown. On hover or click, show a popover with the uploadGuide data for that building type from buildingTypes.ts. The popover should show:
+What to upload for [Building Type]:
+✓ Look for: [uploadGuide.lookFor]
+✗ Avoid: [uploadGuide.avoid]
+📋 Room Schedule hint: [uploadGuide.roomScheduleHint]
+📋 Sign Schedule hint: [uploadGuide.signScheduleHint]
+Use the existing uploadGuide data already in buildingTypes.ts — no new data needed, just surface it in the UI.
+
+After all 6 fixes:
+
+Typecheck — 0 errors
+Tests — 1,461 passing
+Visual check — open the app, confirm new colors match the brand, Review tab looks clean
+Rescan Fox Hill — confirm 193-215 signs, no regressions
+Rescan Walking Court_2 — confirm Step 4b shows near 0ms, Levels 4-6 have 50+ signs each, total 400+

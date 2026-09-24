@@ -1,0 +1,86 @@
+This is a massive improvement. Everything is working:
+✓ Floor plan canvas visible — Fox Hill floor plan rendering with all markers placed correctly across the plan
+✓ Markers visible — 53 markers showing in multiple colors (red egress, green exit, blue restroom, teal, amber) all placed on the plan at correct positions
+✓ Room Editor panel — "ROOM EDITOR / Click any marker on the plan to edit it / Or drag a room from the tray below to place it" — exactly right
+✓ Placement tray — showing room identifier tags correctly: E104 SPARE OFFICE, E105 TM CHR OFFICE, E106 NURSE, E106A NURSE OFFICE, E106B NURSE TOILET etc. — real room names, no numeric junk
+✓ Tag design — two-line tags (room number + sign type), proper height, dark background, amber left bar
+✓ Level pills — LEVEL 1, LEVEL 2
+✓ Legend — Room ID, Room ID w/insert, Office Directory, Restroom, Max Occupancy
+296 to place — those are the unplaced rooms for Fox Hill waiting in the tray.
+The foundation is solid. Now write the floor plan search prompt:
+
+What we're building: A magnifying glass search button in the Plans tab toolbar that drops down a search panel for finding rooms on the floor plan by name or number.
+What changes: FloorPlanTab.tsx only. No backend changes — search works against the sidecar's already-extracted text data via the existing /extract-room-tags endpoint, or against the signs and rooms data already in React Query cache.
+The UI — search icon in toolbar:
+Add a magnifying glass Search icon button in the toolbar, immediately to the right of the Markers toggle:
+[← sheet →] [− 30% +] [FIT] [Markers] [Snap] [🔍]
+Clicking the icon toggles a search dropdown panel that appears directly below the toolbar, overlaying the floor plan:
+┌─────────────────────────────────────────────────────┐
+│ 🔍 [Search rooms, signs, labels...        ] [✕]     │
+│                                                      │
+│ E106 NURSE                    Room ID    LEVEL 1    │
+│ E106A NURSE OFFICE            Room ID    LEVEL 1    │
+│ E106B NURSE TOILET            Restroom   LEVEL 1    │
+│                                                      │
+│ No results for "xyz"                                 │
+└─────────────────────────────────────────────────────┘
+Search behavior:
+
+Searches across sign_type, room_name, floor_label for the current job
+Uses the signs data already loaded in React Query — no new API calls
+Results appear as user types — debounced 150ms
+Each result row shows: room identifier | sign type | floor label
+Clicking a result:
+
+If the sign has real coordinates (marker_x not null/50000) → pan and zoom the floor plan to center on that marker, briefly highlight it with a pulse animation
+If the sign has no coordinates (unplaced) → highlight the matching tag in the placement tray with a yellow glow, scroll tray to bring it into view
+
+
+Maximum 20 results shown, "X more results — refine your search" if more exist
+Escape key closes the panel
+Clicking outside the panel closes it
+
+Highlight animation for found marker:
+typescript// Pulse the marker for 2 seconds when navigated to
+const [highlightedSignId, setHighlightedSignId] = useState<string | null>(null)
+
+// In marker render:
+style={{
+  ...existingStyle,
+  animation: highlightedSignId === sign.id ? 'pulse 0.5s ease-in-out 3' : 'none'
+}}
+
+// CSS:
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+}
+Pan to marker:
+typescriptconst panToMarker = (sign: Sign) => {
+  if (!imgSize || !sign.markerX || sign.markerX === 50000) return
+  const pixX = (sign.markerX / 100000) * imgSize.w
+  const pixY = (sign.markerY / 100000) * imgSize.h
+  // Use react-zoom-pan-pinch's setTransform to center on the marker
+  transformRef.current?.setTransform(
+    -pixX * 1.5 + containerW / 2,
+    -pixY * 1.5 + containerH / 2,
+    1.5
+  )
+  setHighlightedSignId(sign.id)
+  setTimeout(() => setHighlightedSignId(null), 2000)
+}
+Tray highlight for unplaced signs:
+typescriptconst [trayHighlightId, setTrayHighlightId] = useState<string | null>(null)
+
+// On tray tag:
+style={{
+  ...existingTagStyle,
+  boxShadow: trayHighlightId === sign.id ? '0 0 0 2px #F59E0B, 0 0 12px #F59E0B' : 'none'
+}}
+What won't change: All existing toolbar buttons, tray behavior, room editor, drag-and-drop, pipeline, DB, any other file.
+Regression tests:
+
+Fox Hill — click search icon, type "E106", see E106 NURSE / E106A NURSE OFFICE / E106B NURSE TOILET in results. Click E106 NURSE — plan pans to center on that marker and pulses. Type "XXXX" — "No results" message.
+Walking Court — type "A209" — if placed shows on plan, if unplaced highlights tray tag.
+Escape key closes panel. Click outside closes panel.
+149 web + 1555 API tests pass. Typecheck 0 errors.

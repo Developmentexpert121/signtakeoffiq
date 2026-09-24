@@ -1,0 +1,201 @@
+Now I have everything I need. The key insight is that material already comes back from Gemini in the notes field — it's being captured but thrown away. Session 3 needs to extract it properly and route it to the XLSX export's material/finish defaults table.
+Here's the Session 3 Replit prompt:
+
+Session 3 of 4 — Sign Schedule Extraction: Material/Finish Columns + Per-Slot Confidence Messaging
+What this session does: Extracts material and finish specification data from uploaded sign schedule documents and uses it to populate the Material and Finish columns in the XLSX export. Also adds per-slot confidence messaging to the Overview tab. No pipeline architecture changes — this extends the existing Step 3a path.
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — extend SignScheduleEntry, update Gemini prompt, add material spec injection into export defaults
+artifacts/api-server/src/routes/exports.ts — read per-job material spec overrides when building the pricing defaults table
+artifacts/web/src/components/StructuredUploader.tsx — add per-slot confidence display
+New file: artifacts/api-server/src/lib/materialSpec.ts — per-job material spec record storage and lookup
+
+What won't be affected: Rules engine, egress generator, marker placement, training module, all existing benchmark jobs. Jobs without a sign schedule uploaded continue using the existing pricing defaults table unchanged.
+Regression test job: Fox Hill — rescan after tests pass, confirm stable.
+
+Step 1 — Extend SignScheduleEntry with material fields
+In pipeline.ts, add four fields to the SignScheduleEntry interface:
+typescriptinterface SignScheduleEntry {
+  roomNumber: string;
+  roomName:   string;
+  signType:   string;
+  quantity:   number;
+  size:       string;
+  message:    string;
+  notes:      string;
+  source:     "text" | "gemini";
+  sheetId:    string;
+  // NEW — material spec fields
+  substrate:      string | null;  // e.g. "photopolymer", "aluminum", "acrylic"
+  finishMethod:   string | null;  // e.g. "direct UV print", "painted", "brushed"
+  braileSpec:     string | null;  // e.g. "Grade 2 Braille", "no Braille"
+  mountingHeight: string | null;  // e.g. "60\" AFF"
+  manufacturer:   string | null;  // e.g. "ASI", "Vista System"
+}
+
+Step 2 — Update the Gemini Flash prompt in Step 3a
+Find the Gemini Flash call around line 3485. Replace the prompt with this expanded version:
+typescriptconst prompt = `This is an architectural sign schedule or sign specification sheet.
+
+Extract two things:
+
+1. SIGN ENTRIES — all individual sign locations:
+Return as JSON array under key "entries":
+[{ roomNumber, roomName, signType, quantity, size, message, notes }]
+
+2. MATERIAL SPEC — the project-wide sign material specification:
+Return as JSON object under key "materialSpec":
+{
+  "substrate": "the substrate material (e.g. photopolymer, aluminum, acrylic, ADA plastic)",
+  "finishMethod": "the finish or print method (e.g. direct UV print, painted, brushed, raised copy)",
+  "brailleSpec": "Braille requirement (e.g. Grade 2 Braille, no Braille)",
+  "mountingHeight": "mounting height if specified (e.g. 60 inches AFF)",
+  "manufacturer": "sign manufacturer or series if called out (e.g. ASI, Vista)"
+}
+
+If a field is not found, use null.
+If this is a sign type legend, include each type under entries as:
+{ typeCode, typeName, description, size, material }
+
+Respond in JSON only. No markdown fences. No preamble.
+Top level keys: "entries" and "materialSpec".`;
+Update the Gemini response parsing to extract both keys:
+typescript// Parse entries (existing logic, unchanged)
+const entries = parsed.entries ?? parsed; // fallback if old format
+
+// Parse materialSpec (new)
+const materialSpec = parsed.materialSpec ?? null;
+if (materialSpec) {
+  jobMaterialSpec = {
+    substrate:      materialSpec.substrate ?? null,
+    finishMethod:   materialSpec.finishMethod ?? null,
+    brailleSpec:    materialSpec.brailleSpec ?? null,
+    mountingHeight: materialSpec.mountingHeight ?? null,
+    manufacturer:   materialSpec.manufacturer ?? null,
+    jobId:          jobId,
+    source:         "sign_schedule",
+  };
+}
+Add a jobMaterialSpec variable at the top of the pipeline run (alongside signSchedule accumulator):
+typescriptlet jobMaterialSpec: JobMaterialSpec | null = null;
+
+Step 3 — Create materialSpec.ts
+Create artifacts/api-server/src/lib/materialSpec.ts:
+typescriptexport interface JobMaterialSpec {
+  jobId:          string;
+  substrate:      string | null;
+  finishMethod:   string | null;
+  brailleSpec:    string | null;
+  mountingHeight: string | null;
+  manufacturer:   string | null;
+  source:         "sign_schedule" | "manual";
+}
+
+// In-memory store per job — persists for the lifetime of the server process
+// Cleared on force-fresh rescan
+const store = new Map<string, JobMaterialSpec>();
+
+export function setJobMaterialSpec(spec: JobMaterialSpec): void {
+  store.set(spec.jobId, spec);
+}
+
+export function getJobMaterialSpec(jobId: string): JobMaterialSpec | null {
+  return store.get(jobId) ?? null;
+}
+
+export function clearJobMaterialSpec(jobId: string): void {
+  store.delete(jobId);
+}
+Import and call setJobMaterialSpec(jobMaterialSpec) at the end of the pipeline run if jobMaterialSpec is not null. Call clearJobMaterialSpec(jobId) at the force-fresh clear step alongside the existing sign_schedule_entries delete.
+
+Step 4 — Inject material spec into XLSX export
+In artifacts/api-server/src/routes/exports.ts, import getJobMaterialSpec and apply overrides to the per-type defaults table:
+typescriptimport { getJobMaterialSpec } from "../lib/materialSpec";
+
+// Inside the export route handler, after building the defaults table:
+const materialSpec = getJobMaterialSpec(jobId);
+
+if (materialSpec) {
+  // Override materialName for all sign types if substrate is specified
+  if (materialSpec.substrate) {
+    for (const key of Object.keys(defaultsTable)) {
+      defaultsTable[key].materialName = materialSpec.substrate;
+    }
+  }
+  // Override finishingName for all sign types if finishMethod is specified
+  if (materialSpec.finishMethod) {
+    for (const key of Object.keys(defaultsTable)) {
+      defaultsTable[key].finishingName = materialSpec.finishMethod;
+    }
+  }
+}
+Add a Notes column to the XLSX output that includes manufacturer if present:
+typescriptif (materialSpec?.manufacturer) {
+  row.notes = (row.notes ?? "") + ` Manufacturer: ${materialSpec.manufacturer}`;
+}
+
+Step 5 — Per-slot confidence messaging in StructuredUploader
+In artifacts/web/src/components/StructuredUploader.tsx, below the progress checklist, add a per-slot confidence section that appears after a scan has completed. Read from the job's existing Overview data (already fetched by job-detail.tsx and passed as props).
+Add a jobStats prop:
+typescriptinterface StructuredUploaderProps {
+  // existing props...
+  jobStats?: {
+    totalSigns: number;
+    highConfidence: number;
+    needsReview: number;
+    detectedRooms: number;
+    scheduleRows: number;
+  } | null;
+}
+Below the progress checklist, show slot-specific messages when jobStats is available:
+Floor Plans slot — always show after scan:
+✅ Floor plans processed — {detectedRooms} rooms extracted
+If detectedRooms === 0:
+⚠️ No rooms found in floor plans — check that uploaded pages show room labels
+Room Schedule slot — show if file uploaded:
+If uploaded and scheduleRows > 0:
+✅ Room schedule — {scheduleRows} rooms matched
+If uploaded and scheduleRows === 0:
+⚠️ Room schedule uploaded but no rooms extracted — check that the file contains a room or finish schedule table
+If not uploaded:
+○ No room schedule uploaded — upload a Room or Finish Schedule (A-7xx) to improve accuracy
+Sign Schedule slot — show if file uploaded:
+If uploaded and materialSpec found:
+✅ Sign schedule — material specs extracted ({substrate}, {finishMethod})
+If uploaded and no materialSpec:
+⚠️ Sign schedule uploaded but material specs not found — check that the file contains sign type or material specifications
+If not uploaded:
+○ No sign schedule uploaded — upload Division 10 specs to populate Material and Finish columns
+
+Step 6 — Add a GET endpoint for material spec
+In artifacts/api-server/src/routes/jobs.ts or equivalent, add:
+GET /api/jobs/:jobId/material-spec
+Returns the current JobMaterialSpec for the job or null. Used by the frontend to show the sign schedule confidence message.
+
+Typecheck and tests
+
+Typecheck: 0 errors
+Full test suite: 1,585 passing
+Do NOT rescan until tests pass
+Rescan Fox Hill — confirm stable
+Then upload a sign schedule to Fresh Example 8 if one is available and rescan — report whether material spec appears in XLSX Notes column
+
+
+What Replit should NOT do
+
+Do not change the rules engine
+Do not change extractTable
+Do not change any existing SignScheduleEntry parsing logic — only extend it
+Do not change the Files tab
+Do not add new DB tables — use in-memory store only for this session
+Do not change any benchmark job files
+
+
+Definition of done for Session 3
+
+Gemini prompt returns entries and materialSpec keys
+materialSpec.ts stores and retrieves per-job spec
+XLSX Material and Finish columns populated when sign schedule uploaded
+Per-slot confidence messages visible in StructuredUploader after scan
+Fox Hill stable
+Typecheck 0 errors, 1,585 tests passing

@@ -1,0 +1,184 @@
+Here's the prompt:
+
+Three things in one pass. FloorPlanTab.tsx only — no pipeline, no schema changes, no other files.
+Run this SQL first before any code changes:
+sqlUPDATE signs
+SET marker_x = NULL,
+    marker_y = NULL,
+    sheet_id = NULL
+WHERE job_id = 'job_2fb551b4f62a8b22';
+
+Fix 1 — Simplified Placement Tray:
+Remove the PLACED section entirely. Tray shows only signs where marker_x IS NULL. Once dropped on plan, tag disappears from tray. That's it.
+PLACEMENT TRAY                    [Search...]    [↑ Hide]
+Level: LEVEL 1 ▾                  9 rooms to place
+
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│  A209    │ │  A211    │ │  A213    │ │  A215    │  ···
+│ Room ID  │ │ Room ID  │ │ Room ID  │ │ Room ID  │
+└──────────┘ └──────────┘ └──────────┘ └──────────┘
+Tag design:
+
+Amber #F59E0B left bar (4px wide)
+Dark background #1E1E2E
+Room number bold 13px white top line
+Sign type 10px gray bottom line
+32px minimum height — readable without zooming
+cursor: grab on hover, cursor: grabbing while dragging
+draggable={true} with onDragStart setting dataTransfer.setData('signId', sign.id)
+
+Level filter pill row — if job has multiple floor levels, show pill per level above the tags. Clicking a pill filters tray to that level. Defaults to current sheet's level.
+Search box filters room number AND sign type in real time.
+When tray is empty — show:
+✓ All rooms placed on this sheet
+in green, centered.
+Tray height: Fixed 140px, scrollable horizontally. Collapse button top-right stores state in localStorage('tray-collapsed-{jobId}').
+
+Fix 2 — Canvas drop target (corrected coordinate math):
+The canvas onDrop handler must correctly convert screen coordinates to the 0–100,000 grid accounting for react-zoom-pan-pinch transform:
+typescriptonDrop={async (e) => {
+  e.preventDefault()
+  const signId = e.dataTransfer.getData('signId')
+  if (!signId || !imgSize || !activeSheet) return
+
+  // Get canvas element bounds in screen space
+  const canvasEl = transformContentRef.current
+  if (!canvasEl) return
+  const rect = canvasEl.getBoundingClientRect()
+
+  // Drop position relative to the image element
+  // rect already accounts for pan and zoom via CSS transform
+  const relX = e.clientX - rect.left
+  const relY = e.clientY - rect.top
+
+  // Convert to 0–100,000 grid
+  // rect.width = imgSize.w * displayScale, so:
+  const coordX = Math.round((relX / rect.width) * 100000)
+  const coordY = Math.round((relY / rect.height) * 100000)
+
+  const finalX = Math.max(0, Math.min(100000, coordX))
+  const finalY = Math.max(0, Math.min(100000, coordY))
+
+  await patchSign(signId, {
+    markerX: finalX,
+    markerY: finalY,
+    sheetId: activeSheet.id
+  })
+
+  invalidateListSigns()
+}}
+Key: use getBoundingClientRect() on the transform content element (the actual image wrapper inside TransformWrapper) — not the outer container. This gives coordinates already adjusted for pan and zoom, so no manual panOffset / displayScale math needed.
+onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+Show a drop ghost — semi-transparent amber rectangle following cursor while dragging over canvas:
+typescriptconst [dropGhost, setDropGhost] = useState<{x: number, y: number} | null>(null)
+
+onDragOver={(e) => {
+  e.preventDefault()
+  const rect = transformContentRef.current?.getBoundingClientRect()
+  if (rect) setDropGhost({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+}}
+onDragLeave={() => setDropGhost(null)}
+onDrop={() => { setDropGhost(null); /* ... rest of handler */ }}
+Render ghost as:
+tsx{dropGhost && (
+  <div style={{
+    position: 'absolute',
+    left: dropGhost.x - 20,
+    top: dropGhost.y - 10,
+    width: 48,
+    height: 20,
+    background: 'rgba(245,159,11,0.4)',
+    border: '2px dashed #F59E0B',
+    borderRadius: 3,
+    pointerEvents: 'none',
+    zIndex: 999
+  }} />
+)}
+
+Fix 3 — Right panel becomes Room Editor:
+Replace the current ROOMS list panel entirely with a two-state editor:
+State A — Nothing selected (default):
+┌──────────────────────────┐
+│ ROOM EDITOR              │
+│                          │
+│ Click any marker on the  │
+│ plan to edit it          │
+│                          │
+│ Or drag a room from the  │
+│ tray below to place it   │
+└──────────────────────────┘
+State B — Marker selected (click any marker on canvas):
+┌──────────────────────────┐
+│ ROOM EDITOR        [✕]   │
+│                          │
+│ Room Number              │
+│ [A215              ]     │
+│                          │
+│ Sign Type                │
+│ [Room ID           ▼]    │
+│   (dropdown of all       │
+│    canonical sign types) │
+│                          │
+│ Marker Color             │
+│ ● ● ● ● ● ● ● ●         │
+│ (8 preset swatches)      │
+│                          │
+│ Floor Label              │
+│ [LEVEL 1           ]     │
+│                          │
+│ [Save Changes]           │
+│                          │
+│ [Remove from plan]       │
+│ (resets marker_x to NULL │
+│  — tag returns to tray)  │
+└──────────────────────────┘
+Save Changes — PATCH sign with updated fields, invalidate list signs, set xlsxDirty = true.
+Remove from plan — PATCH sign with markerX: null, markerY: null, sheetId: null, invalidate list signs, close editor, tag reappears in tray.
+[✕] — closes editor, deselects marker.
+Clicking a different marker while editor is open — switches editor to that marker's data. If unsaved changes exist, discard silently (no confirmation needed — low stakes edit).
+Sign type dropdown options — all 22 canonical sign types from ADA_CANONICAL_SIGN_TYPES. Searchable dropdown.
+Color swatches — 8 presets:
+#F59E0B  #EF4444  #22C55E  #3B82F6
+#8B5CF6  #64748B  #14B8A6  #F97316
+Selected swatch shows white checkmark. Clicking updates markerColor immediately on canvas (optimistic update) and on Save.
+
+Fix 4 — Culling bug fix:
+In visibleMarkers Branch 3 (individual mode), add null guard for imgSize and expand viewport buffer:
+typescript// If imgSize not known yet, return all non-sentinel signs
+if (!imgSize) {
+  return sheetSigns
+    .filter(s => !s.isDeleted && s.markerX !== null && s.markerX !== 50000)
+    .slice(0, _MAX_MARKERS)
+    .map(s => ({ type: 'individual' as const, sign: s }))
+}
+
+// Expanded buffer — 15% on each side
+const vLeft   = (-panOffset.x - containerW * 0.15) / displayScale
+const vRight  = (-panOffset.x + containerW * 1.15) / displayScale
+const vTop    = (-panOffset.y - containerH * 0.15) / displayScale
+const vBottom = (-panOffset.y + containerH * 1.15) / displayScale
+
+// Exclude null and sentinel coordinates from canvas render
+// (they live in the tray, not on the plan)
+return sheetSigns.filter(s => {
+  if (s.isDeleted) return false
+  if (s.markerX === null || s.markerX === 50000) return false
+  const pixX = (s.markerX / 100000) * imgSize.w
+  const pixY = (s.markerY / 100000) * imgSize.h
+  return pixX >= vLeft && pixX <= vRight &&
+         pixY >= vTop  && pixY <= vBottom
+}).slice(0, _MAX_MARKERS)
+  .map(s => ({ type: 'individual' as const, sign: s }))
+
+What won't change:
+
+Pipeline, DB schema, all API routes
+All other tabs — Overview, Review, Egress, Specialty, Schedule, Export
+Fox Hill and Tower District — tray shows their unplaced signs (if any), editor works identically
+
+Regression tests:
+
+Walking Court PLAN-3-P1 — tray shows all rooms as unplaced amber tags after SQL reset. Drag A215 onto corridor — tag disappears from tray, amber marker appears at drop position on canvas. Click marker — right panel shows A215 details. Change color to red — marker updates. Click Remove — marker gone, A215 back in tray.
+Fox Hill 3.9.51 — all 74 markers visible at 30% zoom without FIT. Click a marker — right panel shows room details, editable. Tray shows empty with "All rooms placed ✓".
+XLSX download after a placement — reflects updated marker data.
+1,555 API + 149 web tests pass. Typecheck 0 errors.

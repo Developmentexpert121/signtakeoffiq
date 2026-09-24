@@ -1,0 +1,1222 @@
+{
+  "name": "/Users/shivam-development/Downloads/Tower_Dist_Takeoff_2026-06-16.xlsx :: Takeoff",
+  "rooms": [
+    {
+      "roomNumber": "101C",
+      "roomName": "UNIT 101C",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "102C",
+      "roomName": "UNIT 102C",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103C",
+      "roomName": "UNIT 103C",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103A",
+      "roomName": "HTRON_A UNIT 2A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103B",
+      "roomName": "HTUOS_B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "104C",
+      "roomName": "UNIT 104C",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "105C",
+      "roomName": "UNIT 105C",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "109B",
+      "roomName": "UNIT 109B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "110B",
+      "roomName": "UNIT 110B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "122A",
+      "roomName": "UNIT 122A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "122B",
+      "roomName": "UNIT 122B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "123A",
+      "roomName": "UNIT 123A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "123B",
+      "roomName": "UNIT 123B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "124A",
+      "roomName": "UNIT 124A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "124B",
+      "roomName": "UNIT 124B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "125A",
+      "roomName": "UNIT 125A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "125B",
+      "roomName": "UNIT 125B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "126B",
+      "roomName": "UNIT 126B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "127B",
+      "roomName": "UNIT 127B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "128B",
+      "roomName": "UNIT 128B",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "A101",
+      "roomName": "LOBBY VESTIBULE",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "A106",
+      "roomName": "SPRINKLER",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "B104",
+      "roomName": "ELECTRICAL UNIT 3A UNIT 3A",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "B107",
+      "roomName": "SPRINKLER \"8-'86",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "C102",
+      "roomName": "CORRIDOR",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L1",
+      "roomName": "Stair BS2",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L1",
+      "roomName": "Stair ELECTRICAL",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L1",
+      "roomName": "Exit at Stair BS2",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L1",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-EXT-2",
+      "roomName": "Exterior Exit Door 2",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-EXT-1",
+      "roomName": "Exterior Exit Door 1",
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "201C",
+      "roomName": "UNIT 201C",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "202C",
+      "roomName": "UNIT 202C",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "203C",
+      "roomName": "UNIT 203C",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "203B",
+      "roomName": "UNIT 203B",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "204C",
+      "roomName": "UNIT 204C",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "205C",
+      "roomName": "UNIT 205C",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "217B",
+      "roomName": "UNIT 217B",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "222A",
+      "roomName": "UNIT 222A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "223A",
+      "roomName": "UNIT 223A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "224A",
+      "roomName": "UNIT 224A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "225A",
+      "roomName": "UNIT 225A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "226A",
+      "roomName": "UNIT 226A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "227A",
+      "roomName": "UNIT 227A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "228A",
+      "roomName": "UNIT 228A",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "A205",
+      "roomName": "MECHANICAL CORRIDOR",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L2",
+      "roomName": "Stair ELECTRICAL",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L2",
+      "roomName": "Stair BS2",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L2",
+      "roomName": "Exit at Stair BS2",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L2",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "301C",
+      "roomName": "UNIT 301C",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "302C",
+      "roomName": "UNIT 302C",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303C",
+      "roomName": "UNIT 303C",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303B",
+      "roomName": "UNIT 303B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303A",
+      "roomName": "UNIT 303A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "304C",
+      "roomName": "UNIT 304C",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "305C",
+      "roomName": "UNIT 305C",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "317B",
+      "roomName": "UNIT 317B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "317A",
+      "roomName": "UNIT 317A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "322B",
+      "roomName": "UNIT 322B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "323A",
+      "roomName": "UNIT 323A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "323B",
+      "roomName": "UNIT 323B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "324A",
+      "roomName": "UNIT 324A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "324B",
+      "roomName": "UNIT 324B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "325A",
+      "roomName": "UNIT 325A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "325B",
+      "roomName": "UNIT 325B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "326A",
+      "roomName": "UNIT 326A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "326B",
+      "roomName": "UNIT 326B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "327A",
+      "roomName": "UNIT 327A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "327B",
+      "roomName": "UNIT 327B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "328A",
+      "roomName": "UNIT 328A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "328B",
+      "roomName": "UNIT 328B",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "A307",
+      "roomName": "MECHANICAL TENANT STORAGE UNIT 2A UNIT 3A",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L3",
+      "roomName": "Stair ELECTRICAL",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L3",
+      "roomName": "Stair BS2",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L3",
+      "roomName": "Exit at Stair BS2",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L3",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EVAC-L3",
+      "roomName": "Evacuation Map \u2014 Floor LEVEL 3",
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "422B",
+      "roomName": "UNIT 422B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "423A",
+      "roomName": "UNIT 423A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "423B",
+      "roomName": "UNIT 423B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "424A",
+      "roomName": "UNIT 424A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "424B",
+      "roomName": "UNIT 424B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "425A",
+      "roomName": "UNIT 425A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "425B",
+      "roomName": "UNIT 425B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "426A",
+      "roomName": "UNIT 426A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "426B",
+      "roomName": "UNIT 426B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "427A",
+      "roomName": "UNIT 427A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "427B",
+      "roomName": "UNIT 427B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "428A",
+      "roomName": "UNIT 428A",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "428B",
+      "roomName": "UNIT 428B",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "A401",
+      "roomName": "LOBBY UNIT 1B CORRIDOR",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L4",
+      "roomName": "Stair ELECTRICAL",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L4",
+      "roomName": "Stair BS2",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L4",
+      "roomName": "Exit at Stair BS2",
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L4",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "level": "LEVEL 4"
+    }
+  ],
+  "signs": [
+    {
+      "roomNumber": "101C",
+      "roomName": "UNIT 101C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "102C",
+      "roomName": "UNIT 102C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103C",
+      "roomName": "UNIT 103C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103A",
+      "roomName": "HTRON_A UNIT 2A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "103B",
+      "roomName": "HTUOS_B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "104C",
+      "roomName": "UNIT 104C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "105C",
+      "roomName": "UNIT 105C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "109B",
+      "roomName": "UNIT 109B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "110B",
+      "roomName": "UNIT 110B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "122A",
+      "roomName": "UNIT 122A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "122B",
+      "roomName": "UNIT 122B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "123A",
+      "roomName": "UNIT 123A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "123B",
+      "roomName": "UNIT 123B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "124A",
+      "roomName": "UNIT 124A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "124B",
+      "roomName": "UNIT 124B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "125A",
+      "roomName": "UNIT 125A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "125B",
+      "roomName": "UNIT 125B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "126B",
+      "roomName": "UNIT 126B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "127B",
+      "roomName": "UNIT 127B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "128B",
+      "roomName": "UNIT 128B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "A101",
+      "roomName": "LOBBY VESTIBULE",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "A101",
+      "roomName": "LOBBY VESTIBULE",
+      "signType": "Exit(Tactile)",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "A106",
+      "roomName": "SPRINKLER",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "B104",
+      "roomName": "ELECTRICAL UNIT 3A UNIT 3A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "B107",
+      "roomName": "SPRINKLER \"8-'86",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "C102",
+      "roomName": "CORRIDOR",
+      "signType": "Evacuation Map",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L1",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L1",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L1",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L1",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L1",
+      "roomName": "Exit at Stair BS2",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L1",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-EXT-2",
+      "roomName": "Exterior Exit Door 2",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "EXIT-EXT-1",
+      "roomName": "Exterior Exit Door 1",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 1"
+    },
+    {
+      "roomNumber": "201C",
+      "roomName": "UNIT 201C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "202C",
+      "roomName": "UNIT 202C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "203C",
+      "roomName": "UNIT 203C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "203B",
+      "roomName": "UNIT 203B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "204C",
+      "roomName": "UNIT 204C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "205C",
+      "roomName": "UNIT 205C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "217B",
+      "roomName": "UNIT 217B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "222A",
+      "roomName": "UNIT 222A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "223A",
+      "roomName": "UNIT 223A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "224A",
+      "roomName": "UNIT 224A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "225A",
+      "roomName": "UNIT 225A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "226A",
+      "roomName": "UNIT 226A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "227A",
+      "roomName": "UNIT 227A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "228A",
+      "roomName": "UNIT 228A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "A205",
+      "roomName": "MECHANICAL CORRIDOR",
+      "signType": "Evacuation Map",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L2",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L2",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L2",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L2",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L2",
+      "roomName": "Exit at Stair BS2",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L2",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 2"
+    },
+    {
+      "roomNumber": "301C",
+      "roomName": "UNIT 301C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "302C",
+      "roomName": "UNIT 302C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303C",
+      "roomName": "UNIT 303C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303B",
+      "roomName": "UNIT 303B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "303A",
+      "roomName": "UNIT 303A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "304C",
+      "roomName": "UNIT 304C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "305C",
+      "roomName": "UNIT 305C",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "317B",
+      "roomName": "UNIT 317B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "317A",
+      "roomName": "UNIT 317A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "322B",
+      "roomName": "UNIT 322B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "323A",
+      "roomName": "UNIT 323A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "323B",
+      "roomName": "UNIT 323B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "324A",
+      "roomName": "UNIT 324A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "324B",
+      "roomName": "UNIT 324B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "325A",
+      "roomName": "UNIT 325A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "325B",
+      "roomName": "UNIT 325B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "326A",
+      "roomName": "UNIT 326A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "326B",
+      "roomName": "UNIT 326B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "327A",
+      "roomName": "UNIT 327A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "327B",
+      "roomName": "UNIT 327B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "328A",
+      "roomName": "UNIT 328A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "328B",
+      "roomName": "UNIT 328B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "A307",
+      "roomName": "MECHANICAL TENANT STORAGE UNIT 2A UNIT 3A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L3",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L3",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L3",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L3",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L3",
+      "roomName": "Exit at Stair BS2",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L3",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "EVAC-L3",
+      "roomName": "Evacuation Map \u2014 Floor LEVEL 3",
+      "signType": "Evacuation Map",
+      "qty": 1,
+      "level": "LEVEL 3"
+    },
+    {
+      "roomNumber": "422B",
+      "roomName": "UNIT 422B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "423A",
+      "roomName": "UNIT 423A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "423B",
+      "roomName": "UNIT 423B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "424A",
+      "roomName": "UNIT 424A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "424B",
+      "roomName": "UNIT 424B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "425A",
+      "roomName": "UNIT 425A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "425B",
+      "roomName": "UNIT 425B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "426A",
+      "roomName": "UNIT 426A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "426B",
+      "roomName": "UNIT 426B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "427A",
+      "roomName": "UNIT 427A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "427B",
+      "roomName": "UNIT 427B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "428A",
+      "roomName": "UNIT 428A",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "428B",
+      "roomName": "UNIT 428B",
+      "signType": "Room ID",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "A401",
+      "roomName": "LOBBY UNIT 1B CORRIDOR",
+      "signType": "Evacuation Map",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L4",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L4",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-ELECTRICAL-L4",
+      "roomName": "Stair ELECTRICAL",
+      "signType": "Stair (Landing)",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "STAIR-BS2-L4",
+      "roomName": "Stair BS2",
+      "signType": "Stair (Corridor)",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-BS2-L4",
+      "roomName": "Exit at Stair BS2",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 4"
+    },
+    {
+      "roomNumber": "EXIT-STAIR-ELECTRICAL-L4",
+      "roomName": "Exit at Stair ELECTRICAL",
+      "signType": "Exit",
+      "qty": 1,
+      "level": "LEVEL 4"
+    }
+  ]
+}

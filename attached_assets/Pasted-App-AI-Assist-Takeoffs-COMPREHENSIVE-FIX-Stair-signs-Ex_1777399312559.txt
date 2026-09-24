@@ -1,0 +1,628 @@
+App: AI-Assist Takeoffs
+
+COMPREHENSIVE FIX — Stair signs, Exit signs, 
+Max Occupancy, Evacuation Maps, and ADA flags
+for ALL 8 building types. This is a complete
+rewrite of the egress sign generation logic.
+
+The core principle: Stair signs, Exit signs, 
+and Evacuation Maps are RULE-GENERATED from 
+job metadata — NOT extracted from PDF room labels.
+Room extraction only handles room ID signs.
+
+════════════════════════════════════════════════
+PART A — DB: Update building_type_profiles table
+════════════════════════════════════════════════
+Add or update these columns and seed values:
+
+ALTER TABLE building_type_profiles ADD COLUMN IF NOT EXISTS
+  ibc_group              VARCHAR,
+  stair_count_default    INTEGER,
+  stair_name_patterns    JSONB,
+  min_exits_per_floor    INTEGER,
+  exit_formula           VARCHAR,
+  evac_map_max_per_floor INTEGER,
+  requires_area_of_rescue BOOLEAN DEFAULT false,
+  unit_mount_side        VARCHAR DEFAULT 'latch',
+  assembly_lexicon       JSONB,
+  mep_lexicon            JSONB,
+  restroom_lexicon       JSONB,
+  corridor_lexicon       JSONB;
+
+SEED VALUES per building type:
+
+-- EDUCATION (Group E)
+UPDATE building_type_profiles SET
+  ibc_group = 'E',
+  stair_count_default = 4,
+  stair_name_patterns = '["SA","SB","SC","SD","SE","SF",
+    "STAIR A","STAIR B","STAIR C","STAIR D"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 2,
+  requires_area_of_rescue = false,
+  unit_mount_side = 'latch',
+  assembly_lexicon = '["GYMNASIUM","GYM","CAFETERIA",
+    "AUDITORIUM","MUSIC ROOM","MUSIC LOBBY","GYM LOBBY",
+    "LECTURE HALL","MULTIPURPOSE","ASSEMBLY HALL",
+    "CAFETORIUM","MEDIA CENTER (>49)"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","TELECOM","HVAC",
+    "JANITOR","CUSTODIAN","CUST","FAN ROOM","BOILER",
+    "SPRINKLER","ELEV MACH","ELEVATOR MACHINE",
+    "STORAGE","STOR"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "BOYS","GIRLS","MEN","WOMEN","UNISEX","FAMILY",
+    "ACCESSIBLE RESTROOM","WC","SHOWER","LAVATORY"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "VESTIBULE","PASSAGE","ALCOVE","PROJECT AREA",
+    "FOYER","BREEZEWAY"]'
+WHERE building_type = 'education';
+
+-- HEALTHCARE (Group I-2)
+UPDATE building_type_profiles SET
+  ibc_group = 'I-2',
+  stair_count_default = 3,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR 3",
+    "STAIR A","STAIR B","SA","SB","SC","EXIT STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 4,
+  requires_area_of_rescue = false,
+  unit_mount_side = 'latch',
+  assembly_lexicon = '["WAITING ROOM","CHAPEL",
+    "FAMILY LOUNGE","CONFERENCE ROOM","CAFETERIA",
+    "DINING ROOM","AUDITORIUM","FAMILY WAITING"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","CLEAN UTILITY",
+    "SOILED UTILITY","BIOMEDICAL","STERILE PROCESSING",
+    "DECONTAMINATION","EQUIPMENT","STORAGE","STOR",
+    "JANITOR","HOUSEKEEPING","LINEN"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "PATIENT TOILET","STAFF RESTROOM","WC","SHOWER",
+    "UNISEX","FAMILY","ACCESSIBLE","LAVATORY"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "VESTIBULE","PASSAGE","WAITING","FOYER",
+    "NURSE STATION","NURSING STATION"]'
+WHERE building_type = 'healthcare';
+
+-- COMMERCIAL (Group B)
+UPDATE building_type_profiles SET
+  ibc_group = 'B',
+  stair_count_default = 2,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR A",
+    "STAIR B","S1","S2","EXIT STAIR","FIRE STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 2,
+  requires_area_of_rescue = true,
+  unit_mount_side = 'latch',
+  assembly_lexicon = '["CONFERENCE ROOM","BOARDROOM",
+    "TRAINING ROOM","CAFETERIA","BREAK ROOM",
+    "AUDITORIUM","BALLROOM","TOWN HALL",
+    "ALL HANDS ROOM","LARGE CONFERENCE"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","IT ROOM","TELECOM",
+    "JANITOR","STORAGE","STOR","UTILITY","HVAC"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "MEN","WOMEN","UNISEX","FAMILY","ALL-GENDER",
+    "ACCESSIBLE","WC","SHOWER","LAVATORY"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "ATRIUM","VESTIBULE","PASSAGE","RECEPTION",
+    "FOYER","CONCOURSE"]'
+WHERE building_type = 'commercial';
+
+-- GOVERNMENT (Group B/A-3)
+UPDATE building_type_profiles SET
+  ibc_group = 'B',
+  stair_count_default = 3,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR 3",
+    "STAIR A","STAIR B","S1","S2","S3",
+    "PUBLIC STAIR","SECURE STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 2,
+  requires_area_of_rescue = true,
+  unit_mount_side = 'latch',
+  assembly_lexicon = '["COURTROOM","COUNCIL CHAMBER",
+    "HEARING ROOM","JURY ASSEMBLY","JURY ROOM",
+    "BOARD ROOM","CONFERENCE ROOM","PUBLIC LOBBY",
+    "ASSEMBLY ROOM","COMMISSION CHAMBER"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","EVIDENCE",
+    "RECORDS VAULT","VAULT","ARCHIVE","STORAGE",
+    "JANITOR","UTILITY","HVAC","TELECOM"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "MEN","WOMEN","UNISEX","FAMILY","ACCESSIBLE",
+    "PUBLIC RESTROOM","STAFF RESTROOM","WC"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "PUBLIC LOBBY","VESTIBULE","PASSAGE","FOYER",
+    "GALLERY","SECURE CORRIDOR","SALLY PORT"]'
+WHERE building_type = 'government';
+
+-- HOTEL (Group R-1)
+UPDATE building_type_profiles SET
+  ibc_group = 'R-1',
+  stair_count_default = 2,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR A",
+    "STAIR B","S1","S2","FIRE STAIR","EXIT STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 1,
+  requires_area_of_rescue = false,
+  unit_mount_side = 'center',
+  assembly_lexicon = '["BALLROOM","BANQUET HALL",
+    "GRAND BALLROOM","RESTAURANT","BAR","LOUNGE",
+    "MEETING ROOM","SALON","BOARD ROOM",
+    "PRE-FUNCTION","ROOFTOP BAR"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","LAUNDRY",
+    "HOUSEKEEPING","LINEN","STORAGE","STOR",
+    "JANITOR","UTILITY","HVAC","BACK OF HOUSE"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "MEN","WOMEN","UNISEX","FAMILY","ACCESSIBLE",
+    "PUBLIC RESTROOM","WC","POWDER ROOM"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "VESTIBULE","PASSAGE","FOYER","PRE-FUNCTION",
+    "ELEVATOR LOBBY","CONCOURSE"]'
+WHERE building_type = 'hotel';
+
+-- RESIDENTIAL (Group R-2)
+UPDATE building_type_profiles SET
+  ibc_group = 'R-2',
+  stair_count_default = 2,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR A",
+    "STAIR B","S1","S2","FIRE STAIR","EXIT STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 1,
+  requires_area_of_rescue = false,
+  unit_mount_side = 'center',
+  assembly_lexicon = '["CLUBROOM","CLUB ROOM",
+    "FITNESS CENTER","GYM","PARTY ROOM",
+    "AMENITY ROOM","COMMUNITY ROOM","LOUNGE",
+    "ROOFTOP TERRACE","POOL","GAME ROOM"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","BIKE ROOM","STORAGE",
+    "STOR","JANITOR","UTILITY","HVAC","TRASH",
+    "RECYCLING","PACKAGE ROOM","MAIL ROOM"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "MEN","WOMEN","UNISEX","FAMILY","ACCESSIBLE",
+    "WC","POOL RESTROOM","GYM RESTROOM"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "VESTIBULE","PASSAGE","FOYER","MAILROOM",
+    "ELEVATOR LOBBY","ENTRY"]'
+WHERE building_type = 'residential';
+
+-- ASSEMBLY (Group A)
+UPDATE building_type_profiles SET
+  ibc_group = 'A',
+  stair_count_default = 4,
+  stair_name_patterns = '["STAIR 1","STAIR 2","STAIR 3",
+    "STAIR 4","STAIR A","STAIR B","S1","S2","S3",
+    "VOMITORY","AISLE STAIR","EXIT STAIR"]',
+  min_exits_per_floor = 3,
+  evac_map_max_per_floor = 4,
+  requires_area_of_rescue = true,
+  unit_mount_side = 'latch',
+  assembly_lexicon = '["SANCTUARY","NAVE","CHANCEL",
+    "NARTHEX","AUDITORIUM","THEATER","THEATRE",
+    "ARENA","GYMNASIUM","FELLOWSHIP HALL",
+    "GALLERY","EXHIBITION HALL","CONCERT HALL",
+    "BALLROOM","CHAPEL","WORSHIP CENTER",
+    "MAIN HALL","PERFORMANCE HALL"]',
+  mep_lexicon = '["MECHANICAL","ELECTRICAL","ELEC",
+    "IDF","MDF","DATA","SERVER","STORAGE","STOR",
+    "JANITOR","UTILITY","HVAC","CONCESSION STORAGE",
+    "BACK OF HOUSE","DRESSING ROOM STORAGE"]',
+  restroom_lexicon = '["TOILET","RESTROOM","BATHROOM",
+    "MEN","WOMEN","UNISEX","FAMILY","ACCESSIBLE",
+    "PUBLIC RESTROOM","WC","PATRON RESTROOM"]',
+  corridor_lexicon = '["CORRIDOR","HALL","LOBBY",
+    "FOYER","NARTHEX","VESTIBULE","CONCOURSE",
+    "PRE-FUNCTION","GALLERY","PASSAGE"]'
+WHERE building_type = 'assembly';
+
+-- UNKNOWN (Group B default)
+UPDATE building_type_profiles SET
+  ibc_group = 'B',
+  stair_count_default = 2,
+  stair_name_patterns = '["STAIR","STAIRWAY","STAIRWELL",
+    "EXIT STAIR","FIRE STAIR"]',
+  min_exits_per_floor = 2,
+  evac_map_max_per_floor = 2,
+  requires_area_of_rescue = false,
+  unit_mount_side = 'latch'
+WHERE building_type = 'unknown';
+
+════════════════════════════════════════════════
+PART B — Core fix: Egress Sign Generator
+         New module — runs AFTER room extraction
+════════════════════════════════════════════════
+Create: /api-server/src/lib/egress-sign-generator.ts
+
+This module runs after room extraction completes
+and generates stair, exit, evac map, area of
+rescue, and max occupancy signs from metadata.
+It does NOT depend on room extraction finding
+stair or exit rooms.
+
+async function generateEgressSigns(job, profile) {
+
+  // ── STEP 1: Detect stair count ──────────────
+  // Try extracted rooms first, fall back to default
+  
+  const extractedStairs = await db.query(
+    \`SELECT DISTINCT room_number, room_name, floor
+     FROM signs WHERE job_id = $1
+     AND (
+       room_name ILIKE ANY($2)
+       OR room_number ~ '^S[A-F]\\d{2}$'
+       OR room_number ~ '^S\\d{1,2}$'
+     )\`,
+    [job.id, profile.stair_name_patterns]
+  );
+
+  const stairCount = extractedStairs.length > 0
+    ? new Set(extractedStairs.map(s => 
+        s.room_number.replace(/\\d+$/, '')
+      )).size
+    : profile.stair_count_default;
+
+  const floorsServed = job.floor_count || 2;
+  const isEstimated = extractedStairs.length === 0;
+
+  // ── STEP 2: Generate stair signs ────────────
+  // R11: 1 corridor + 1 landing per stair per floor
+  
+  for (let s = 1; s <= stairCount; s++) {
+    const stairLabel = stairCount <= 4
+      ? String.fromCharCode(64 + s)  // A, B, C, D
+      : String(s);                    // 1, 2, 3...
+
+    for (let f = 1; f <= floorsServed; f++) {
+      await insertEgressSign(job.id, {
+        room_number: \`STAIR-\${stairLabel}\`,
+        room_name: \`STAIR \${stairLabel}\`,
+        floor: \`LEVEL \${f}\`,
+        sign_type: 'Stair (Corridor)',
+        qty: 1,
+        ada_required: true,
+        rule_ref: 'R11',
+        source: 'rules',
+        confidence: isEstimated ? 0.7 : 1.0,
+        notes: isEstimated
+          ? \`Estimated — verify stair count on plans\`
+          : \`Detected from plan extraction\`
+      });
+      await insertEgressSign(job.id, {
+        room_number: \`STAIR-\${stairLabel}\`,
+        room_name: \`STAIR \${stairLabel}\`,
+        floor: \`LEVEL \${f}\`,
+        sign_type: 'Stair (Landing)',
+        qty: 1,
+        ada_required: true,
+        rule_ref: 'R11',
+        source: 'rules',
+        confidence: isEstimated ? 0.7 : 1.0,
+        notes: isEstimated
+          ? \`Estimated — verify stair count on plans\`
+          : \`Detected from plan extraction\`
+      });
+    }
+
+    // Area of Rescue — Government and Assembly only
+    if (profile.requires_area_of_rescue) {
+      for (let f = 1; f <= floorsServed; f++) {
+        await insertEgressSign(job.id, {
+          room_number: \`STAIR-\${stairLabel}\`,
+          room_name: \`STAIR \${stairLabel}\`,
+          floor: \`LEVEL \${f}\`,
+          sign_type: 'Area of Rescue',
+          qty: 2,  // identification + instructions
+          ada_required: true,
+          rule_ref: 'R16',
+          source: 'rules',
+          notes: 'Area of Rescue ID + Instruction signs'
+        });
+      }
+    }
+  }
+
+  // ── STEP 3: Generate exit signs ─────────────
+  // R9: stair doors + exterior doors
+  
+  // Exit at every stair door on every floor
+  for (let s = 1; s <= stairCount; s++) {
+    const stairLabel = stairCount <= 4
+      ? String.fromCharCode(64 + s) : String(s);
+    for (let f = 1; f <= floorsServed; f++) {
+      await insertEgressSign(job.id, {
+        room_number: \`EXIT-STAIR-\${stairLabel}-L\${f}\`,
+        room_name: \`Exit at Stair \${stairLabel}\`,
+        floor: \`LEVEL \${f}\`,
+        sign_type: 'Exit',
+        qty: 1,
+        ada_required: false,
+        rule_ref: 'R9',
+        source: 'rules',
+        notes: 'Illuminated exit sign at stair entry door'
+      });
+    }
+  }
+
+  // Exterior exit doors (ground floor only)
+  // Use building type minimum
+  const minExteriorExits = {
+    education: 4,    // 2 per wing × 2 wings
+    healthcare: 4,
+    commercial: 2,
+    government: 3,
+    hotel: 2,
+    residential: 2,
+    assembly: 4,     // min 3 per IBC Group A
+    unknown: 2
+  }[job.building_type] || 2;
+
+  for (let e = 1; e <= minExteriorExits; e++) {
+    await insertEgressSign(job.id, {
+      room_number: \`EXIT-EXT-\${e}\`,
+      room_name: \`Exterior Exit Door \${e}\`,
+      floor: 'LEVEL 1',
+      sign_type: 'Exit',
+      qty: 1,
+      ada_required: false,
+      rule_ref: 'R9',
+      source: 'rules',
+      notes: 'Verify count — exterior exit doors on plans'
+    });
+  }
+
+  // Remove Exit signs from extracted rooms
+  // (MECHANICAL, LOBBY etc should not have Exit)
+  await db.query(
+    \`DELETE FROM signs
+     WHERE job_id = $1
+     AND sign_type = 'Exit'
+     AND source != 'rules'\`,
+    [job.id]
+  );
+
+  // ── STEP 4: Generate evacuation maps ────────
+  // R13: decision points only, max per floor cap
+  
+  // Remove all existing evac maps first
+  await db.query(
+    \`DELETE FROM signs
+     WHERE job_id = $1
+     AND sign_type = 'Evacuation Map'\`,
+    [job.id]
+  );
+
+  // Re-assign to correct rooms only
+  const evacCandidates = await db.query(
+    \`SELECT id, room_name, floor
+     FROM signs
+     WHERE job_id = $1
+     AND UPPER(room_name) = ANY($2)
+     ORDER BY floor, room_name\`,
+    [job.id, ['CORRIDOR','MAIN CORRIDOR','LOBBY',
+               'MAIN LOBBY','GYM LOBBY','MUSIC LOBBY',
+               'ELEVATOR LOBBY','CAFETERIA','GYMNASIUM']]
+  );
+
+  const evacByFloor = {};
+  for (const candidate of evacCandidates) {
+    const floor = candidate.floor || 'LEVEL 1';
+    if (!evacByFloor[floor]) evacByFloor[floor] = 0;
+    if (evacByFloor[floor] < profile.evac_map_max_per_floor) {
+      await insertEgressSign(job.id, {
+        room_number: candidate.room_number,
+        room_name: candidate.room_name,
+        floor: floor,
+        sign_type: 'Evacuation Map',
+        qty: 1,
+        ada_required: false,
+        rule_ref: 'R13',
+        source: 'rules'
+      });
+      evacByFloor[floor]++;
+    }
+  }
+
+  // Fallback: if no corridor/lobby found,
+  // place 1 evac map per floor at first room
+  for (let f = 1; f <= floorsServed; f++) {
+    const floorKey = \`LEVEL \${f}\`;
+    if (!evacByFloor[floorKey]) {
+      await insertEgressSign(job.id, {
+        room_number: \`EVAC-L\${f}\`,
+        room_name: \`Main Corridor\`,
+        floor: floorKey,
+        sign_type: 'Evacuation Map',
+        qty: 1,
+        ada_required: false,
+        rule_ref: 'R13',
+        source: 'rules',
+        notes: 'Location estimated — verify on plans'
+      });
+    }
+  }
+
+  // ── STEP 5: Max Occupancy for assembly rooms ─
+  // R10: assembly rooms get Room ID w/Insert AND
+  //      Max Occupancy as separate sign records
+  
+  const assemblyRooms = await db.query(
+    \`SELECT id, room_number, room_name, floor
+     FROM signs
+     WHERE job_id = $1
+     AND is_assembly = true
+     AND sign_type != 'Max Occupancy'\`,
+    [job.id]
+  );
+
+  for (const room of assemblyRooms) {
+    // Check if Max Occupancy already exists for this room
+    const existing = await db.query(
+      \`SELECT id FROM signs
+       WHERE job_id = $1
+       AND room_number = $2
+       AND sign_type = 'Max Occupancy'\`,
+      [job.id, room.room_number]
+    );
+    if (existing.length === 0) {
+      await insertEgressSign(job.id, {
+        room_number: room.room_number,
+        room_name: room.room_name,
+        floor: room.floor,
+        sign_type: 'Max Occupancy',
+        qty: 1,
+        ada_required: false,
+        rule_ref: 'R10',
+        source: 'rules',
+        notes: 'Post inside room at primary entrance'
+      });
+    }
+  }
+}
+
+// Call this at the end of the job processing pipeline
+// after all room extraction and semantic mapping:
+await generateEgressSigns(job, buildingTypeProfile);
+
+════════════════════════════════════════════════
+PART C — ADA required flag: fix for all types
+════════════════════════════════════════════════
+In the XLSX export and Summary/Pricing tabs,
+update ada_required for ALL building types:
+
+const ADA_REQUIRED_SIGNS = [
+  'Room ID',
+  'Room ID w/Insert',      // ← currently wrong (No)
+  'Restroom',
+  'Stair (Corridor)',
+  'Stair (Landing)',
+  'Exit (Tactile)',
+  'Area of Rescue',
+  'Elevator',
+  'In Case of Fire',
+  'Boys', 'Girls',
+  'Men', 'Women',
+  'Unisex Restroom',
+  'Family Restroom',
+  'Accessible Room',       // Hotel/Residential
+  'Unit ID',               // Residential
+  'Patient Room ID',       // Healthcare
+  'Courtroom ID',          // Government
+];
+
+const NON_ADA_SIGNS = [
+  'Max Occupancy',         // informational
+  'Evacuation Map',        // graphic
+  'Office Directory',      // directory
+  'Exit',                  // illuminated electrical
+  'LEED Sign',             // decorative
+  'BDA Location',          // informational
+  'Exterior Sign',         // different standard
+];
+
+// Hotel + Residential exception:
+// ada_required = YES but mount_side = 'center'
+// (ADA §703.4.2 residential/transient exception)
+const CENTER_MOUNT_TYPES = ['hotel', 'residential'];
+
+════════════════════════════════════════════════
+PART D — Review tab: Egress section
+════════════════════════════════════════════════
+In the Review tab, show two sections:
+
+1. "Room Signs" — existing table (room ID, 
+   restroom, max occupancy per room)
+
+2. "Egress & Code Signs" — new collapsible section
+   showing rule-generated signs:
+   - Stair (Corridor) signs
+   - Stair (Landing) signs  
+   - Exit signs
+   - Area of Rescue (govt/assembly)
+   - Evacuation Maps
+
+   Each row shows:
+   - Sign type
+   - Location (Stair A, Level 1, etc.)
+   - Source badge: "Rules" (amber)
+   - Confidence badge: estimated vs detected
+   - Notes field
+
+   Header shows:
+   "These signs are generated from building 
+    code rules. Verify counts against plans."
+
+════════════════════════════════════════════════
+PART E — Verification panel checks
+════════════════════════════════════════════════
+Update the Overview verification panel:
+
+✓/✗ Stair sets: [N] stairs × [F] floors 
+    = [N×F×2] signs — verify count is correct
+✓/✗ Exit signs: minimum [formula result]
+    currently [actual count]  
+✓/✗ Elevator: [N] cab(s) = [N] In Case of Fire
+✓/✗ Max Occupancy: [N] assembly rooms identified
+✓/✗ Evac Maps: [N] maps, max [cap] per floor
+✓/✗ ADA: all room ID signs marked tactile
+
+════════════════════════════════════════════════
+VERIFICATION — expected results per type
+════════════════════════════════════════════════
+
+EDUCATION (Fox Hill, 4 stairs, 2 floors):
+  Stair (Corridor):  8  (4×2)
+  Stair (Landing):   8  (4×2)
+  Exit:             12  (8 stair + 4 exterior)
+  Max Occupancy:     4+ (gym, cafe, music, lobby)
+  Evac Map:          4  (2 per floor max)
+  Total addition:  ~32 signs over current 177
+  Target total:    ~205-215
+
+HEALTHCARE (any job, 3 stairs, 4 floors):
+  Stair (Corridor): 12  (3×4)
+  Stair (Landing):  12  (3×4)
+  Exit:             16  (12 stair + 4 exterior)
+  Evac Map:         16  (4 per floor × 4 floors)
+
+COMMERCIAL (any job, 2 stairs, 3 floors):
+  Stair (Corridor):  6  (2×3)
+  Stair (Landing):   6  (2×3)
+  Exit:              8  (6 stair + 2 exterior)
+  Evac Map:          6  (2 per floor × 3 floors)
+
+GOVERNMENT (any job, 3 stairs, 3 floors):
+  Stair (Corridor):  9  (3×3)
+  Stair (Landing):   9  (3×3)
+  Area of Rescue:   18  (2 per stair per floor)
+  Exit:             11  (9 stair + 2-3 exterior)
+
+HOTEL (any job, 2 stairs, 8 floors):
+  Stair (Corridor): 16  (2×8)
+  Stair (Landing):  16  (2×8)
+  Exit:             18  (16 stair + 2 exterior)
+  Evac Map:          8  (1 per floor × 8 floors)
+
+RESIDENTIAL (any job, 2 stairs, 6 floors):
+  Stair (Corridor): 12  (2×6)
+  Stair (Landing):  12  (2×6)
+  Exit:             14  (12 stair + 2 exterior)
+  Evac Map:          6  (1 per floor × 6 floors)
+
+ASSEMBLY (any job, 4 stairs, 2 floors):
+  Stair (Corridor):  8  (4×2)
+  Stair (Landing):   8  (4×2)
+  Area of Rescue:   16  (2 per stair per floor)
+  Exit:             16  (12 stair + 4 exterior)
+  Evac Map:          8  (4 per floor × 2 floors)
+
+ALL TYPES:
+  ✓ ada_required=Yes on all Room ID variants
+  ✓ Stair signs appear in every job
+  ✓ Exit count ≥ stair_count × floor_count
+  ✓ Evac maps ≤ evac_map_max_per_floor × floors
+  ✓ Max Occupancy on all isAssembly rooms
+  ✓ No Exit signs on room names (MECHANICAL etc)
+  ✓ Gleason Lib rescan unchanged
+  ✓ All 1,430 tests pass

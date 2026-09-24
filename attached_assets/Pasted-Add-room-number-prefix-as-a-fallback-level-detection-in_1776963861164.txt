@@ -1,0 +1,56 @@
+Add room number prefix as a fallback level detection in parseLevelFromContext in pipeline.ts.
+Find the parseLevelFromContext function and add a third fallback after the keyword matching, using the room number prefix:
+tsfunction parseLevelFromContext(
+  rawLevel: string | null, 
+  sheetTitle: string | null,
+  roomNumber?: string | null,
+): string | null {
+  const sources = [rawLevel, sheetTitle].filter(Boolean).map(s => s!.toUpperCase());
+  
+  // Pass 1 — keyword match from level string or sheet title
+  for (const src of sources) {
+    if (src.includes("BASEMENT") || src.includes("B1") || src.includes("LOWER LEVEL")) 
+      return "Basement";
+    if (src.includes("GROUND") || src.includes("GRADE") || src.includes("LEVEL 1") || src.includes("1ST")) 
+      return "Level 1";
+    if (src.includes("LEVEL 2") || src.includes("2ND") || src.includes("SECOND")) 
+      return "Level 2";
+    if (src.includes("LEVEL 3") || src.includes("3RD") || src.includes("THIRD")) 
+      return "Level 3";
+    if (src.includes("MEZZANINE") || src.includes("MEZZ")) 
+      return "Mezzanine";
+    if (src.includes("ROOF")) 
+      return "Roof";
+  }
+
+  // Pass 2 — room number prefix fallback
+  // 0xx/00x = Basement, 1xx = Level 1, 2xx = Level 2, 3xx = Level 3
+  if (roomNumber) {
+    const rn = roomNumber.trim().toUpperCase();
+    if (/^0/.test(rn)) return "Basement";
+    if (/^1/.test(rn)) return "Level 1";
+    if (/^2/.test(rn)) return "Level 2";
+    if (/^3/.test(rn)) return "Level 3";
+    if (/^4/.test(rn)) return "Level 4";
+    if (/^[BS]-?\d/.test(rn)) return "Basement";
+    if (/^[Pp]-?\d/.test(rn)) return "Parking";
+  }
+
+  return null;
+}
+Update all calls to parseLevelFromContext to pass the room number as the third argument:
+tsconst assignedLevel = parseLevelFromContext(
+  extracted.level,
+  sheet.sheetTitle ?? null,
+  extracted.roomNumber ?? null,
+) ?? extracted.level ?? null;
+Also add room number prefix detection in Step 8 room inventory as a final safety net — when a room's level is still null, a page number, or contains "PLAN":
+ts// Final level safety net — derive from room number if still unresolved
+if (!room.level || room.level.toUpperCase().includes("PLAN") || room.level.toUpperCase().includes("PAGE")) {
+  const derivedLevel = parseLevelFromContext(null, null, room.roomNumber);
+  if (derivedLevel) {
+    room.level = derivedLevel;
+    logger.log(`[pipeline] Step 8: Derived level '${derivedLevel}' from room number '${room.roomNumber}'`);
+  }
+}
+After saving, click Re-apply Keywords on Cambridge Moses — no rescan needed. The level labels should stay correct on future rescans automatically.

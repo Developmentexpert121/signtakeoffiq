@@ -1,0 +1,48 @@
+Good landscape read. The gaps are clear — three areas with zero meaningful coverage: the XLSX pricing output (P3), the Plans tab visual layer (P2b), and the Review tab interactions (P4). Here's the prompt:
+
+Session 9 — Comprehensive Gap Coverage: XLSX Pricing, Plans Tab, Review Tab
+Add tests across three new test files. Do not modify any existing test files. Typecheck must pass. Target: 1,502 → ~1,540+ tests. Do not rescan any job.
+
+New File 1 — artifacts/api-server/src/__tests__/exports-pricing.test.ts
+Test the XLSX Takeoff sheet pricing output added in P3. Cover:
+
+getPriceForSignType returns correct materialName, finishingName, materialRate, finishingRate for known sign types (Room ID, Restroom, Exit, Stair ID)
+Evacuation map always returns flatPrice = 45 regardless of dimensions
+Unit price = max(minPrice, (materialRate + finishingRate) × width × height)
+Extended = unitPrice × qty — verify with qty > 1
+Unknown sign type falls back to DEFAULT_SIGN_PRICING entry
+Floor subtotal = sum of all extended values on that floor
+Grand total = sum of all floor subtotals
+Currency values rounded to 2 decimal places at JS level (not just display)
+Job-level material spec override takes precedence over DEFAULT_SIGN_PRICING when present
+
+
+New File 2 — artifacts/web/src/components/FloorPlanTab.test.tsx (extend existing)
+Add to the existing FloorPlanTab.test.tsx — new describe block "Plans tab visual layer (P2b)". Cover:
+
+Floor level filter: when selectedLevel = "LEVEL 1", signs with floorLabel = "LEVEL 2" are not rendered
+Signs with null floorLabel always render regardless of selected level
+Marker click opens popover showing room number, room name, sign type, qty, confidence, floor label, source badge
+Confidence color: green class present when confidence ≥ 0.80, amber when 0.60–0.79, gray when < 0.60
+"Analyze Doors" button is present in popover and is disabled
+Unlocated sidebar shows "All signs placed" when all signs have coordinates
+Unlocated sidebar shows count and room entries when signs have null coordinates
+selectedLevel persists to localStorage key floor-plan-level-${jobId} on change
+selectedLevel initializes from localStorage on mount
+
+
+New File 3 — artifacts/web/src/pages/job-detail-review.test.tsx
+New test file covering Review tab interactions added in P4. Cover:
+
+Per-floor "Accept All Level N" button renders in floor section header when pendingAiInGroup > 0
+Button does not render when pendingAiInGroup === 0
+Clicking per-floor button opens AlertDialog with level-specific text: "Accept N pending AI rooms on Level N?"
+Global "Accept All AI Rooms" button opens AlertDialog with global text (no level mention)
+Confirming per-floor dialog calls bulkReviewRooms with { reviewStatus: "confirmed", level: "LEVEL 1" }
+Confirming global dialog calls bulkReviewRooms with { reviewStatus: "confirmed" } and no level key
+bulkConfirmDialog state resets to null after dialog is dismissed
+Floor section collapses and expands on chevron click
+Collapsed floor section hides room rows but keeps header visible
+
+
+After all new tests: Run full test suite — paste the complete count breakdown by file. Typecheck must pass. Do not rescan any job.

@@ -1,0 +1,66 @@
+This diagnostic is definitive. Three separate failures are compounding to produce 119 signs instead of 350+:
+
+Problem 1 — Floor replication is not firing. Level 3 has 4 rooms, Levels 4-6 have zero. AA103-A/B/C should produce ~30 rooms × 4 floors = 120 rooms. The Auto-inferred floorLabel log line never appeared in any run, which means inferFloorLabelFromFilename() is either not being called or not matching. The AA103 filenames have double dashes (LEVELS-03-06--PART-A) — the regex may be failing on that pattern.
+
+Problem 2 — Schedule matching is broken. Step 9 sees 17 sign types from the schedule, not 163 room entries. The 163-entry extraction from the forced run is cached in sign_schedule_entries, but Step 9 is treating them as 17 type-codes (the legend) rather than 163 room-level entries. The schedule extraction is working but the downstream consumer is reading it wrong.
+
+Problem 3 — Only 5 fresh AI scans ran. The log from the last run shows only PLAN-0 through PLAN-4 as fresh scans — not all 27 sheets. The other 22 sheets used cached room data from before the AA103 files were uploaded, so those rooms are stale or missing.
+
+These are three code fixes, not data issues. Send this to Replit:
+
+What's broken in one sentence: Three compounding bugs: (1) inferFloorLabelFromFilename() regex fails on double-dash filenames like LEVELS-03-06--PART-A, (2) Step 9 schedule consumer reads sign_schedule_entries as sign type legends instead of room-level entries, and (3) cached AI scans from before the AA103 upload are being reused for sheets that now have different source files.
+
+Files that change:
+
+artifacts/api-server/src/lib/pipeline.ts — all three fixes
+Fix 1 — Regex double-dash fix in inferFloorLabelFromFilename()
+The current regex:
+
+typescript
+/(?:LEVELS?|FLOORS?|FL)[_\-\s]+(\d+)[_\-\s]+(?:TO[_\-\s]+)?(\d+)/
+Fails on LEVELS-03-06--PART-A because after 06 there are two dashes before PART — the regex stops at 06 correctly, but the leading pattern LEVELS-03-06 has single dashes which should match. Test this exact filename in a quick Node REPL and show the result. If it's not matching, change the separator pattern from [_\-\s]+ to [_\-\s]{1,3} to handle double dashes, and also add 0-padded number support explicitly:
+
+typescript
+/(?:LEVELS?|FLOORS?|FL)[_\-\s]{1,3}(0?\d+)[_\-\s]{1,3}(?:TO[_\-\s]{1,3})?(0?\d+)/i
+Log the result of every inferFloorLabelFromFilename() call regardless of whether it matches:
+
+typescript
+logger.log(`[pipeline] inferFloorLabel("${filename}") → "${result ?? 'null'}"`);
+Fix 2 — Step 9 schedule consumer reading sign types instead of room entries
+Step 9 shows 17 type(s): 1, 2, 3, 4...17 — these are the sign type legend codes from AA831's right side, not the 163 room-schedule rows from the left-side tables.
+
+Find where Step 9 reads from sign_schedule_entries or scheduleSignRows. There are two separate data structures:
+
+signSchedule[] — room-level entries extracted in Step 3a (163 rows)
+scheduleSignRows[] — the signs-shaped rows pushed from Step 3a entries
+Check whether hasScheduleImport is true and whether scheduleSignRows actually contains 163 entries when Step 9 runs, or whether it's been overwritten/cleared by the specialty signs path. Add a log line at the start of Step 9:
+
+typescript
+logger.log(`[pipeline] Step 9 entry: hasScheduleImport=${hasScheduleImport}, scheduleSignRows=${scheduleSignRows.length}, signSchedule=${signSchedule.length}`);
+If scheduleSignRows is empty or 17 at Step 9 entry, the 163 entries are being lost between Step 3a and Step 9. The fix is to ensure scheduleSignRows is populated from signSchedule[] entries correctly and persists through to Step 9.
+
+Fix 3 — Invalidate cached AI scans when source files change
+When new files are added to a job (AA103-A/B/C were added after the initial scan), any cached ai_scans rows for synthesized sheets from those files should be invalidated.
+
+Find where the pipeline checks for existing AI scan cache before deciding whether to run fresh vision. Add a check: if the fileId on a job_sheets row doesn't match any file that existed during the cached scan, treat that sheet as uncached and run fresh vision.
+
+The simplest implementation: when floorPlanFiles is built, collect all current fileId values. Before the vision loop, delete any ai_scans rows where the associated job_sheets.fileId is not in the current floorPlanFiles id set:
+
+typescript
+const currentFileIds = new Set(floorPlanFiles.map(f => f.id));
+const staleSheets = sheetDbRows.filter(s => s.fileId && !currentFileIds.has(s.fileId));
+if (staleSheets.length > 0) {
+  logger.log(`[pipeline] Invalidating ${staleSheets.length} cached scans for removed/replaced files`);
+  await db.delete(aiScansTable).where(
+    inArray(aiScansTable.sheetId, staleSheets.map(s => s.id))
+  );
+}
+After fixes
+Typecheck 0 errors, tests 1,461 passing
+Confirm inferFloorLabelFromFilename("AA103-A-FLOOR-PLAN_-LEVELS-03-06--PART-A-Rev.6.pdf") logs a non-null result
+Force Full Re-process Walking Court — watch for:
+inferFloorLabel(...) → "Floors 3-6" × 3
+Step 9 entry: scheduleSignRows=163
+Fresh AI scans on all 27 sheets
+Target 350+ signs
+
